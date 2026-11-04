@@ -60,7 +60,7 @@ interface BodegaBackend {
   id: string;
   nombre: string;
   descripcion: string | null;
-  tipo: string;
+  tipo: "inventario_general" | "principal" | "sucursal";
   estado: "activa" | "inactiva";
 }
 
@@ -116,6 +116,7 @@ function convertirBodega(bodega: BodegaBackend): Bodega {
     responsable: "",
     estado: bodega.estado,
     stockTotal: 0,
+    tipo: bodega.tipo,
   };
 }
 

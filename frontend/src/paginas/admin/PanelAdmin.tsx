@@ -2,14 +2,21 @@ import { Box, Building2, Paintbrush, Utensils } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import EncabezadoPagina from "../../componentes/EncabezadoPagina";
-import {
-  bodegasPrincipalesAdmin,
-  inventarioGeneralAdmin,
-  sucursalesTastyAdmin,
-} from "../../datos/datosAdmin";
+import { useUsuarios } from "../../contexto/UsuariosContext";
 
 function PanelAdmin() {
   const navigate = useNavigate();
+  const { bodegasDisponibles } = useUsuarios();
+
+  const inventarioGeneralAdmin = bodegasDisponibles.find(
+    (bodega) => bodega.tipo === "inventario_general",
+  );
+  const bodegasPrincipalesAdmin = bodegasDisponibles.filter(
+    (bodega) => bodega.tipo === "principal",
+  );
+  const sucursalesTastyAdmin = bodegasDisponibles.filter(
+    (bodega) => bodega.tipo === "sucursal",
+  );
 
   return (
     <div className="pagina-admin">
@@ -35,8 +42,11 @@ function PanelAdmin() {
           </div>
 
           <div className="inventario-info">
-            <h3>{inventarioGeneralAdmin.nombre}</h3>
-            <p>{inventarioGeneralAdmin.descripcion}</p>
+            <h3>{inventarioGeneralAdmin?.nombre || "Inventario General"}</h3>
+            <p>
+              {inventarioGeneralAdmin?.descripcion ||
+                "Bodega central del inventario institucional."}
+            </p>
           </div>
         </button>
       </section>

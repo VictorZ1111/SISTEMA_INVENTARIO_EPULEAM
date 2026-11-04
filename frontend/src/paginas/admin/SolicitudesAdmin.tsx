@@ -13,8 +13,8 @@ import EncabezadoPagina from "../../componentes/EncabezadoPagina";
 import TablaBase from "../../componentes/TablaBase";
 import CampoDesplegable from "../../componentes/CampoDesplegable";
 
-import { bodegasAdmin } from "../../datos/datosAdmin";
 import { useInventario } from "../../contexto/InventarioContext";
+import { useUsuarios } from "../../contexto/UsuariosContext";
 import type {
   EstadoSolicitud,
   ItemSolicitud,
@@ -388,6 +388,7 @@ function SolicitudesAdmin() {
     reversarAtencionSolicitud,
     reversarRechazoSolicitud,
   } = useInventario();
+  const { bodegasDisponibles } = useUsuarios();
 
   const [busqueda, setBusqueda] = useState("");
   const [bodegaFiltro, setBodegaFiltro] = useState("todas");
@@ -410,7 +411,7 @@ function SolicitudesAdmin() {
   const [solicitudReversion, setSolicitudReversion] = useState<Solicitud | null>(null);
 
   const bodegasFiltro = useMemo(() => {
-    const bodegasBase = bodegasAdmin
+    const bodegasBase = bodegasDisponibles
       .filter((bodega) => bodega.nombre !== "Inventario General")
       .map((bodega) => bodega.nombre);
 
@@ -419,7 +420,7 @@ function SolicitudesAdmin() {
     return Array.from(new Set([...bodegasBase, ...bodegasSolicitudes])).sort(
       (a, b) => a.localeCompare(b, "es", { sensitivity: "base" })
     );
-  }, [solicitudes]);
+  }, [bodegasDisponibles, solicitudes]);
 
 
   const haySolicitudesPendientes = solicitudes.some(

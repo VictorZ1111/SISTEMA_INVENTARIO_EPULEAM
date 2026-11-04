@@ -12,19 +12,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import EncabezadoPagina from "../../componentes/EncabezadoPagina";
 import TablaBase from "../../componentes/TablaBase";
 
-import { bodegasAdmin } from "../../datos/datosAdmin";
 import { useInventario } from "../../contexto/InventarioContext";
 import { useUsuarios } from "../../contexto/UsuariosContext";
 import {
   obtenerCustodioAsignado,
   obtenerEtiquetaAsignacion,
 } from "../../utilidades/asignacionesUsuarios";
-import type { Bodega } from "../../tipos/bodega";
 import type { Movimiento, TipoMovimiento } from "../../tipos/movimiento";
 import CampoDesplegable from "../../componentes/CampoDesplegable";
-
-const STORAGE_BODEGAS_CREADAS = "epuleam_bodegas_admin_creadas";
-const STORAGE_BODEGAS_EDITADAS = "epuleam_bodegas_admin_editadas";
 
 type FiltroTipoMovimiento =
   | "todos"
@@ -50,17 +45,6 @@ function obtenerTipoNormalizado(tipo: TipoMovimiento): FiltroTipoMovimiento {
   return "modificacion";
 }
 
-function obtenerBodegasGuardadas(clave: string): Bodega[] {
-  const bodegasGuardadas = localStorage.getItem(clave);
-
-  if (!bodegasGuardadas) return [];
-
-  try {
-    return JSON.parse(bodegasGuardadas) as Bodega[];
-  } catch {
-    return [];
-  }
-}
 
 function limpiarNombreBodega(nombreBodega: string) {
   if (!nombreBodega) return "No especificado";
@@ -469,7 +453,7 @@ function MovimientosAdmin() {
     reversarMovimientoSolicitud,
   } = useInventario();
 
-  const { usuarios } = useUsuarios();
+  const { usuarios, bodegasDisponibles: bodegasReales } = useUsuarios();
 
   const [busqueda, setBusqueda] = useState("");
   const [tipoFiltro, setTipoFiltro] =
@@ -495,21 +479,8 @@ function MovimientosAdmin() {
       "no especificado",
     ];
 
-    const bodegasBase = bodegasAdmin.filter(
+    const bodegasBase = bodegasReales.filter(
       (bodega) => bodega.nombre !== "Inventario General"
-    );
-
-    const bodegasCreadas = obtenerBodegasGuardadas(STORAGE_BODEGAS_CREADAS);
-    const bodegasEditadas = obtenerBodegasGuardadas(STORAGE_BODEGAS_EDITADAS);
-
-    const bodegasCombinadas = [...bodegasBase, ...bodegasCreadas].map(
-      (bodega) => {
-        const bodegaEditada = bodegasEditadas.find(
-          (editada) => editada.id === bodega.id
-        );
-
-        return bodegaEditada || bodega;
-      }
     );
 
     const destinosMovimientos = movimientos.map((movimiento) =>
@@ -517,7 +488,7 @@ function MovimientosAdmin() {
     );
 
     const nombresBodegas = [
-      ...bodegasCombinadas.map((bodega) => bodega.nombre),
+      ...bodegasBase.map((bodega) => bodega.nombre),
       ...destinosMovimientos,
     ];
 
@@ -538,7 +509,7 @@ function MovimientosAdmin() {
     return Object.values(bodegasUnicas).sort((a, b) =>
       a.localeCompare(b, "es", { sensitivity: "base" })
     );
-  }, [movimientos]);
+  }, [bodegasReales, movimientos]);
 
   const obtenerResponsableDestino = (movimiento: Movimiento) => {
     const destino = obtenerDestinoMovimiento(movimiento);
