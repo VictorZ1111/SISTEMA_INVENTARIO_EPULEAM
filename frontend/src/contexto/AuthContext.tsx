@@ -62,8 +62,6 @@ interface Props {
   children: ReactNode;
 }
 
-const STORAGE_SESION = "epuleam_usuario_sesion";
-
 function convertirRolBackend(rol: RolBackend): RolUsuario {
   if (rol === "administrador") return "admin";
   return rol;
@@ -77,7 +75,6 @@ function obtenerCargoPorRol(rol: RolUsuario) {
 
 function limpiarSesionGuardada() {
   localStorage.removeItem(STORAGE_TOKEN);
-  localStorage.removeItem(STORAGE_SESION);
 }
 
 function obtenerMensajeError(error: unknown) {
@@ -167,7 +164,6 @@ export function AuthProvider({ children }: Props) {
         if (!activo) return;
 
         setUsuarioActual(usuario);
-        localStorage.setItem(STORAGE_SESION, JSON.stringify(usuario));
       } catch {
         limpiarSesionGuardada();
 
@@ -203,7 +199,6 @@ export function AuthProvider({ children }: Props) {
 
         const usuario = await construirUsuarioSesion(data.usuario);
 
-        localStorage.setItem(STORAGE_SESION, JSON.stringify(usuario));
         setUsuarioActual(usuario);
 
         return usuario;
