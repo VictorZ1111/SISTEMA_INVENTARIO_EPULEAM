@@ -2,11 +2,8 @@ import {
   ArrowDownAZ,
   ArrowUpAZ,
   Box,
-  Building2,
   Paintbrush,
   Search,
-  Utensils,
-  Warehouse,
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -26,6 +23,7 @@ import {
   esBienVisible,
   obtenerBodegaProducto,
   obtenerClaseIconoBodega,
+  obtenerIconoBodega,
   obtenerTituloBodega,
 } from "../../dominio/inventarioVisual";
 import { useConfiguracion } from "../../contexto/ConfiguracionContext";
@@ -40,21 +38,6 @@ function normalizarTexto(texto: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
-}
-
-function normalizarBodega(bodega: string) {
-  return normalizarTexto(limpiarNombreBodega(bodega));
-}
-
-function obtenerIconoBodega(bodega: string) {
-  const nombre = normalizarBodega(bodega);
-
-  if (nombre.includes("limpieza")) return Paintbrush;
-  if (nombre.includes("oficina")) return Building2;
-  if (nombre.includes("gastronom") || nombre.includes("tasty")) return Utensils;
-  if (nombre.includes("inventario") || nombre.includes("general")) return Box;
-
-  return Warehouse;
 }
 
 function obtenerTextoEstadoBien(estadoBien: string) {

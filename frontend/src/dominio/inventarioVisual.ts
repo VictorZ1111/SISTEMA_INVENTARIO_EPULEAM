@@ -1,3 +1,4 @@
+import { Box, Building2, Paintbrush, Utensils, Warehouse } from "lucide-react";
 import type { Producto } from "../tipos/producto";
 import {
   BODEGA_INVENTARIO_GENERAL,
@@ -24,6 +25,17 @@ export function obtenerTituloBodega(bodega: string) {
   if (normalizado.includes("oficina")) return "Bodega Oficina";
 
   return nombre;
+}
+
+export function obtenerIconoBodega(bodega: string) {
+  const nombre = normalizarBodega(bodega);
+
+  if (nombre.includes("limpieza")) return Paintbrush;
+  if (nombre.includes("oficina")) return Building2;
+  if (nombre.includes("gastronom") || nombre.includes("tasty")) return Utensils;
+  if (nombre.includes("inventario") || nombre.includes("general")) return Box;
+
+  return Warehouse;
 }
 
 export function obtenerClaseIconoBodega(bodega: string) {

@@ -2,12 +2,8 @@ import {
   ArrowDownAZ,
   ArrowLeft,
   ArrowUpAZ,
-  Box,
-  Building2,
   Paintbrush,
   Search,
-  Utensils,
-  Warehouse,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -24,6 +20,7 @@ import {
   obtenerBodegasPrincipalesUsuario,
   obtenerSucursalesTastyUsuario,
 } from "../../dominio/bodegas";
+import { obtenerIconoBodega } from "../../dominio/inventarioVisual";
 import { useUsuarios } from "../../contexto/UsuariosContext";
 import { obtenerSupervisorBodega } from "../../utilidades/asignacionesUsuarios";
 import { useConfiguracion } from "../../contexto/ConfiguracionContext";
@@ -58,17 +55,6 @@ function obtenerDescripcionBodega(bodega: string) {
   }
 
   return "Bodega asignada para consulta de inventario.";
-}
-
-function obtenerIconoBodega(bodega: string) {
-  const nombre = normalizarTexto(limpiarNombreBodega(bodega));
-
-  if (nombre.includes("limpieza")) return Paintbrush;
-  if (nombre.includes("oficina")) return Building2;
-  if (nombre.includes("gastronom") || nombre.includes("tasty")) return Utensils;
-  if (nombre.includes("inventario") || nombre.includes("general")) return Box;
-
-  return Warehouse;
 }
 
 function obtenerClaseBodega(bodega: string) {
