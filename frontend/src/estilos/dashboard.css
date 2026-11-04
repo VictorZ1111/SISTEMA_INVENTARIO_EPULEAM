@@ -6087,10 +6087,6 @@
   color: #0f172a;
 }
 
-.movimientos-fecha-filtro__icono {
-  flex: 0 0 auto;
-  color: #64748b;
-}
 
 .movimientos-fecha-filtro input {
   width: 100%;
@@ -6181,9 +6177,6 @@
 }
 
 @media (max-width: 760px) {
-  .movimientos-filtros {
-    grid-template-columns: 1fr !important;
-  }
 }
 
 /* ============================= */
@@ -7750,14 +7743,10 @@ textarea,
 .movimientos-tabla-scroll .tabla-contenedor td:nth-child(1) { width: 13.5% !important; }
 .movimientos-tabla-scroll .tabla-contenedor th:nth-child(2),
 .movimientos-tabla-scroll .tabla-contenedor td:nth-child(2) { width: 15% !important; }
-.movimientos-tabla-scroll .tabla-contenedor th:nth-child(3),
-.movimientos-tabla-scroll .tabla-contenedor td:nth-child(3) { width: 14% !important; }
 .movimientos-tabla-scroll .tabla-contenedor th:nth-child(4),
 .movimientos-tabla-scroll .tabla-contenedor td:nth-child(4) { width: 8% !important; }
 .movimientos-tabla-scroll .tabla-contenedor th:nth-child(5),
 .movimientos-tabla-scroll .tabla-contenedor td:nth-child(5) { width: 10% !important; }
-.movimientos-tabla-scroll .tabla-contenedor th:nth-child(6),
-.movimientos-tabla-scroll .tabla-contenedor td:nth-child(6) { width: 17% !important; }
 .movimientos-tabla-scroll .tabla-contenedor th:nth-child(7),
 .movimientos-tabla-scroll .tabla-contenedor td:nth-child(7) { width: 11% !important; }
 .movimientos-tabla-scroll .tabla-contenedor th:nth-child(8),
@@ -8056,10 +8045,6 @@ textarea,
 /* ===================================================== */
 
 /* Se compacta Tipo y se reserva más espacio para los tres botones de Acciones. */
-.movimientos-tabla-scroll .tabla-contenedor th:nth-child(1),
-.movimientos-tabla-scroll .tabla-contenedor td:nth-child(1) {
-  width: 11.5% !important;
-}
 
 .movimientos-tabla-scroll .tabla-contenedor th:nth-child(2),
 .movimientos-tabla-scroll .tabla-contenedor td:nth-child(2) {
@@ -8071,15 +8056,7 @@ textarea,
   width: 13.5% !important;
 }
 
-.movimientos-tabla-scroll .tabla-contenedor th:nth-child(4),
-.movimientos-tabla-scroll .tabla-contenedor td:nth-child(4) {
-  width: 7.5% !important;
-}
 
-.movimientos-tabla-scroll .tabla-contenedor th:nth-child(5),
-.movimientos-tabla-scroll .tabla-contenedor td:nth-child(5) {
-  width: 9.5% !important;
-}
 
 .movimientos-tabla-scroll .tabla-contenedor th:nth-child(6),
 .movimientos-tabla-scroll .tabla-contenedor td:nth-child(6) {
@@ -8397,10 +8374,6 @@ textarea,
   margin: 0 !important;
 }
 
-.movimientos-tabla-rol-scroll .acciones-movimientos-rol .boton-icono-tabla {
-  flex: 0 0 auto !important;
-  margin: 0 !important;
-}
 
 /* ===================================================== */
 /* MOVIMIENTOS - RESTAURAR SCROLL + ACCIONES ALINEADAS  */
