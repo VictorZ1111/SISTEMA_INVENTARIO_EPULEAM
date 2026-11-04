@@ -5,6 +5,8 @@ import {
 } from "@nestjs/common";
 import { DataSource, EntityManager } from "typeorm";
 
+import { LIMITE_REVERSA_MS } from "../../comun/constantes/reversiones";
+
 import type { UsuarioAutenticado } from "../auth/interfaces/usuario-autenticado.interface";
 import { Existencia } from "../inventario/entities/existencia.entity";
 import { Producto } from "../productos/entities/producto.entity";
@@ -64,7 +66,7 @@ export class ReversionesMovimientosService {
       }
 
       const limite = new Date(
-        movimiento.createdAt.getTime() + 3 * 60 * 60 * 1000,
+        movimiento.createdAt.getTime() + LIMITE_REVERSA_MS,
       );
 
       if (new Date() > limite) {

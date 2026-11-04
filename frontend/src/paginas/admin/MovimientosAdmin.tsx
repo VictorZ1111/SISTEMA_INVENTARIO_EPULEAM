@@ -26,6 +26,8 @@ import { useInventario } from "../../contexto/InventarioContext";
 
 import { useUsuarios } from "../../contexto/UsuariosContext";
 
+import { LIMITE_REVERSA_MS } from "../../dominio/reversiones";
+
 import {
 
   obtenerCustodioAsignado,
@@ -828,8 +830,6 @@ function MovimientosAdmin() {
     );
 
   };
-
-  const LIMITE_REVERSA_MS = 3 * 60 * 60 * 1000;
 
   const movimientoEstaDentroDeTiempo = (movimiento: Movimiento) => {
 

@@ -13,6 +13,8 @@ import {
   SelectQueryBuilder,
 } from "typeorm";
 
+import { LIMITE_REVERSA_MS } from "../../comun/constantes/reversiones";
+
 import { UsuarioBodega } from "../asignaciones/entities/usuario-bodega.entity";
 import type { UsuarioAutenticado } from "../auth/interfaces/usuario-autenticado.interface";
 import { Bodega } from "../bodegas/entities/bodega.entity";
@@ -361,7 +363,7 @@ export class SolicitudesService {
       }
 
       const limiteReversa = new Date(
-        solicitud.atendidaAt.getTime() + 3 * 60 * 60 * 1000,
+        solicitud.atendidaAt.getTime() + LIMITE_REVERSA_MS,
       );
 
       if (new Date() > limiteReversa) {

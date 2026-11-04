@@ -20,6 +20,8 @@ import { useInventario } from "../../contexto/InventarioContext";
 
 import { useUsuarios } from "../../contexto/UsuariosContext";
 
+import { LIMITE_REVERSA_MS } from "../../dominio/reversiones";
+
 import {
   convertirTextoFechaAIso,
   crearFechaIsoLocal,
@@ -529,7 +531,6 @@ function SolicitudesAdmin() {
         : "¿Seguro que deseas atender parcialmente esta solicitud? Solo se entregará lo disponible y quedará pendiente lo faltante.",
     });
   };
-  const LIMITE_REVERSA_MS = 3 * 60 * 60 * 1000;
   const solicitudEstaDentroDeTiempo = (solicitud: Solicitud) => {
     if (!solicitud.atendidaAt || solicitud.reversada) return false;
     const fechaAtencion = new Date(solicitud.atendidaAt).getTime();
