@@ -14,8 +14,12 @@ import SelectorFechaFiltro from "../../componentes/SelectorFechaFiltro";
 
 import { useAuth } from "../../contexto/AuthContext";
 import { obtenerBodegasAccesoUsuario } from "../../dominio/bodegas";
+import {
+  normalizarTipoMovimiento,
+  obtenerTextoMovimiento,
+} from "../../dominio/movimientos";
 import { useInventario } from "../../contexto/InventarioContext";
-import type { Movimiento, TipoMovimiento } from "../../tipos/movimiento";
+import type { Movimiento } from "../../tipos/movimiento";
 import {
   formatearFechaMovimiento,
   obtenerFechaHoraOrden,
@@ -44,29 +48,6 @@ function normalizarTexto(etiqueta: string) {
     .replace(/^bodega\s+/i, "")
     .replace(/\s+/g, " ");
 }
-
-function normalizarTipoMovimiento(
-  tipo: TipoMovimiento,
-): FiltroTipoMovimiento | "entrada" | "modificacion" {
-  if (tipo === "salida") return "transferencia";
-  if (tipo === "ajuste") return "modificacion";
-  if (tipo === "entrada") return "entrada";
-  if (tipo === "modificacion") return "modificacion";
-  if (tipo === "baja") return "baja";
-  if (tipo === "transferencia") return "transferencia";
-  return "transferencia";
-}
-
-function obtenerTextoMovimiento(tipo: TipoMovimiento) {
-  const tipoNormalizado = normalizarTipoMovimiento(tipo);
-
-  if (tipoNormalizado === "transferencia") return "Transferencia";
-  if (tipoNormalizado === "entrada") return "Entrada";
-  if (tipoNormalizado === "baja") return "Baja";
-  if (tipoNormalizado === "modificacion") return "Modificación";
-  return "Movimiento";
-}
-
 
 function limpiarObservacionMovimiento(observacion: string) {
   const texto = observacion.trim();
