@@ -1,3 +1,5 @@
+import type { Movimiento } from "../tipos/movimiento";
+
 export const MESES_CALENDARIO = [
   "enero",
   "febrero",
@@ -65,4 +67,41 @@ export function normalizarEntradaFecha(texto: string) {
   if (soloNumeros.length > 4) partes.push(soloNumeros.slice(4, 8));
 
   return partes.join("/");
+}
+
+export function obtenerFechaIso(fecha: string) {
+  const coincidencia = fecha.match(/^(\d{4}-\d{2}-\d{2})/);
+
+  if (coincidencia) return coincidencia[1];
+
+  const fechaConvertida = new Date(fecha);
+
+  if (Number.isNaN(fechaConvertida.getTime())) return "";
+
+  const anio = fechaConvertida.getFullYear();
+  const mes = String(fechaConvertida.getMonth() + 1).padStart(2, "0");
+  const dia = String(fechaConvertida.getDate()).padStart(2, "0");
+
+  return `${anio}-${mes}-${dia}`;
+}
+
+export function obtenerFechaHoraOrden(movimiento: Movimiento) {
+  const valorFecha = movimiento.createdAt || movimiento.fecha;
+  const fechaConvertida = new Date(valorFecha);
+
+  if (!Number.isNaN(fechaConvertida.getTime())) {
+    return fechaConvertida.getTime();
+  }
+
+  return 0;
+}
+
+export function formatearFechaMovimiento(fecha: string) {
+  const fechaIso = obtenerFechaIso(fecha);
+
+  if (!fechaIso) return fecha;
+
+  const [anio, mes, dia] = fechaIso.split("-");
+
+  return `${dia}/${mes}/${anio}`;
 }

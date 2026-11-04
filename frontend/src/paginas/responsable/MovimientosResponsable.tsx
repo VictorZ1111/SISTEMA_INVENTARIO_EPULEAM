@@ -16,6 +16,12 @@ import { useAuth } from "../../contexto/AuthContext";
 import { obtenerBodegasAccesoUsuario } from "../../dominio/bodegas";
 import { useInventario } from "../../contexto/InventarioContext";
 import type { Movimiento, TipoMovimiento } from "../../tipos/movimiento";
+import {
+  formatearFechaMovimiento,
+  obtenerFechaHoraOrden,
+  obtenerFechaIso,
+} from "../../utilidades/fechas";
+
 
 type FiltroTipoMovimiento =
   | "todos"
@@ -77,38 +83,6 @@ function limpiarObservacionMovimiento(observacion: string) {
       .replace(/^Motivo:\s*/i, "")
       .trim() || "Sin observación"
   );
-}
-
-function obtenerFechaIso(fecha: string) {
-  const coincidencia = fecha.match(/^(\d{4}-\d{2}-\d{2})/);
-  if (coincidencia) return coincidencia[1];
-
-  const fechaConvertida = new Date(fecha);
-  if (Number.isNaN(fechaConvertida.getTime())) return "";
-
-  const anio = fechaConvertida.getFullYear();
-  const mes = String(fechaConvertida.getMonth() + 1).padStart(2, "0");
-  const dia = String(fechaConvertida.getDate()).padStart(2, "0");
-  return `${anio}-${mes}-${dia}`;
-}
-
-function obtenerFechaHoraOrden(movimiento: Movimiento) {
-  const valorFecha = movimiento.createdAt || movimiento.fecha;
-  const fechaConvertida = new Date(valorFecha);
-
-  if (!Number.isNaN(fechaConvertida.getTime())) {
-    return fechaConvertida.getTime();
-  }
-
-  return 0;
-}
-
-function formatearFechaMovimiento(fecha: string) {
-  const fechaIso = obtenerFechaIso(fecha);
-  if (!fechaIso) return fecha;
-
-  const [anio, mes, dia] = fechaIso.split("-");
-  return `${dia}/${mes}/${anio}`;
 }
 
 function MovimientosResponsable() {

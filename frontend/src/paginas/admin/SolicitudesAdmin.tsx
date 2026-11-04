@@ -11,10 +11,13 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import EncabezadoPagina from "../../componentes/EncabezadoPagina";
+
 import TablaBase from "../../componentes/TablaBase";
+
 import CampoDesplegable from "../../componentes/CampoDesplegable";
 
 import { useInventario } from "../../contexto/InventarioContext";
+
 import { useUsuarios } from "../../contexto/UsuariosContext";
 
 import {
@@ -24,6 +27,7 @@ import {
   formatearFechaFiltro,
   MESES_CALENDARIO,
   normalizarEntradaFecha,
+  obtenerFechaIso,
 } from "../../utilidades/fechas";
 
 import type {
@@ -73,7 +77,6 @@ function obtenerTextoEstado(estado: EstadoSolicitud) {
 
 function limpiarTextoSolicitud(texto: string) {
   const textoLimpio = texto.trim();
-
   return textoLimpio
     .replace(/^solicitud\s+de\s+reposici[oó]n\s+de\s+/i, "")
     .replace(/^solicitud\s+de\s+/i, "")
@@ -83,9 +86,7 @@ function limpiarTextoSolicitud(texto: string) {
 
 function formatearTextoSolicitud(texto: string) {
   const textoLimpio = limpiarTextoSolicitud(texto);
-
   if (!textoLimpio) return texto.trim();
-
   return textoLimpio.charAt(0).toUpperCase() + textoLimpio.slice(1);
 }
 
@@ -102,155 +103,92 @@ function normalizarTexto(texto: string) {
     .trim();
 }
 
-function obtenerFechaIsoSolicitud(fecha: string) {
-  const coincidencia = fecha.match(/^(\d{4}-\d{2}-\d{2})/);
-
-  if (coincidencia) return coincidencia[1];
-
-  const fechaConvertida = new Date(fecha);
-
-  if (Number.isNaN(fechaConvertida.getTime())) return "";
-
-  const anio = fechaConvertida.getFullYear();
-  const mes = String(fechaConvertida.getMonth() + 1).padStart(2, "0");
-  const dia = String(fechaConvertida.getDate()).padStart(2, "0");
-
-  return `${anio}-${mes}-${dia}`;
-}
-
 interface SelectorFechaSolicitudProps {
   valor: string;
   alCambiar: (valor: string) => void;
 }
 
-function SelectorFechaSolicitud({
-  valor,
-  alCambiar,
-}: SelectorFechaSolicitudProps) {
+function SelectorFechaSolicitud({ valor, alCambiar }: SelectorFechaSolicitudProps) {
   const contenedorRef = useRef<HTMLDivElement | null>(null);
   const [abierto, setAbierto] = useState(false);
-  const [textoFecha, setTextoFecha] = useState(() =>
-    formatearFechaFiltro(valor),
-  );
+  const [textoFecha, setTextoFecha] = useState(() => formatearFechaFiltro(valor));
   const [fechaInvalida, setFechaInvalida] = useState(false);
-
   const [mesVisible, setMesVisible] = useState(() => {
     if (valor) {
       const [anio, mes] = valor.split("-").map(Number);
-
       if (anio && mes) return new Date(anio, mes - 1, 1);
     }
-
     const hoy = new Date();
-
     return new Date(hoy.getFullYear(), hoy.getMonth(), 1);
   });
-
   useEffect(() => {
     const cerrarAlHacerClickFuera = (evento: MouseEvent) => {
-      if (
-        contenedorRef.current &&
-        !contenedorRef.current.contains(evento.target as Node)
-      ) {
+      if (contenedorRef.current && !contenedorRef.current.contains(evento.target as Node)) {
         setAbierto(false);
       }
     };
-
     document.addEventListener("mousedown", cerrarAlHacerClickFuera);
-
-    return () =>
-      document.removeEventListener("mousedown", cerrarAlHacerClickFuera);
+    return () => document.removeEventListener("mousedown", cerrarAlHacerClickFuera);
   }, []);
-
   useEffect(() => {
     setTextoFecha(formatearFechaFiltro(valor));
     setFechaInvalida(false);
-
     if (!valor) return;
-
     const [anio, mes] = valor.split("-").map(Number);
-
     if (anio && mes) setMesVisible(new Date(anio, mes - 1, 1));
   }, [valor]);
-
   const anio = mesVisible.getFullYear();
   const mes = mesVisible.getMonth();
-
   const primerDia = new Date(anio, mes, 1);
   const desplazamientoLunes = (primerDia.getDay() + 6) % 7;
   const diasMes = new Date(anio, mes + 1, 0).getDate();
-
-  const celdas = Array.from(
-    { length: desplazamientoLunes + diasMes },
-    (_, indice) => {
-      if (indice < desplazamientoLunes) return null;
-
-      return indice - desplazamientoLunes + 1;
-    },
-  );
-
+  const celdas = Array.from({ length: desplazamientoLunes + diasMes }, (_, indice) => {
+    if (indice < desplazamientoLunes) return null;
+    return indice - desplazamientoLunes + 1;
+  });
   const hoyIso = crearFechaIsoLocal(new Date());
-
   const aplicarTextoFecha = () => {
     if (!textoFecha.trim()) {
       setFechaInvalida(false);
       alCambiar("");
       return;
     }
-
     const fechaIso = convertirTextoFechaAIso(textoFecha);
-
     if (!fechaIso) {
       setFechaInvalida(true);
       return;
     }
-
     setFechaInvalida(false);
     alCambiar(fechaIso);
-
     const [nuevoAnio, nuevoMes] = fechaIso.split("-").map(Number);
-
     setMesVisible(new Date(nuevoAnio, nuevoMes - 1, 1));
   };
-
   const seleccionarDia = (dia: number) => {
     const fechaIso = crearFechaIsoLocal(new Date(anio, mes, dia));
-
     alCambiar(fechaIso);
     setTextoFecha(formatearFechaFiltro(fechaIso));
     setFechaInvalida(false);
     setAbierto(false);
   };
-
   const seleccionarHoy = () => {
     const hoy = new Date();
     const fechaIso = crearFechaIsoLocal(hoy);
-
     alCambiar(fechaIso);
     setTextoFecha(formatearFechaFiltro(fechaIso));
     setFechaInvalida(false);
     setMesVisible(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
     setAbierto(false);
   };
-
   const limpiar = () => {
     alCambiar("");
     setTextoFecha("");
     setFechaInvalida(false);
     setAbierto(false);
   };
-
   return (
-    <div
-      className="movimientos-fecha-selector solicitudes-fecha-selector"
-      ref={contenedorRef}
-    >
+    <div className="movimientos-fecha-selector solicitudes-fecha-selector" ref={contenedorRef}>
       <div
-        className={`movimientos-fecha-filtro${
-          abierto ? " movimientos-fecha-filtro--abierto" : ""
-        }${
-          fechaInvalida ? " movimientos-fecha-filtro--invalido" : ""
-        }`}
+        className={`movimientos-fecha-filtro${abierto ? " movimientos-fecha-filtro--abierto" : ""}${fechaInvalida ? " movimientos-fecha-filtro--invalido" : ""}`}
       >
         <button
           className="movimientos-fecha-filtro__calendario"
@@ -262,12 +200,8 @@ function SelectorFechaSolicitud({
           onMouseDown={(evento) => evento.preventDefault()}
           onClick={() => setAbierto((estado) => !estado)}
         >
-          <span
-            className="movimientos-fecha-filtro__marca"
-            aria-hidden="true"
-          />
+          <span className="movimientos-fecha-filtro__marca" aria-hidden="true" />
         </button>
-
         <input
           type="text"
           inputMode="numeric"
@@ -276,13 +210,9 @@ function SelectorFechaSolicitud({
           aria-label="Filtrar por fecha"
           maxLength={10}
           onChange={(evento) => {
-            const textoNormalizado = normalizarEntradaFecha(
-              evento.target.value,
-            );
-
+            const textoNormalizado = normalizarEntradaFecha(evento.target.value);
             setTextoFecha(textoNormalizado);
             setFechaInvalida(false);
-
             if (!textoNormalizado) alCambiar("");
           }}
           onBlur={aplicarTextoFecha}
@@ -294,75 +224,31 @@ function SelectorFechaSolicitud({
           }}
         />
       </div>
-
       {abierto && (
-        <div
-          className="movimientos-calendario"
-          role="dialog"
-          aria-label="Seleccionar fecha"
-        >
+        <div className="movimientos-calendario" role="dialog" aria-label="Seleccionar fecha">
           <div className="movimientos-calendario__cabecera">
-            <button
-              type="button"
-              className="movimientos-calendario__navegacion"
-              aria-label="Mes anterior"
-              onClick={() => setMesVisible(new Date(anio, mes - 1, 1))}
-            >
-              ‹
-            </button>
-
+            <button type="button" className="movimientos-calendario__navegacion" aria-label="Mes anterior" onClick={() => setMesVisible(new Date(anio, mes - 1, 1))}>‹</button>
             <strong>{`${MESES_CALENDARIO[mes]} de ${anio}`}</strong>
-
-            <button
-              type="button"
-              className="movimientos-calendario__navegacion"
-              aria-label="Mes siguiente"
-              onClick={() => setMesVisible(new Date(anio, mes + 1, 1))}
-            >
-              ›
-            </button>
+            <button type="button" className="movimientos-calendario__navegacion" aria-label="Mes siguiente" onClick={() => setMesVisible(new Date(anio, mes + 1, 1))}>›</button>
           </div>
-
-          <div
-            className="movimientos-calendario__semana"
-            aria-hidden="true"
-          >
-            {DIAS_CALENDARIO.map((dia) => (
-              <span key={dia}>{dia}</span>
-            ))}
+          <div className="movimientos-calendario__semana" aria-hidden="true">
+            {DIAS_CALENDARIO.map((dia) => <span key={dia}>{dia}</span>)}
           </div>
-
           <div className="movimientos-calendario__dias">
             {celdas.map((dia, indice) => {
-              if (!dia) {
-                return (
-                  <span
-                    className="movimientos-calendario__vacio"
-                    key={`vacio-${indice}`}
-                  />
-                );
-              }
-
-              const fechaIso = crearFechaIsoLocal(
-                new Date(anio, mes, dia),
-              );
-
+              if (!dia) return <span className="movimientos-calendario__vacio" key={`vacio-${indice}`} />;
+              const fechaIso = crearFechaIsoLocal(new Date(anio, mes, dia));
               const seleccionado = fechaIso === valor;
               const esHoy = fechaIso === hoyIso;
-
               return (
                 <button
                   type="button"
                   key={fechaIso}
                   className={[
                     "movimientos-calendario__dia",
-                    seleccionado
-                      ? "movimientos-calendario__dia--seleccionado"
-                      : "",
+                    seleccionado ? "movimientos-calendario__dia--seleccionado" : "",
                     esHoy ? "movimientos-calendario__dia--hoy" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
+                  ].filter(Boolean).join(" ")}
                   aria-pressed={seleccionado}
                   onClick={() => seleccionarDia(dia)}
                 >
@@ -371,19 +257,9 @@ function SelectorFechaSolicitud({
               );
             })}
           </div>
-
           <div className="movimientos-calendario__pie">
-            <button
-              type="button"
-              onClick={limpiar}
-              disabled={!valor && !textoFecha}
-            >
-              Borrar
-            </button>
-
-            <button type="button" onClick={seleccionarHoy}>
-              Hoy
-            </button>
+            <button type="button" onClick={limpiar} disabled={!valor && !textoFecha}>Borrar</button>
+            <button type="button" onClick={seleccionarHoy}>Hoy</button>
           </div>
         </div>
       )}
@@ -393,13 +269,11 @@ function SelectorFechaSolicitud({
 
 function obtenerDiaOrden(fecha: string) {
   const fechaConvertida = new Date(fecha);
-
   if (Number.isNaN(fechaConvertida.getTime())) return 0;
-
   return Date.UTC(
     fechaConvertida.getFullYear(),
     fechaConvertida.getMonth(),
-    fechaConvertida.getDate(),
+    fechaConvertida.getDate()
   );
 }
 
@@ -409,22 +283,17 @@ function obtenerItemsSolicitud(solicitud: Solicitud): ItemSolicitud[] {
       ...item,
       id: item.id || `${solicitud.id}-${index}`,
       productoSolicitado:
-        item.productoSolicitado ||
-        solicitud.productoSolicitado ||
-        "No especificado",
+        item.productoSolicitado || solicitud.productoSolicitado || "No especificado",
       cantidad: Number(item.cantidad) || solicitud.cantidad || 1,
       cantidadEntregada: Number(item.cantidadEntregada) || 0,
     }));
   }
-
   return [
     {
       id: `${solicitud.id}-1`,
       productoId: solicitud.productoId,
       productoSolicitado:
-        solicitud.productoSolicitado ||
-        solicitud.descripcion ||
-        "No especificado",
+        solicitud.productoSolicitado || solicitud.descripcion || "No especificado",
       cantidad: solicitud.cantidad || 1,
       cantidadEntregada: solicitud.cantidadEntregada || 0,
       cantidadRechazada: solicitud.cantidadRechazada || 0,
@@ -441,105 +310,52 @@ function SolicitudesAdmin() {
     reversarAtencionSolicitud,
     reversarRechazoSolicitud,
   } = useInventario();
-
   const { bodegasDisponibles } = useUsuarios();
-
   const [busqueda, setBusqueda] = useState("");
   const [bodegaFiltro, setBodegaFiltro] = useState("todas");
-
   const [estadoFiltro, setEstadoFiltro] =
     useState<FiltroEstadoSolicitud>("pendiente");
-
   const [fechaFiltro, setFechaFiltro] = useState("");
-
   const [ordenSolicitudes, setOrdenSolicitudes] =
     useState<OrdenSolicitudes>("asc");
-
-  const [solicitudDetalle, setSolicitudDetalle] =
-    useState<Solicitud | null>(null);
-
-  const [itemsRevision, setItemsRevision] =
-    useState<ItemRevisionSolicitud[]>([]);
-
+  const [solicitudDetalle, setSolicitudDetalle] = useState<Solicitud | null>(
+    null
+  );
+  const [itemsRevision, setItemsRevision] = useState<ItemRevisionSolicitud[]>([]);
   const [mensajeSistema, setMensajeSistema] =
     useState<MensajeSistema | null>(null);
-
   const [confirmacionSolicitud, setConfirmacionSolicitud] =
     useState<ConfirmacionSolicitud | null>(null);
-
   const [observacionAdmin, setObservacionAdmin] = useState("");
-  const [mostrarObservacionAdmin, setMostrarObservacionAdmin] =
-    useState(false);
-
+  const [mostrarObservacionAdmin, setMostrarObservacionAdmin] = useState(false);
   const [motivoReversion, setMotivoReversion] = useState("");
-
-  const [solicitudReversion, setSolicitudReversion] =
-    useState<Solicitud | null>(null);
-
+  const [solicitudReversion, setSolicitudReversion] = useState<Solicitud | null>(null);
   const bodegasFiltro = useMemo(() => {
     const bodegasBase = bodegasDisponibles
       .filter((bodega) => bodega.nombre !== "Inventario General")
       .map((bodega) => bodega.nombre);
-
-    const bodegasSolicitudes = solicitudes.map(
-      (solicitud) => solicitud.bodega,
-    );
-
-    return Array.from(
-      new Set([...bodegasBase, ...bodegasSolicitudes]),
-    ).sort((a, b) =>
-      a.localeCompare(b, "es", {
-        sensitivity: "base",
-      }),
+    const bodegasSolicitudes = solicitudes.map((solicitud) => solicitud.bodega);
+    return Array.from(new Set([...bodegasBase, ...bodegasSolicitudes])).sort(
+      (a, b) => a.localeCompare(b, "es", { sensitivity: "base" })
     );
   }, [bodegasDisponibles, solicitudes]);
-
   const haySolicitudesPendientes = solicitudes.some(
-    (solicitud) => solicitud.estado === "pendiente",
+    (solicitud) => solicitud.estado === "pendiente"
   );
-
   const haySolicitudesParciales = solicitudes.some(
-    (solicitud) => solicitud.estado === "parcial",
+    (solicitud) => solicitud.estado === "parcial"
   );
-
-  const opcionesEstadoFiltro: {
-    valor: FiltroEstadoSolicitud;
-    texto: string;
-    alerta: boolean;
-  }[] = [
-    {
-      valor: "pendiente",
-      texto: "Pendientes",
-      alerta: haySolicitudesPendientes,
-    },
-    {
-      valor: "parcial",
-      texto: "Parciales",
-      alerta: haySolicitudesParciales,
-    },
-    {
-      valor: "atendida",
-      texto: "Atendidas",
-      alerta: false,
-    },
-    {
-      valor: "rechazada",
-      texto: "Rechazadas",
-      alerta: false,
-    },
-    {
-      valor: "todos",
-      texto: "Todas",
-      alerta: false,
-    },
+  const opcionesEstadoFiltro: { valor: FiltroEstadoSolicitud; texto: string; alerta: boolean }[] = [
+    { valor: "pendiente", texto: "Pendientes", alerta: haySolicitudesPendientes },
+    { valor: "parcial", texto: "Parciales", alerta: haySolicitudesParciales },
+    { valor: "atendida", texto: "Atendidas", alerta: false },
+    { valor: "rechazada", texto: "Rechazadas", alerta: false },
+    { valor: "todos", texto: "Todas", alerta: false },
   ];
-
   const solicitudesFiltradas = useMemo(() => {
     const texto = busqueda.trim().toLowerCase();
-
     const filtradas = solicitudes.filter((solicitud) => {
       const items = obtenerItemsSolicitud(solicitud);
-
       const coincideBusqueda =
         texto === "" ||
         solicitud.solicitante.toLowerCase().startsWith(texto) ||
@@ -547,48 +363,26 @@ function SolicitudesAdmin() {
         items.some((item) =>
           formatearTextoSolicitud(item.productoSolicitado)
             .toLowerCase()
-            .startsWith(texto),
+            .startsWith(texto)
         );
-
       const coincideBodega =
-        bodegaFiltro === "todas"
-          ? true
-          : solicitud.bodega === bodegaFiltro;
-
+        bodegaFiltro === "todas" ? true : solicitud.bodega === bodegaFiltro;
       const coincideEstado =
-        estadoFiltro === "todos"
-          ? true
-          : solicitud.estado === estadoFiltro;
-
+        estadoFiltro === "todos" ? true : solicitud.estado === estadoFiltro;
       const coincideFecha =
         fechaFiltro === ""
           ? true
-          : obtenerFechaIsoSolicitud(solicitud.fecha) === fechaFiltro;
-
-      return (
-        coincideBusqueda &&
-        coincideBodega &&
-        coincideEstado &&
-        coincideFecha
-      );
+          : obtenerFechaIso(solicitud.fecha) === fechaFiltro;
+      return coincideBusqueda && coincideBodega && coincideEstado && coincideFecha;
     });
-
     return [...filtradas].sort((a, b) => {
-      const comparacionFecha =
-        obtenerDiaOrden(b.fecha) - obtenerDiaOrden(a.fecha);
-
+      const comparacionFecha = obtenerDiaOrden(b.fecha) - obtenerDiaOrden(a.fecha);
       if (comparacionFecha !== 0) return comparacionFecha;
-
       const comparacionAlfabetica = formatearTextoSolicitud(
-        a.productoSolicitado,
-      ).localeCompare(
-        formatearTextoSolicitud(b.productoSolicitado),
-        "es",
-        {
-          sensitivity: "base",
-        },
-      );
-
+        a.productoSolicitado
+      ).localeCompare(formatearTextoSolicitud(b.productoSolicitado), "es", {
+        sensitivity: "base",
+      });
       return ordenSolicitudes === "asc"
         ? comparacionAlfabetica
         : comparacionAlfabetica * -1;
@@ -601,62 +395,42 @@ function SolicitudesAdmin() {
     fechaFiltro,
     ordenSolicitudes,
   ]);
-
-  const mostrarMensaje = (
-    tipo: MensajeSistema["tipo"],
-    texto: string,
-  ) => {
+  const mostrarMensaje = (tipo: MensajeSistema["tipo"], texto: string) => {
     setMensajeSistema({ tipo, texto });
-
     window.setTimeout(() => {
       setMensajeSistema(null);
     }, 3000);
   };
-
   const obtenerDisponibilidadItem = (item: ItemSolicitud) => {
     const productoDisponible = productos.find((producto) => {
-      const coincideId = item.productoId
-        ? producto.id === item.productoId
-        : false;
-
+      const coincideId = item.productoId ? producto.id === item.productoId : false;
       const coincideNombre =
         normalizarTexto(producto.descripcion).includes(
-          normalizarTexto(item.productoSolicitado),
+          normalizarTexto(item.productoSolicitado)
         ) ||
         normalizarTexto(item.productoSolicitado).includes(
-          normalizarTexto(producto.descripcion),
+          normalizarTexto(producto.descripcion)
         );
-
       const estaDisponible =
         producto.estado !== "inactivo" &&
-        (!producto.ubicacion ||
-          producto.ubicacion === "Inventario General");
-
+        (!producto.ubicacion || producto.ubicacion === "Inventario General");
       return estaDisponible && (coincideId || coincideNombre);
     });
-
     return {
       productoIdDisponible: productoDisponible?.id,
       disponible: productoDisponible?.cantidad || 0,
     };
   };
-
   const prepararRevisionSolicitud = (solicitud: Solicitud) => {
     const items = obtenerItemsSolicitud(solicitud).map((item) => {
       const pendiente = Math.max(
         0,
         item.cantidad -
           (item.cantidadEntregada || 0) -
-          (item.cantidadRechazada || 0),
+          (item.cantidadRechazada || 0)
       );
-
       const disponibilidad = obtenerDisponibilidadItem(item);
-
-      const cantidadAEntregar = Math.min(
-        pendiente,
-        disponibilidad.disponible,
-      );
-
+      const cantidadAEntregar = Math.min(pendiente, disponibilidad.disponible);
       return {
         ...item,
         pendiente,
@@ -665,54 +439,36 @@ function SolicitudesAdmin() {
         cantidadAEntregar,
       };
     });
-
     setItemsRevision(items);
     setSolicitudDetalle(solicitud);
-
-    const observacionGuardada =
-      (
-        solicitud as Solicitud & {
-          observacionAdmin?: string;
-        }
-      ).observacionAdmin || "";
-
+    const observacionGuardada = (solicitud as Solicitud & { observacionAdmin?: string }).observacionAdmin || "";
     setObservacionAdmin(observacionGuardada);
     setMostrarObservacionAdmin(false);
     setMotivoReversion("");
   };
-
   const cerrarDetalle = () => {
     setSolicitudDetalle(null);
     setItemsRevision([]);
     setObservacionAdmin("");
     setMostrarObservacionAdmin(false);
   };
-
-  const rechazarSolicitudDirecta = async (
-    solicitud: Solicitud,
-  ) => {
+  const rechazarSolicitudDirecta = async (solicitud: Solicitud) => {
     if (
       solicitud.estado === "rechazada" ||
       solicitud.estado === "atendida" ||
       solicitud.pendientesRechazados
-    ) {
-      return;
-    }
-
+    ) return;
     const resultado = await cambiarEstadoSolicitud(
       solicitud.id,
       "rechazada",
       mostrarObservacionAdmin ? observacionAdmin.trim() : "",
     );
-
     if (!resultado.exito) {
       mostrarMensaje("error", resultado.mensaje);
       return;
     }
-
     cerrarDetalle();
     setConfirmacionSolicitud(null);
-
     mostrarMensaje(
       "exito",
       solicitud.estado === "parcial"
@@ -720,16 +476,12 @@ function SolicitudesAdmin() {
         : resultado.mensaje,
     );
   };
-
   const pedirConfirmacionRechazo = (solicitud: Solicitud) => {
     if (
       solicitud.estado === "rechazada" ||
       solicitud.estado === "atendida" ||
       solicitud.pendientesRechazados
-    ) {
-      return;
-    }
-
+    ) return;
     setConfirmacionSolicitud({
       tipo: "rechazar",
       titulo:
@@ -742,40 +494,31 @@ function SolicitudesAdmin() {
           : "¿Seguro que deseas rechazar esta solicitud? Esta acción dejará constancia del rechazo.",
     });
   };
-
   const atenderDisponible = async () => {
     if (!solicitudDetalle) return;
-
     const entregas = itemsRevision
       .filter((item) => item.cantidadAEntregar > 0)
       .map((item) => ({
         itemId: item.id,
-        productoId:
-          item.productoId || item.productoIdDisponible,
+        productoId: item.productoId || item.productoIdDisponible,
         productoSolicitado: item.productoSolicitado,
         cantidad: item.cantidadAEntregar,
       }));
-
     const resultado = await atenderSolicitud(
       solicitudDetalle.id,
       entregas,
-      mostrarObservacionAdmin ? observacionAdmin.trim() : "",
+      mostrarObservacionAdmin ? observacionAdmin.trim() : ""
     );
-
     if (!resultado.exito) {
       mostrarMensaje("error", resultado.mensaje);
       return;
     }
-
     cerrarDetalle();
     setConfirmacionSolicitud(null);
-
     mostrarMensaje("exito", resultado.mensaje);
   };
-
   const pedirConfirmacionAtencion = () => {
     if (!solicitudDetalle || !puedeAtenderDisponible) return;
-
     setConfirmacionSolicitud({
       tipo: "atender",
       titulo: solicitudCompletaDisponible
@@ -786,112 +529,73 @@ function SolicitudesAdmin() {
         : "¿Seguro que deseas atender parcialmente esta solicitud? Solo se entregará lo disponible y quedará pendiente lo faltante.",
     });
   };
-
   const LIMITE_REVERSA_MS = 3 * 60 * 60 * 1000;
-
   const solicitudEstaDentroDeTiempo = (solicitud: Solicitud) => {
     if (!solicitud.atendidaAt || solicitud.reversada) return false;
-
     const fechaAtencion = new Date(solicitud.atendidaAt).getTime();
-
     if (Number.isNaN(fechaAtencion)) return false;
-
     return Date.now() - fechaAtencion <= LIMITE_REVERSA_MS;
   };
-
   const esSolicitudConReversa = (solicitud: Solicitud) => {
     if (solicitud.reversada) return false;
-
     if (solicitud.estado === "rechazada") return true;
-
     return (
-      (solicitud.estado === "atendida" ||
-        solicitud.estado === "parcial") &&
+      (solicitud.estado === "atendida" || solicitud.estado === "parcial") &&
       obtenerItemsSolicitud(solicitud).some(
         (item) => (item.cantidadEntregada || 0) > 0,
       )
     );
   };
-
   const puedeReversarSolicitud = (solicitud: Solicitud) =>
-    esSolicitudConReversa(solicitud) &&
-    solicitudEstaDentroDeTiempo(solicitud);
-
-  const obtenerTituloReversionSolicitud = (
-    solicitud: Solicitud,
-  ) => {
-    if (solicitud.reversada) {
-      return "Esta solicitud ya fue reversada";
-    }
-
+    esSolicitudConReversa(solicitud) && solicitudEstaDentroDeTiempo(solicitud);
+  const obtenerTituloReversionSolicitud = (solicitud: Solicitud) => {
+    if (solicitud.reversada) return "Esta solicitud ya fue reversada";
     if (!esSolicitudConReversa(solicitud)) {
       return "Esta solicitud no requiere reversión";
     }
-
     if (!solicitudEstaDentroDeTiempo(solicitud)) {
       return "Tiempo vencido: solo se puede reversar durante 3 horas";
     }
-
     return solicitud.estado === "rechazada"
       ? "Reversar rechazo"
       : "Reversar atención";
   };
-
   const pedirConfirmacionReversion = (solicitud: Solicitud) => {
     if (!puedeReversarSolicitud(solicitud)) return;
-
     setSolicitudReversion(solicitud);
     setMotivoReversion("");
-
     setConfirmacionSolicitud({
       tipo: "reversar",
-      titulo:
-        solicitud.estado === "rechazada"
-          ? "Reversar rechazo"
-          : "Reversar atención",
+      titulo: solicitud.estado === "rechazada" ? "Reversar rechazo" : "Reversar atención",
       mensaje:
         solicitud.estado === "rechazada"
           ? "Esta acción devolverá la solicitud a pendiente y registrará la corrección como modificación."
           : "Esta acción reversará la atención de la solicitud, la devolverá a pendiente y registrará la corrección como modificación.",
     });
   };
-
   const cerrarConfirmacion = () => {
     setConfirmacionSolicitud(null);
     setSolicitudReversion(null);
     setMotivoReversion("");
   };
-
   const confirmarReversion = async () => {
     if (!solicitudReversion) return;
-
     const resultado =
       solicitudReversion.estado === "rechazada"
-        ? await reversarRechazoSolicitud(
-            solicitudReversion.id,
-            motivoReversion,
-          )
-        : await reversarAtencionSolicitud(
-            solicitudReversion.id,
-            motivoReversion,
-          );
-
+        ? await reversarRechazoSolicitud(solicitudReversion.id, motivoReversion)
+        : await reversarAtencionSolicitud(solicitudReversion.id, motivoReversion);
     if (!resultado.exito) {
       mostrarMensaje("error", resultado.mensaje);
       return;
     }
-
     if (solicitudDetalle?.id === solicitudReversion.id) {
       cerrarDetalle();
     }
-
     setConfirmacionSolicitud(null);
     setSolicitudReversion(null);
     setMotivoReversion("");
-
     mostrarMensaje("exito", resultado.mensaje);
   };
-
   const limpiarFiltros = () => {
     setBusqueda("");
     setBodegaFiltro("todas");
@@ -899,70 +603,51 @@ function SolicitudesAdmin() {
     setFechaFiltro("");
     setOrdenSolicitudes("asc");
   };
-
   const filtrosActivos =
     busqueda.trim() !== "" ||
     bodegaFiltro !== "todas" ||
     estadoFiltro !== "pendiente" ||
     fechaFiltro !== "" ||
     ordenSolicitudes !== "asc";
-
-  const itemsPendientes = itemsRevision.filter(
-    (item) => item.pendiente > 0,
-  );
-
+  const itemsPendientes = itemsRevision.filter((item) => item.pendiente > 0);
   const puedeAtenderDisponible = itemsPendientes.some(
-    (item) => item.cantidadAEntregar > 0,
+    (item) => item.cantidadAEntregar > 0
   );
-
   const solicitudCompletaDisponible =
     itemsPendientes.length > 0 &&
-    itemsPendientes.every(
-      (item) => item.cantidadAEntregar >= item.pendiente,
-    );
-
+    itemsPendientes.every((item) => item.cantidadAEntregar >= item.pendiente);
   const textoBotonAtencion = solicitudCompletaDisponible
     ? "Aceptar solicitud"
     : puedeAtenderDisponible
       ? "Aceptar parcialmente"
       : "Sin stock disponible";
-
   const solicitudConfirmacion =
     confirmacionSolicitud?.tipo === "reversar"
       ? solicitudReversion
       : solicitudDetalle;
-
   return (
     <div className="pagina-admin">
       <EncabezadoPagina
         titulo="Solicitudes"
         descripcion="Revisa y gestiona las solicitudes enviadas por los supervisores de bodega."
       />
-
       {mensajeSistema && (
-        <div
-          className={`mensaje-flotante mensaje-flotante-${mensajeSistema.tipo}`}
-        >
+        <div className={`mensaje-flotante mensaje-flotante-${mensajeSistema.tipo}`}>
           {mensajeSistema.texto}
         </div>
       )}
-
       <section className="seccion-dashboard">
         <div className="seccion-dashboard-header solicitudes-header-simple">
           <div>
             <h2>Listado de solicitudes</h2>
-
             <p>
-              El administrador revisa disponibilidad, atiende entregas
-              parciales o completa solicitudes.
+              El administrador revisa disponibilidad, atiende entregas parciales o completa solicitudes.
             </p>
           </div>
         </div>
-
         <div className="solicitudes-filtros">
           <div className="buscador-input-contenedor solicitudes-buscador">
             <Search size={18} />
-
             <input
               type="text"
               value={busqueda}
@@ -970,15 +655,11 @@ function SolicitudesAdmin() {
               placeholder="Buscar solicitud..."
             />
           </div>
-
           <CampoDesplegable
             valor={bodegaFiltro}
             alCambiar={setBodegaFiltro}
             opciones={[
-              {
-                valor: "todas",
-                texto: "Todas las bodegas",
-              },
+              { valor: "todas", texto: "Todas las bodegas" },
               ...bodegasFiltro.map((bodega) => ({
                 valor: bodega,
                 texto: bodega.replace("Bodega ", ""),
@@ -987,33 +668,24 @@ function SolicitudesAdmin() {
             ariaLabel="Filtrar por bodega"
             ancho={240}
           />
-
           <CampoDesplegable
             valor={estadoFiltro}
-            alCambiar={(valor) =>
-              setEstadoFiltro(valor as FiltroEstadoSolicitud)
-            }
+            alCambiar={(valor) => setEstadoFiltro(valor as FiltroEstadoSolicitud)}
             opciones={opcionesEstadoFiltro}
             ariaLabel="Filtrar por estado"
             ancho={230}
           />
-
           <SelectorFechaSolicitud
             valor={fechaFiltro}
             alCambiar={setFechaFiltro}
           />
-
           <button
             className="boton-filtro boton-filtro-icono"
             type="button"
-            title={
-              ordenSolicitudes === "asc"
-                ? "Orden A-Z"
-                : "Orden Z-A"
-            }
+            title={ordenSolicitudes === "asc" ? "Orden A-Z" : "Orden Z-A"}
             onClick={() =>
               setOrdenSolicitudes((ordenActual) =>
-                ordenActual === "asc" ? "desc" : "asc",
+                ordenActual === "asc" ? "desc" : "asc"
               )
             }
           >
@@ -1023,7 +695,6 @@ function SolicitudesAdmin() {
               <ArrowUpAZ size={18} />
             )}
           </button>
-
           <button
             className="boton-filtro boton-filtro-icono"
             type="button"
@@ -1034,136 +705,105 @@ function SolicitudesAdmin() {
             <Paintbrush size={18} />
           </button>
         </div>
-
         <div className="solicitudes-tabla-scroll">
           <TablaBase
             columnas={[
-              "Bien solicitado",
-              "Cantidad",
-              "Entregado",
-              "Solicitante",
-              "Bodega",
-              "Fecha",
-              "Estado",
-              "Acciones",
-            ]}
-            mensajeVacio="No existen solicitudes registradas"
-          >
-            {solicitudesFiltradas.length > 0
-              ? solicitudesFiltradas.map((solicitud) => {
-                  const items = obtenerItemsSolicitud(solicitud);
-
-                  const cantidadTotal = items.reduce(
-                    (total, item) => total + item.cantidad,
-                    0,
-                  );
-
-                  const cantidadEntregada = items.reduce(
-                    (total, item) =>
-                      total + (item.cantidadEntregada || 0),
-                    0,
-                  );
-
-                  return (
-                    <tr key={solicitud.id}>
-                      <td>
-                        <div className="celda-producto">
-                          <strong>
-                            {items.length === 1
-                              ? formatearTextoSolicitud(
-                                  items[0].productoSolicitado,
-                                )
-                              : `${items.length} bienes solicitados`}
-                          </strong>
-                        </div>
-                      </td>
-
-                      <td>{cantidadTotal}</td>
-                      <td>{cantidadEntregada}</td>
-                      <td>{solicitud.solicitante}</td>
-                      <td>
-                        {solicitud.bodega.replace("Bodega ", "")}
-                      </td>
-                      <td>{solicitud.fecha}</td>
-
-                      <td>
-                        <span
-                          className={`badge-solicitud badge-solicitud-${obtenerClaseEstadoSolicitud(
-                            solicitud.estado,
-                          )}`}
+            "Bien solicitado",
+            "Cantidad",
+            "Entregado",
+            "Solicitante",
+            "Bodega",
+            "Fecha",
+            "Estado",
+            "Acciones",
+          ]}
+          mensajeVacio="No existen solicitudes registradas"
+        >
+          {solicitudesFiltradas.length > 0
+            ? solicitudesFiltradas.map((solicitud) => {
+                const items = obtenerItemsSolicitud(solicitud);
+                const cantidadTotal = items.reduce(
+                  (total, item) => total + item.cantidad,
+                  0
+                );
+                const cantidadEntregada = items.reduce(
+                  (total, item) => total + (item.cantidadEntregada || 0),
+                  0
+                );
+                return (
+                  <tr key={solicitud.id}>
+                    <td>
+                      <div className="celda-producto">
+                        <strong>
+                          {items.length === 1
+                            ? formatearTextoSolicitud(items[0].productoSolicitado)
+                            : `${items.length} bienes solicitados`}
+                        </strong>
+                      </div>
+                    </td>
+                    <td>{cantidadTotal}</td>
+                    <td>{cantidadEntregada}</td>
+                    <td>{solicitud.solicitante}</td>
+                    <td>{solicitud.bodega.replace("Bodega ", "")}</td>
+                    <td>{solicitud.fecha}</td>
+                    <td>
+                      <span
+                        className={`badge-solicitud badge-solicitud-${obtenerClaseEstadoSolicitud(solicitud.estado)}`}
+                      >
+                        {obtenerTextoEstado(solicitud.estado)}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="acciones-tabla acciones-solicitudes">
+                        <button
+                          className="boton-icono-tabla boton-icono-alerta"
+                          type="button"
+                          title={
+                            (solicitud.estado === "pendiente" || solicitud.estado === "parcial") &&
+                            !solicitud.pendientesRechazados
+                              ? "Revisar y atender solicitud"
+                              : "Ver información de la solicitud"
+                          }
+                          onClick={() => prepararRevisionSolicitud(solicitud)}
                         >
-                          {obtenerTextoEstado(solicitud.estado)}
-                        </span>
-                      </td>
-
-                      <td>
-                        <div className="acciones-tabla acciones-solicitudes">
+                          !
+                        </button>
+                        {esSolicitudConReversa(solicitud) && (
                           <button
-                            className="boton-icono-tabla boton-icono-alerta"
+                            className="boton-icono-tabla boton-icono-reversar"
                             type="button"
-                            title={
-                              (solicitud.estado === "pendiente" ||
-                                solicitud.estado === "parcial") &&
-                              !solicitud.pendientesRechazados
-                                ? "Revisar y atender solicitud"
-                                : "Ver información de la solicitud"
-                            }
-                            onClick={() =>
-                              prepararRevisionSolicitud(solicitud)
-                            }
+                            title={obtenerTituloReversionSolicitud(solicitud)}
+                            disabled={!puedeReversarSolicitud(solicitud)}
+                            onClick={() => pedirConfirmacionReversion(solicitud)}
                           >
-                            !
+                            <RotateCcw size={17} />
                           </button>
-
-                          {esSolicitudConReversa(solicitud) && (
-                            <button
-                              className="boton-icono-tabla boton-icono-reversar"
-                              type="button"
-                              title={obtenerTituloReversionSolicitud(
-                                solicitud,
-                              )}
-                              disabled={
-                                !puedeReversarSolicitud(solicitud)
-                              }
-                              onClick={() =>
-                                pedirConfirmacionReversion(solicitud)
-                              }
-                            >
-                              <RotateCcw size={17} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              : null}
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            : null}
           </TablaBase>
         </div>
       </section>
-
       {solicitudDetalle && (
         <div className="modal-fondo">
           <div className="modal-contenedor modal-solicitud-detalle modal-solicitud-atencion">
             <div className="modal-header">
               <div>
                 <h2>Solicitud</h2>
-
                 <p>
-                  Revisa el stock disponible y atiende automáticamente
-                  lo que sí puede cumplirse.
+                  Revisa el stock disponible y atiende automáticamente lo que sí puede cumplirse.
                 </p>
               </div>
-
               <div className="modal-solicitud-header-acciones">
                 <span
-                  className={`badge-solicitud badge-solicitud-${obtenerClaseEstadoSolicitud(
-                    solicitudDetalle.estado,
-                  )}`}
+                  className={`badge-solicitud badge-solicitud-${obtenerClaseEstadoSolicitud(solicitudDetalle.estado)}`}
                 >
                   {obtenerTextoEstado(solicitudDetalle.estado)}
                 </span>
-
                 <button
                   className="modal-cerrar"
                   type="button"
@@ -1173,35 +813,24 @@ function SolicitudesAdmin() {
                 </button>
               </div>
             </div>
-
             <div className="detalle-producto-grid detalle-solicitud-grid detalle-solicitud-grid-mejorada">
               <div>
                 <span>Solicitante</span>
                 <strong>{solicitudDetalle.solicitante}</strong>
               </div>
-
               <div>
                 <span>Bodega destino</span>
-                <strong>
-                  {solicitudDetalle.bodega.replace("Bodega ", "")}
-                </strong>
+                <strong>{solicitudDetalle.bodega.replace("Bodega ", "")}</strong>
               </div>
-
               <div>
                 <span>Fecha</span>
                 <strong>{solicitudDetalle.fecha}</strong>
               </div>
-
               <div className="detalle-completo detalle-observacion-solicitud">
                 <span>Observación</span>
-                <strong>
-                  {formatearTextoSolicitud(
-                    solicitudDetalle.descripcion,
-                  )}
-                </strong>
+                <strong>{formatearTextoSolicitud(solicitudDetalle.descripcion)}</strong>
               </div>
             </div>
-
             <div className="tabla-card tabla-solicitud-atencion">
               <div className="tabla-contenedor">
                 <table>
@@ -1216,39 +845,19 @@ function SolicitudesAdmin() {
                       <th>Revisión</th>
                     </tr>
                   </thead>
-
                   <tbody>
                     {itemsRevision.map((item) => {
                       const stockSuficiente =
-                        item.pendiente > 0 &&
-                        item.disponible >= item.pendiente;
-
+                        item.pendiente > 0 && item.disponible >= item.pendiente;
                       const stockInsuficiente =
-                        item.pendiente > 0 &&
-                        item.disponible > 0 &&
-                        !stockSuficiente;
-
-                      const cantidadEntregada =
-                        item.cantidadEntregada || 0;
-
-                      const cantidadRechazada =
-                        item.cantidadRechazada || 0;
-
+                        item.pendiente > 0 && item.disponible > 0 && !stockSuficiente;
+                      const cantidadEntregada = item.cantidadEntregada || 0;
+                      const cantidadRechazada = item.cantidadRechazada || 0;
                       const itemCerrado = item.pendiente === 0;
-
-                      const itemEntregado =
-                        itemCerrado &&
-                        cantidadEntregada >= item.cantidad;
-
-                      const itemRechazado =
-                        itemCerrado &&
-                        cantidadRechazada >= item.cantidad;
-
+                      const itemEntregado = itemCerrado && cantidadEntregada >= item.cantidad;
+                      const itemRechazado = itemCerrado && cantidadRechazada >= item.cantidad;
                       const itemMixto =
-                        itemCerrado &&
-                        cantidadEntregada > 0 &&
-                        cantidadRechazada > 0;
-
+                        itemCerrado && cantidadEntregada > 0 && cantidadRechazada > 0;
                       const textoRevision = itemEntregado
                         ? "Entregado"
                         : itemRechazado
@@ -1260,57 +869,34 @@ function SolicitudesAdmin() {
                               : stockInsuficiente
                                 ? "Stock insuficiente"
                                 : "Sin stock";
-
-                      const revisionCumplida =
-                        itemEntregado || stockSuficiente;
-
+                      const revisionCumplida = itemEntregado || stockSuficiente;
                       return (
-                        <tr
-                          key={
-                            item.id || item.productoSolicitado
-                          }
-                        >
-                          <td>
-                            {formatearTextoSolicitud(
-                              item.productoSolicitado,
-                            )}
-                          </td>
-
+                        <tr key={item.id || item.productoSolicitado}>
+                          <td>{formatearTextoSolicitud(item.productoSolicitado)}</td>
                           <td>
                             {productos.find(
                               (producto) =>
-                                producto.id ===
-                                (item.productoId ||
-                                  item.productoIdDisponible),
+                                producto.id === (item.productoId || item.productoIdDisponible)
                             )?.tipoProducto === "no_consumible"
                               ? productos.find(
                                   (producto) =>
-                                    producto.id ===
-                                    (item.productoId ||
-                                      item.productoIdDisponible),
+                                    producto.id === (item.productoId || item.productoIdDisponible)
                                 )?.empresa || "No registrado"
                               : "No aplica"}
                           </td>
-
                           <td>{item.cantidad}</td>
                           <td>{item.cantidadEntregada || 0}</td>
                           <td>{item.cantidadRechazada || 0}</td>
                           <td>{item.disponible}</td>
-
                           <td>
                             <span
-                              className={`estado-entrega-item ${
-                                revisionCumplida
-                                  ? "cumple"
-                                  : "no-cumple"
-                              }`}
+                              className={`estado-entrega-item ${revisionCumplida ? "cumple" : "no-cumple"}`}
                             >
                               {revisionCumplida ? (
                                 <Check size={16} />
                               ) : (
                                 <X size={16} />
                               )}
-
                               {textoRevision}
                             </span>
                           </td>
@@ -1321,7 +907,6 @@ function SolicitudesAdmin() {
                 </table>
               </div>
             </div>
-
             {solicitudDetalle.estado !== "rechazada" &&
               solicitudDetalle.estado !== "atendida" &&
               !solicitudDetalle.pendientesRechazados && (
@@ -1330,24 +915,18 @@ function SolicitudesAdmin() {
                     <button
                       className="boton-agregar-observacion-solicitud"
                       type="button"
-                      onClick={() =>
-                        setMostrarObservacionAdmin(true)
-                      }
+                      onClick={() => setMostrarObservacionAdmin(true)}
                     >
                       + Agregar observación
                     </button>
                   ) : (
                     <div className="campo-observacion-admin-solicitud">
                       <label>Observación</label>
-
                       <textarea
                         value={observacionAdmin}
-                        onChange={(e) =>
-                          setObservacionAdmin(e.target.value)
-                        }
+                        onChange={(e) => setObservacionAdmin(e.target.value)}
                         placeholder="Escribe una observación"
                       />
-
                       <button
                         className="boton-cancelar-observacion-solicitud"
                         type="button"
@@ -1362,35 +941,30 @@ function SolicitudesAdmin() {
                   )}
                 </div>
               )}
-
-            {solicitudDetalle.estado !== "rechazada" &&
+            {(solicitudDetalle.estado !== "rechazada" &&
               solicitudDetalle.estado !== "atendida" &&
-              !solicitudDetalle.pendientesRechazados && (
-                <div className="modal-acciones modal-acciones-solicitud">
-                  <button
-                    className="boton-secundario"
-                    type="button"
-                    onClick={() =>
-                      pedirConfirmacionRechazo(solicitudDetalle)
-                    }
-                  >
-                    Rechazar
-                  </button>
-
-                  <button
-                    className="boton-principal"
-                    type="button"
-                    disabled={!puedeAtenderDisponible}
-                    onClick={pedirConfirmacionAtencion}
-                  >
-                    {textoBotonAtencion}
-                  </button>
-                </div>
-              )}
+              !solicitudDetalle.pendientesRechazados) && (
+              <div className="modal-acciones modal-acciones-solicitud">
+                <button
+                  className="boton-secundario"
+                  type="button"
+                  onClick={() => pedirConfirmacionRechazo(solicitudDetalle)}
+                >
+                  Rechazar
+                </button>
+                <button
+                  className="boton-principal"
+                  type="button"
+                  disabled={!puedeAtenderDisponible}
+                  onClick={pedirConfirmacionAtencion}
+                >
+                  {textoBotonAtencion}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
-
       {confirmacionSolicitud && solicitudConfirmacion && (
         <div className="modal-fondo modal-fondo-confirmacion">
           <div className="modal-contenedor modal-confirmacion-solicitud">
@@ -1399,7 +973,6 @@ function SolicitudesAdmin() {
                 <h2>{confirmacionSolicitud.titulo}</h2>
                 <p>{confirmacionSolicitud.mensaje}</p>
               </div>
-
               <button
                 className="modal-cerrar"
                 type="button"
@@ -1408,23 +981,18 @@ function SolicitudesAdmin() {
                 <X size={20} />
               </button>
             </div>
-
             {confirmacionSolicitud.tipo === "reversar" && (
               <div className="formulario-modal formulario-reversion-solicitud">
                 <div className="campo-formulario campo-completo">
                   <label>Motivo de reversión *</label>
-
                   <textarea
                     value={motivoReversion}
-                    onChange={(e) =>
-                      setMotivoReversion(e.target.value)
-                    }
+                    onChange={(e) => setMotivoReversion(e.target.value)}
                     placeholder="Ej: Se atendió o rechazó la solicitud por error."
                   />
                 </div>
               </div>
             )}
-
             <div className="modal-acciones">
               <button
                 className="boton-secundario"
@@ -1433,7 +1001,6 @@ function SolicitudesAdmin() {
               >
                 Cancelar
               </button>
-
               <button
                 className={
                   confirmacionSolicitud.tipo === "rechazar"
@@ -1450,12 +1017,10 @@ function SolicitudesAdmin() {
                     rechazarSolicitudDirecta(solicitudConfirmacion);
                     return;
                   }
-
                   if (confirmacionSolicitud.tipo === "reversar") {
                     confirmarReversion();
                     return;
                   }
-
                   atenderDisponible();
                 }}
               >
