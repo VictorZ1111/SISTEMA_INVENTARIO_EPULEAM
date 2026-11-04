@@ -18,6 +18,7 @@ import TablaBase from "../../componentes/TablaBase";
 
 import { useAuth } from "../../contexto/AuthContext";
 import {
+  limpiarPrefijoBodega as limpiarNombreBodega,
   obtenerBodegasPrincipalesUsuario,
   obtenerSucursalesTastyUsuario,
 } from "../../dominio/bodegas";
@@ -26,10 +27,6 @@ import { useInventario } from "../../contexto/InventarioContext";
 import type { Producto } from "../../tipos/producto";
 
 type OrdenInventario = "asc" | "desc";
-
-function limpiarNombreBodega(bodega: string) {
-  return bodega.replace(/^Bodega\s+/i, "").trim();
-}
 
 function normalizarTexto(texto: string) {
   return texto

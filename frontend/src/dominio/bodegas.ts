@@ -24,7 +24,7 @@ function normalizarTextoBodega(texto: string) {
     .replace(/\s+/g, " ");
 }
 
-function limpiarPrefijoBodega(bodega: string) {
+export function limpiarPrefijoBodega(bodega: string) {
   return bodega.replace(/^Bodega\s+/i, "").trim();
 }
 

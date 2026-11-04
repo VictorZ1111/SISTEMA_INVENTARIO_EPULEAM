@@ -20,6 +20,7 @@ import TablaBase from "../../componentes/TablaBase";
 
 import { useAuth } from "../../contexto/AuthContext";
 import {
+  limpiarPrefijoBodega as limpiarNombreBodega,
   SUCURSALES_TASTY,
   esBodegaGastronomiaAgrupada,
   obtenerBodegasPrincipalesUsuario,
@@ -38,10 +39,6 @@ import {
 
 type OrdenBienes = "asc" | "desc";
 type FiltroEstadoBien = "todos" | "bueno" | "regular" | "malo";
-
-function limpiarNombreBodega(bodega: string) {
-  return bodega.replace(/^Bodega\s+/i, "").trim();
-}
 
 function normalizarTexto(texto: string) {
   return texto
