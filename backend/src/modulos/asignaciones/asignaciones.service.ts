@@ -53,6 +53,19 @@ export interface AsignacionesUsuarioPublicas {
   asignaciones: AsignacionPublica[];
 }
 
+export interface AsignacionDirectorioPublica {
+  usuario: {
+    id: string;
+    nombre: string;
+    rol: RolUsuario;
+    estado: EstadoUsuario;
+  };
+  bodega: {
+    id: string;
+    nombre: string;
+  };
+}
+
 @Injectable()
 export class AsignacionesService {
   private readonly bodegasSupervisorPermitidas = new Set([
@@ -93,6 +106,89 @@ export class AsignacionesService {
 
     return asignaciones.map((asignacion) =>
       this.convertirAPublica(asignacion),
+    );
+  }
+
+  async listarDirectorio(
+    actor: UsuarioAutenticado,
+  ): Promise<AsignacionDirectorioPublica[]> {
+    if (actor.rol === RolUsuario.ADMINISTRADOR) {
+      const asignaciones = await this.listarTodas();
+      return asignaciones.map((asignacion) =>
+        this.convertirADirectorio(asignacion),
+      );
+    }
+
+    const asignacionesPropias = await this.asignacionesRepository.find({
+      where: {
+        usuarioId: actor.id,
+      },
+      relations: {
+        bodega: true,
+      },
+    });
+
+    if (asignacionesPropias.length === 0) {
+      return [];
+    }
+
+    let bodegaIdsVisibles: string[] = [];
+    let rolVisible: RolUsuario;
+
+    if (actor.rol === RolUsuario.SUPERVISOR) {
+      const bodegasPrincipalesIds = Array.from(
+        new Set(
+          asignacionesPropias
+            .map((asignacion) => asignacion.bodega.id)
+            .filter(Boolean),
+        ),
+      );
+
+      const sucursales = bodegasPrincipalesIds.length
+        ? await this.bodegasRepository.find({
+            where: {
+              bodegaPadreId: In(bodegasPrincipalesIds),
+              estado: EstadoBodega.ACTIVA,
+            },
+          })
+        : [];
+
+      bodegaIdsVisibles = sucursales.map((bodega) => bodega.id);
+      rolVisible = RolUsuario.RESPONSABLE;
+    } else {
+      bodegaIdsVisibles = Array.from(
+        new Set(
+          asignacionesPropias
+            .map((asignacion) => asignacion.bodega.bodegaPadreId)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      );
+      rolVisible = RolUsuario.SUPERVISOR;
+    }
+
+    if (bodegaIdsVisibles.length === 0) {
+      return [];
+    }
+
+    const asignacionesVisibles = await this.asignacionesRepository.find({
+      where: {
+        bodegaId: In(bodegaIdsVisibles),
+        usuario: {
+          rol: rolVisible,
+          estado: EstadoUsuario.ACTIVO,
+        },
+      },
+      relations: {
+        usuario: true,
+        bodega: true,
+      },
+      order: {
+        createdAt: "ASC",
+      },
+    });
+
+    return asignacionesVisibles.map((asignacion) =>
+      this.convertirADirectorio(this.convertirAPublica(asignacion)),
     );
   }
 
@@ -326,6 +422,23 @@ export class AsignacionesService {
         tipo: asignacion.bodega.tipo,
         estado: asignacion.bodega.estado,
         bodegaPadreId: asignacion.bodega.bodegaPadreId,
+      },
+    };
+  }
+
+  private convertirADirectorio(
+    asignacion: AsignacionPublica,
+  ): AsignacionDirectorioPublica {
+    return {
+      usuario: {
+        id: asignacion.usuario.id,
+        nombre: asignacion.usuario.nombre,
+        rol: asignacion.usuario.rol,
+        estado: asignacion.usuario.estado,
+      },
+      bodega: {
+        id: asignacion.bodega.id,
+        nombre: asignacion.bodega.nombre,
       },
     };
   }

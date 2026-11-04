@@ -17,6 +17,7 @@ import type { UsuarioAutenticado } from "../auth/interfaces/usuario-autenticado.
 import { RolUsuario } from "../usuarios/enums/rol-usuario.enum";
 import {
   AsignacionesService,
+  type AsignacionDirectorioPublica,
   type AsignacionPublica,
   type AsignacionesUsuarioPublicas,
 } from "./asignaciones.service";
@@ -41,6 +42,18 @@ export class AsignacionesController {
     return this.asignacionesService.listarPorUsuario(
       usuario.id,
     );
+  }
+
+  @Get("directorio")
+  @Roles(
+    RolUsuario.ADMINISTRADOR,
+    RolUsuario.SUPERVISOR,
+    RolUsuario.RESPONSABLE,
+  )
+  listarDirectorio(
+    @UsuarioActual() usuario: UsuarioAutenticado,
+  ): Promise<AsignacionDirectorioPublica[]> {
+    return this.asignacionesService.listarDirectorio(usuario);
   }
 
   @Get()

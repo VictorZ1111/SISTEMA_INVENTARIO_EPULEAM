@@ -11,7 +11,6 @@ import {
 
 import { clienteApi } from "../api/clienteApi";
 import { useAuth } from "./AuthContext";
-import { usuariosAdmin } from "../datos/datosAdmin";
 import type { Bodega } from "../tipos/bodega";
 import type { EstadoUsuario, RolUsuario, Usuario } from "../tipos/usuario";
 
@@ -72,6 +71,19 @@ interface AsignacionBackend {
   };
 }
 
+interface AsignacionDirectorioBackend {
+  usuario: {
+    id: string;
+    nombre: string;
+    rol: RolBackend;
+    estado: EstadoUsuario;
+  };
+  bodega: {
+    id: string;
+    nombre: string;
+  };
+}
+
 const UsuariosContext = createContext<UsuariosContexto | undefined>(undefined);
 
 interface Props {
@@ -122,73 +134,112 @@ function convertirBodega(bodega: BodegaBackend): Bodega {
 
 export function UsuariosProvider({ children }: Props) {
   const { usuarioActual, cargandoSesion } = useAuth();
-  const [usuarios, setUsuarios] = useState<Usuario[]>(usuariosAdmin);
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [bodegasDisponibles, setBodegasDisponibles] = useState<Bodega[]>([]);
   const [cargandoUsuarios, setCargandoUsuarios] = useState(false);
 
   const recargarUsuarios = useCallback(async () => {
-    if (usuarioActual?.rol !== "admin") return;
+    if (!usuarioActual) {
+      setUsuarios([]);
+      setBodegasDisponibles([]);
+      return;
+    }
 
     setCargandoUsuarios(true);
 
     try {
-      const [respuestaUsuarios, respuestaAsignaciones, respuestaBodegas] =
-        await Promise.all([
-          clienteApi.get<UsuarioBackend[]>("/usuarios"),
-          clienteApi.get<AsignacionBackend[]>("/asignaciones"),
-          clienteApi.get<BodegaBackend[]>("/bodegas/activas"),
-        ]);
+      if (usuarioActual.rol === "admin") {
+        const [respuestaUsuarios, respuestaAsignaciones, respuestaBodegas] =
+          await Promise.all([
+            clienteApi.get<UsuarioBackend[]>("/usuarios"),
+            clienteApi.get<AsignacionBackend[]>("/asignaciones"),
+            clienteApi.get<BodegaBackend[]>("/bodegas/activas"),
+          ]);
 
-      const asignacionesPorUsuario = new Map<string, string[]>();
+        const asignacionesPorUsuario = new Map<string, string[]>();
 
-      respuestaAsignaciones.data.forEach((asignacion) => {
-        const actuales = asignacionesPorUsuario.get(asignacion.usuario.id) || [];
-        actuales.push(asignacion.bodega.nombre);
-        asignacionesPorUsuario.set(asignacion.usuario.id, actuales);
-      });
+        respuestaAsignaciones.data.forEach((asignacion) => {
+          const actuales = asignacionesPorUsuario.get(asignacion.usuario.id) || [];
+          actuales.push(asignacion.bodega.nombre);
+          asignacionesPorUsuario.set(asignacion.usuario.id, actuales);
+        });
 
-      const usuariosConvertidos: Usuario[] = respuestaUsuarios.data.map((usuario) => {
-        const rol = convertirRolBackend(usuario.rol);
+        const usuariosConvertidos: Usuario[] = respuestaUsuarios.data.map((usuario) => {
+          const rol = convertirRolBackend(usuario.rol);
+          const bodegasAsignadas = Array.from(
+            new Set(asignacionesPorUsuario.get(usuario.id) || []),
+          );
+
+          return {
+            id: usuario.id,
+            nombre: usuario.nombre,
+            correo: usuario.correo,
+            rol,
+            estado: usuario.estado,
+            telefono: usuario.telefono || "",
+            cargo: obtenerCargoPorRol(rol),
+            bodegasAsignadas,
+            bodegaAsignada: bodegasAsignadas[0] || "",
+            esAdministradorGeneral: usuario.esAdministradorGeneral,
+          };
+        });
+
+        setUsuarios(usuariosConvertidos);
+        setBodegasDisponibles(respuestaBodegas.data.map(convertirBodega));
+        return;
+      }
+
+      const { data } = await clienteApi.get<AsignacionDirectorioBackend[]>(
+        "/asignaciones/directorio",
+      );
+      const usuariosPorId = new Map<string, Usuario>();
+
+      data.forEach((asignacion) => {
+        const rol = convertirRolBackend(asignacion.usuario.rol);
+        const existente = usuariosPorId.get(asignacion.usuario.id);
         const bodegasAsignadas = Array.from(
-          new Set(asignacionesPorUsuario.get(usuario.id) || []),
+          new Set([
+            ...(existente?.bodegasAsignadas || []),
+            asignacion.bodega.nombre,
+          ]),
         );
 
-        return {
-          id: usuario.id,
-          nombre: usuario.nombre,
-          correo: usuario.correo,
+        usuariosPorId.set(asignacion.usuario.id, {
+          id: asignacion.usuario.id,
+          nombre: asignacion.usuario.nombre,
+          correo: "",
           rol,
-          estado: usuario.estado,
-          telefono: usuario.telefono || "",
+          estado: asignacion.usuario.estado,
           cargo: obtenerCargoPorRol(rol),
           bodegasAsignadas,
           bodegaAsignada: bodegasAsignadas[0] || "",
-          esAdministradorGeneral: usuario.esAdministradorGeneral,
-        };
+        });
       });
 
-      setUsuarios(usuariosConvertidos);
-      setBodegasDisponibles(respuestaBodegas.data.map(convertirBodega));
+      setUsuarios(Array.from(usuariosPorId.values()));
+      setBodegasDisponibles([]);
     } catch (error) {
+      if (usuarioActual.rol !== "admin") {
+        setUsuarios([]);
+        setBodegasDisponibles([]);
+      }
       throw new Error(obtenerMensajeError(error));
     } finally {
       setCargandoUsuarios(false);
     }
-  }, [usuarioActual?.rol]);
+  }, [usuarioActual]);
 
   useEffect(() => {
     if (cargandoSesion) return;
 
-    if (usuarioActual?.rol === "admin") {
-      void recargarUsuarios().catch(() => undefined);
+    if (!usuarioActual) {
+      setUsuarios([]);
+      setBodegasDisponibles([]);
       return;
     }
 
-    // Los demás módulos aún están en proceso de integración. Se conserva su
-    // información simulada hasta conectar esos módulos con el backend.
-    setUsuarios(usuariosAdmin);
-    setBodegasDisponibles([]);
-  }, [usuarioActual?.rol, cargandoSesion, recargarUsuarios]);
+    void recargarUsuarios().catch(() => undefined);
+  }, [usuarioActual, cargandoSesion, recargarUsuarios]);
 
   const obtenerIdsBodegas = useCallback(
     (nombres: string[] = []) => {
