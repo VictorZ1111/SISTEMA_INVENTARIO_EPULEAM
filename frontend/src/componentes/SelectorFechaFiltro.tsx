@@ -13,30 +13,26 @@ interface SelectorFechaFiltroProps {
   valor: string;
   alCambiar: (valor: string) => void;
   ariaLabel?: string;
+  className?: string;
 }
 
 export default function SelectorFechaFiltro({
   valor,
   alCambiar,
   ariaLabel = "Filtrar por fecha",
+  className = "",
 }: SelectorFechaFiltroProps) {
   const contenedorRef = useRef<HTMLDivElement | null>(null);
   const [abierto, setAbierto] = useState(false);
-  const [textoFecha, setTextoFecha] = useState(() =>
-    formatearFechaFiltro(valor),
-  );
+  const [textoFecha, setTextoFecha] = useState(() => formatearFechaFiltro(valor));
   const [fechaInvalida, setFechaInvalida] = useState(false);
   const [mesVisible, setMesVisible] = useState(() => {
     if (valor) {
       const [anio, mes] = valor.split("-").map(Number);
-
-      if (anio && mes) {
-        return new Date(anio, mes - 1, 1);
-      }
+      if (anio && mes) return new Date(anio, mes - 1, 1);
     }
 
     const hoy = new Date();
-
     return new Date(hoy.getFullYear(), hoy.getMonth(), 1);
   });
 
@@ -51,9 +47,7 @@ export default function SelectorFechaFiltro({
     };
 
     document.addEventListener("mousedown", cerrarAlHacerClickFuera);
-
-    return () =>
-      document.removeEventListener("mousedown", cerrarAlHacerClickFuera);
+    return () => document.removeEventListener("mousedown", cerrarAlHacerClickFuera);
   }, []);
 
   useEffect(() => {
@@ -61,12 +55,8 @@ export default function SelectorFechaFiltro({
     setFechaInvalida(false);
 
     if (!valor) return;
-
     const [anio, mes] = valor.split("-").map(Number);
-
-    if (anio && mes) {
-      setMesVisible(new Date(anio, mes - 1, 1));
-    }
+    if (anio && mes) setMesVisible(new Date(anio, mes - 1, 1));
   }, [valor]);
 
   const anio = mesVisible.getFullYear();
@@ -74,12 +64,10 @@ export default function SelectorFechaFiltro({
   const primerDia = new Date(anio, mes, 1);
   const desplazamientoLunes = (primerDia.getDay() + 6) % 7;
   const diasMes = new Date(anio, mes + 1, 0).getDate();
-
   const celdas = Array.from(
     { length: desplazamientoLunes + diasMes },
     (_, indice) => {
       if (indice < desplazamientoLunes) return null;
-
       return indice - desplazamientoLunes + 1;
     },
   );
@@ -94,7 +82,6 @@ export default function SelectorFechaFiltro({
     }
 
     const fechaIso = convertirTextoFechaAIso(textoFecha);
-
     if (!fechaIso) {
       setFechaInvalida(true);
       return;
@@ -102,15 +89,12 @@ export default function SelectorFechaFiltro({
 
     setFechaInvalida(false);
     alCambiar(fechaIso);
-
     const [nuevoAnio, nuevoMes] = fechaIso.split("-").map(Number);
-
     setMesVisible(new Date(nuevoAnio, nuevoMes - 1, 1));
   };
 
   const seleccionarDia = (dia: number) => {
     const fechaIso = crearFechaIsoLocal(new Date(anio, mes, dia));
-
     alCambiar(fechaIso);
     setTextoFecha(formatearFechaFiltro(fechaIso));
     setFechaInvalida(false);
@@ -120,7 +104,6 @@ export default function SelectorFechaFiltro({
   const seleccionarHoy = () => {
     const hoy = new Date();
     const fechaIso = crearFechaIsoLocal(hoy);
-
     alCambiar(fechaIso);
     setTextoFecha(formatearFechaFiltro(fechaIso));
     setFechaInvalida(false);
@@ -135,14 +118,14 @@ export default function SelectorFechaFiltro({
     setAbierto(false);
   };
 
+  const claseContenedor = ["movimientos-fecha-selector", className]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div className="movimientos-fecha-selector" ref={contenedorRef}>
+    <div className={claseContenedor} ref={contenedorRef}>
       <div
-        className={`movimientos-fecha-filtro${
-          abierto ? " movimientos-fecha-filtro--abierto" : ""
-        }${
-          fechaInvalida ? " movimientos-fecha-filtro--invalido" : ""
-        }`}
+        className={`movimientos-fecha-filtro${abierto ? " movimientos-fecha-filtro--abierto" : ""}${fechaInvalida ? " movimientos-fecha-filtro--invalido" : ""}`}
       >
         <button
           className="movimientos-fecha-filtro__calendario"
@@ -154,10 +137,7 @@ export default function SelectorFechaFiltro({
           onMouseDown={(evento) => evento.preventDefault()}
           onClick={() => setAbierto((estado) => !estado)}
         >
-          <span
-            className="movimientos-fecha-filtro__marca"
-            aria-hidden="true"
-          />
+          <span className="movimientos-fecha-filtro__marca" aria-hidden="true" />
         </button>
 
         <input
@@ -168,16 +148,10 @@ export default function SelectorFechaFiltro({
           aria-label={ariaLabel}
           maxLength={10}
           onChange={(evento) => {
-            const textoNormalizado = normalizarEntradaFecha(
-              evento.target.value,
-            );
-
+            const textoNormalizado = normalizarEntradaFecha(evento.target.value);
             setTextoFecha(textoNormalizado);
             setFechaInvalida(false);
-
-            if (!textoNormalizado) {
-              alCambiar("");
-            }
+            if (!textoNormalizado) alCambiar("");
           }}
           onBlur={aplicarTextoFecha}
           onKeyDown={(evento) => {
@@ -204,9 +178,7 @@ export default function SelectorFechaFiltro({
             >
               ‹
             </button>
-
             <strong>{`${MESES_CALENDARIO[mes]} de ${anio}`}</strong>
-
             <button
               type="button"
               className="movimientos-calendario__navegacion"
@@ -217,10 +189,7 @@ export default function SelectorFechaFiltro({
             </button>
           </div>
 
-          <div
-            className="movimientos-calendario__semana"
-            aria-hidden="true"
-          >
+          <div className="movimientos-calendario__semana" aria-hidden="true">
             {DIAS_CALENDARIO.map((dia) => (
               <span key={dia}>{dia}</span>
             ))}
@@ -237,9 +206,7 @@ export default function SelectorFechaFiltro({
                 );
               }
 
-              const fechaIso = crearFechaIsoLocal(
-                new Date(anio, mes, dia),
-              );
+              const fechaIso = crearFechaIsoLocal(new Date(anio, mes, dia));
               const seleccionado = fechaIso === valor;
               const esHoy = fechaIso === hoyIso;
 
@@ -249,9 +216,7 @@ export default function SelectorFechaFiltro({
                   key={fechaIso}
                   className={[
                     "movimientos-calendario__dia",
-                    seleccionado
-                      ? "movimientos-calendario__dia--seleccionado"
-                      : "",
+                    seleccionado ? "movimientos-calendario__dia--seleccionado" : "",
                     esHoy ? "movimientos-calendario__dia--hoy" : "",
                   ]
                     .filter(Boolean)
@@ -266,14 +231,9 @@ export default function SelectorFechaFiltro({
           </div>
 
           <div className="movimientos-calendario__pie">
-            <button
-              type="button"
-              onClick={limpiar}
-              disabled={!valor && !textoFecha}
-            >
+            <button type="button" onClick={limpiar} disabled={!valor && !textoFecha}>
               Borrar
             </button>
-
             <button type="button" onClick={seleccionarHoy}>
               Hoy
             </button>
