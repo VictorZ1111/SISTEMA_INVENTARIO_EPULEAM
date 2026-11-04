@@ -1898,10 +1898,6 @@
 }
 
 .solicitudes-filtros {
-  display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(165px, 205px) minmax(260px, 330px) minmax(125px, 165px) 54px 54px;
-  gap: 12px;
-  align-items: center;
   margin-bottom: 18px;
 }
 
@@ -2007,10 +2003,6 @@
 }
 
 @media (max-width: 1180px) {
-  .solicitudes-filtros {
-    grid-template-columns: 1fr 1fr;
-  }
-
   .boton-filtro-icono,
   .boton-filtro-limpiar {
     width: 100%;
@@ -2018,10 +2010,6 @@
 }
 
 @media (max-width: 760px) {
-  .solicitudes-filtros {
-    grid-template-columns: 1fr;
-  }
-
   .detalle-solicitud-grid {
     grid-template-columns: 1fr;
   }
@@ -2936,10 +2924,6 @@
 /* SOLICITUDES - DETALLE UI  */
 /* ========================= */
 
-.modal-solicitud-atencion {
-  max-width: 980px;
-}
-
 .modal-solicitud-detalle .modal-header {
   display: flex;
   align-items: flex-start;
@@ -3343,30 +3327,9 @@
   border: 1px solid #7dd3fc !important;
 }
 
-.modal-solicitud-atencion {
-  max-width: 980px;
-  max-height: 92vh;
-}
-
-.modal-solicitud-atencion .modal-header {
-  padding: 22px 28px 18px;
-}
-
-.modal-solicitud-atencion .detalle-solicitud-grid-mejorada {
-  padding: 20px 28px 16px;
-}
-
 .modal-solicitud-atencion .tabla-solicitud-atencion {
-  margin: 0 28px 24px;
   border-radius: 16px;
   overflow: hidden;
-}
-
-.modal-solicitud-atencion .tabla-solicitud-atencion .tabla-contenedor {
-  max-height: 260px;
-  overflow-y: auto;
-  overflow-x: auto;
-  scrollbar-gutter: stable;
 }
 
 .modal-solicitud-atencion .tabla-solicitud-atencion thead th {
@@ -3379,11 +3342,6 @@
 
 .modal-solicitud-atencion .tabla-solicitud-atencion tbody tr:last-child td {
   border-bottom: none;
-}
-
-.modal-solicitud-atencion .modal-acciones-solicitud {
-  margin: -6px 28px 26px;
-  padding-top: 18px;
 }
 
 .modal-solicitud-atencion .modal-acciones-solicitud:empty {
@@ -5365,135 +5323,25 @@
 /* ===================================================== */
 /* AJUSTE SOLICITUDES ADMIN: búsqueda amplia sin cortar años */
 /* ===================================================== */
-.solicitudes-filtros {
-  grid-template-columns: minmax(420px, 1fr) 205px 230px 190px 52px 52px !important;
-}
-
 .solicitudes-filtros .filtro-estado-personalizado {
   min-width: 0 !important;
-  max-width: none !important;
-}
-
-.solicitudes-filtros .filtro-select-contenedor select,
-.solicitudes-filtros .filtro-estado-boton {
-  width: 100%;
-}
-
-.solicitudes-filtros .solicitudes-buscador {
-  min-width: 0;
 }
 
 /* ========================= */
 /* FIX FINAL SOLICITUDES ADMIN - SIN SCROLL HORIZONTAL */
 /* ========================= */
-.solicitudes-filtros {
-  grid-template-columns: minmax(360px, 1fr) 200px 220px 200px 54px 54px;
-  width: 100%;
-  max-width: 100%;
-  overflow: visible;
-}
-
-.solicitudes-filtros > * {
-  min-width: 0;
-}
-
-.solicitudes-filtros .filtro-select-contenedor select,
-.solicitudes-filtros .filtro-estado-boton {
-  min-width: 0;
-}
-
-.solicitudes-filtros .filtro-estado-personalizado {
-  max-width: 220px;
-}
-
-.solicitudes-filtros .filtro-select-contenedor:nth-of-type(2) {
-  max-width: 200px;
-}
-
 .solicitudes-tabla-scroll {
-  max-width: 100%;
   overflow: hidden;
-}
-
-.solicitudes-tabla-scroll .tabla-card,
-.solicitudes-tabla-scroll .tabla-contenedor {
-  max-width: 100%;
-  overflow-x: hidden;
-}
-
-.solicitudes-tabla-scroll .tabla-contenedor table {
-  width: 100%;
-  table-layout: fixed;
 }
 
 .solicitudes-tabla-scroll .tabla-contenedor th,
 .solicitudes-tabla-scroll .tabla-contenedor td {
-  padding-left: 16px;
-  padding-right: 16px;
   word-break: normal;
-}
-
-.solicitudes-tabla-scroll .tabla-contenedor th:nth-child(1),
-.solicitudes-tabla-scroll .tabla-contenedor td:nth-child(1) {
-  width: 20%;
-}
-
-.solicitudes-tabla-scroll .tabla-contenedor th:nth-child(2),
-.solicitudes-tabla-scroll .tabla-contenedor td:nth-child(2),
-.solicitudes-tabla-scroll .tabla-contenedor th:nth-child(3),
-.solicitudes-tabla-scroll .tabla-contenedor td:nth-child(3) {
-  width: 8%;
-}
-
-.solicitudes-tabla-scroll .tabla-contenedor th:nth-child(4),
-.solicitudes-tabla-scroll .tabla-contenedor td:nth-child(4),
-.solicitudes-tabla-scroll .tabla-contenedor th:nth-child(5),
-.solicitudes-tabla-scroll .tabla-contenedor td:nth-child(5) {
-  width: 13%;
-}
-
-.solicitudes-tabla-scroll .tabla-contenedor th:nth-child(6),
-.solicitudes-tabla-scroll .tabla-contenedor td:nth-child(6) {
-  width: 11%;
-  white-space: nowrap;
-}
-
-.solicitudes-tabla-scroll .tabla-contenedor th:nth-child(7),
-.solicitudes-tabla-scroll .tabla-contenedor td:nth-child(7) {
-  width: 11%;
-}
-
-.solicitudes-tabla-scroll .tabla-contenedor th:nth-child(8),
-.solicitudes-tabla-scroll .tabla-contenedor td:nth-child(8) {
-  width: 8%;
-  text-align: center;
-}
-
-@media (max-width: 1280px) {
-  .solicitudes-filtros {
-    grid-template-columns: minmax(300px, 1fr) 180px 200px 180px 54px 54px;
-  }
 }
 
 /* ===================================================== */
 /* CORRECCIÓN REAL SOLICITUDES ADMIN: filtros compactos sin scroll horizontal */
 /* ===================================================== */
-.solicitudes-filtros {
-  display: flex !important;
-  align-items: center !important;
-  gap: 10px !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  overflow: visible !important;
-  flex-wrap: nowrap !important;
-}
-
-.solicitudes-filtros .solicitudes-buscador {
-  flex: 1 1 auto !important;
-  min-width: 300px !important;
-  max-width: none !important;
-}
-
 .solicitudes-filtros > .filtro-select-contenedor:nth-of-type(1) {
   flex: 0 0 200px !important;
   width: 200px !important;
@@ -5510,13 +5358,6 @@
   flex: 0 0 185px !important;
   width: 185px !important;
   max-width: 185px !important;
-}
-
-.solicitudes-filtros .boton-filtro-icono {
-  flex: 0 0 50px !important;
-  width: 50px !important;
-  min-width: 50px !important;
-  max-width: 50px !important;
 }
 
 .solicitudes-filtros .filtro-select-contenedor select,
@@ -5587,33 +5428,16 @@
 }
 
 @media (max-width: 1280px) {
-  .solicitudes-filtros {
-    gap: 8px !important;
-  }
-
-  .solicitudes-filtros .solicitudes-buscador {
-    min-width: 260px !important;
-  }
-
   .solicitudes-filtros > .filtro-select-contenedor:nth-of-type(1) {
-    flex-basis: 175px !important;
     width: 175px !important;
   }
 
   .solicitudes-filtros .filtro-estado-personalizado {
-    flex-basis: 160px !important;
     width: 160px !important;
   }
 
   .solicitudes-filtros > .filtro-select-contenedor:nth-of-type(2) {
-    flex-basis: 170px !important;
     width: 170px !important;
-  }
-
-  .solicitudes-filtros .boton-filtro-icono {
-    flex-basis: 46px !important;
-    width: 46px !important;
-    min-width: 46px !important;
   }
 }
 
