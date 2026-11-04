@@ -1,0 +1,57 @@
+# ==============================
+# DEPENDENCIAS
+# ==============================
+node_modules/
+**/node_modules/
+
+# ==============================
+# VARIABLES PRIVADAS
+# ==============================
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Permitimos archivos de ejemplo
+!.env.example
+!**/.env.example
+
+# ==============================
+# ARCHIVOS GENERADOS
+# ==============================
+dist/
+**/dist/
+build/
+**/build/
+
+# ==============================
+# COBERTURA Y LOGS
+# ==============================
+coverage/
+**/coverage/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+
+# ==============================
+# RESPALDOS / BASE DE DATOS
+# ==============================
+*.dump
+*.backup
+*.bak
+
+# ==============================
+# ARCHIVOS COMPRIMIDOS
+# ==============================
+*.zip
+*.rar
+*.7z
+
+# ==============================
+# SISTEMA OPERATIVO / EDITORES
+# ==============================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

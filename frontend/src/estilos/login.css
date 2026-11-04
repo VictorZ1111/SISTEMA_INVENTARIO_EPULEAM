@@ -1,0 +1,324 @@
+/* ========================= */
+/* CONTENEDOR GENERAL */
+/* ========================= */
+
+.pantalla-login {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+
+  display: grid;
+  grid-template-columns: 41% 59%;
+
+  background: #f3f4f6;
+}
+
+/* ========================= */
+/* PANEL FORMULARIO */
+/* ========================= */
+
+.login-panel-formulario {
+  position: relative;
+  z-index: 2;
+
+  height: 100vh;
+  background: #ffffff;
+
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+
+  padding: 34px 44px 34px 68px;
+
+  clip-path: polygon(0 0, 100% 0, 84% 100%, 0 100%);
+
+  box-shadow: 12px 0 30px rgba(15, 23, 42, 0.04);
+}
+
+.login-contenido {
+  width: 100%;
+  max-width: 410px;
+  margin-right: 38px;
+  transform: translateY(-50px);
+}
+
+/* ========================= */
+/* LOGOS */
+/* ========================= */
+
+.login-logos {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  margin-bottom: 5px;
+}
+
+.logo-epuleam {
+  width: 245px;
+  max-width: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.logo-uleam {
+  width: 210px;
+  max-width: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* ========================= */
+/* TEXTO */
+/* ========================= */
+
+.login-texto {
+  text-align: center;
+}
+
+.login-texto h1 {
+  margin: 0 0 8px;
+  color: #0f172a;
+  font-size: 54px;
+  font-weight: 900;
+  line-height: 1.02;
+}
+
+.login-texto p {
+  margin: 0 auto 22px;
+  color: #475569;
+  font-size: 16px;
+  line-height: 1.45;
+  max-width: 360px;
+  text-align: center;
+}
+
+/* ========================= */
+/* FORMULARIO */
+/* ========================= */
+
+.formulario-login {
+  width: 100%;
+  max-width: 370px;
+  margin: 0 auto;
+}
+
+.grupo-campo {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 15px;
+}
+
+.grupo-campo label {
+  margin-bottom: 7px;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.login-input {
+  width: 100%;
+  padding: 13px 16px;
+
+  border: 1px solid #d7dce5;
+  border-radius: 12px;
+
+  background: #f8fafc;
+  color: #111827;
+
+  outline: none;
+  font-size: 15px;
+
+  transition: all 0.22s ease;
+}
+
+.login-input::placeholder {
+  color: #8a94a5;
+}
+
+.login-input:focus {
+  border-color: #183e78;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(24, 62, 120, 0.12);
+}
+
+.mensaje-error-login {
+  margin-bottom: 12px;
+  padding: 11px 13px;
+
+  border-radius: 10px;
+  background: #fee2e2;
+  color: #991b1b;
+
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.login-boton {
+  width: 100%;
+  margin-top: 6px;
+  padding: 15px 18px;
+
+  border: none;
+  border-radius: 12px;
+
+  background: linear-gradient(135deg, #183e78, #c8102e);
+  color: #ffffff;
+
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 800;
+
+  box-shadow: 0 12px 24px rgba(24, 62, 120, 0.2);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.login-boton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 28px rgba(24, 62, 120, 0.26);
+}
+
+.login-boton:active {
+  transform: translateY(0);
+}
+
+/* ========================= */
+/* PANEL IMAGEN */
+/* ========================= */
+
+.login-panel-imagen {
+  position: relative;
+  z-index: 1;
+
+  height: 100vh;
+
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+
+  margin-left: -8vw;
+}
+
+/* ========================= */
+/* FILTRO CÁLIDO SUAVE */
+/* ========================= */
+
+.capa-imagen-login {
+  position: absolute;
+  inset: 0;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(121, 88, 54, 0.24),
+      rgba(224, 196, 160, 0.14)
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.08),
+      rgba(90, 66, 43, 0.16)
+    );
+
+  backdrop-filter: sepia(0.22) saturate(0.92) brightness(0.96);
+}
+
+/* ========================= */
+/* RESPONSIVE */
+/* ========================= */
+
+@media (max-width: 1280px) {
+  .pantalla-login {
+    grid-template-columns: 43% 57%;
+  }
+
+  .login-panel-formulario {
+    padding: 34px 34px 34px 62px;
+  }
+
+  .login-contenido {
+    max-width: 390px;
+    margin-right: 38px;
+    transform: translateY(-20px);
+  }
+
+  .logo-epuleam {
+    width: 220px;
+  }
+
+  .logo-uleam {
+    width: 178px;
+  }
+
+  .login-texto h1 {
+    font-size: 48px;
+  }
+
+  .login-texto p {
+    font-size: 15px;
+    margin-bottom: 22px;
+  }
+
+  .login-panel-imagen {
+    margin-left: -10vw;
+  }
+}
+
+@media (max-width: 980px) {
+  .pantalla-login {
+    grid-template-columns: 1fr;
+    min-height: 100vh;
+    height: auto;
+  }
+
+  .login-panel-formulario {
+    clip-path: none;
+    height: auto;
+    min-height: 100vh;
+    padding: 34px 24px;
+    justify-content: center;
+  }
+
+  .login-contenido {
+    max-width: 460px;
+    margin-right: 0;
+    transform: none;
+  }
+
+  .login-panel-imagen {
+    display: none;
+  }
+
+  .login-texto h1 {
+    font-size: 40px;
+  }
+}
+
+@media (max-width: 520px) {
+  .login-logos {
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 22px;
+  }
+
+  .logo-epuleam {
+    width: 170px;
+  }
+
+  .logo-uleam {
+    width: 140px;
+  }
+
+  .login-texto h1 {
+    font-size: 34px;
+  }
+
+  .login-texto p {
+    font-size: 14px;
+  }
+
+  .login-boton {
+    width: 100%;
+  }
+}

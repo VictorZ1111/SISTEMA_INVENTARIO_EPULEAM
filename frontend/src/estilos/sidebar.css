@@ -1,0 +1,215 @@
+/* ========================= */
+/* BARRA LATERAL */
+/* ========================= */
+
+.barra-lateral {
+  width: 300px;
+  height: 100vh;
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
+
+  position: fixed;
+  left: 0;
+  top: 0;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+
+  z-index: 10;
+}
+
+/* ========================= */
+/* PARTE SUPERIOR */
+/* ========================= */
+
+.sidebar-superior {
+  width: 100%;
+}
+
+.sidebar-logo {
+  min-height: 94px;
+  padding: 10px 20px;
+
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.sidebar-logo-icono {
+  width: 56px;
+  height: 56px;
+
+  background: transparent;
+  border: none;
+  border-radius: 0;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  overflow: visible;
+  flex-shrink: 0;
+}
+
+.sidebar-logo-imagen {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  display: block;
+}
+
+.sidebar-logo h2 {
+  margin: 0;
+  color: #111827;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.sidebar-logo p {
+  margin: 4px 0 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+/* ========================= */
+/* MENÚ */
+/* ========================= */
+
+.sidebar-menu {
+  padding: 16px 14px;
+}
+
+.sidebar-link {
+  height: 48px;
+  padding: 0 16px;
+
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  color: #5b6472;
+  text-decoration: none;
+
+  border-radius: 9px;
+  margin-bottom: 6px;
+
+  font-size: 16px;
+  font-weight: 600;
+
+  transition: 0.2s ease;
+}
+
+.sidebar-link:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.sidebar-link.activo {
+  background: #111111;
+  color: #ffffff;
+}
+
+.sidebar-link svg {
+  flex-shrink: 0;
+}
+
+.sidebar-separador {
+  margin: 20px 14px 10px;
+  color: #6b7280;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  font-weight: 800;
+}
+
+/* ========================= */
+/* USUARIO */
+/* ========================= */
+
+.sidebar-usuario {
+  height: 78px;
+  padding: 14px 18px;
+
+  border-top: 1px solid #e5e7eb;
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar-usuario {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+
+  background: #222222;
+  color: #ffffff;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  font-weight: 800;
+  font-size: 18px;
+}
+
+.datos-usuario {
+  flex: 1;
+  min-width: 0;
+}
+
+.datos-usuario h3 {
+  margin: 0;
+  font-size: 15px;
+  color: #111827;
+  font-weight: 800;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.datos-usuario p {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: #6b7280;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.boton-salir {
+  border: none;
+  background: transparent;
+  color: #111827;
+  cursor: pointer;
+
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  transition: 0.2s ease;
+}
+
+.boton-salir:hover {
+  background: #f3f4f6;
+}
+
+/* ========================= */
+/* RESPONSIVE */
+/* ========================= */
+
+@media (max-width: 900px) {
+  .barra-lateral {
+    display: none;
+  }
+}

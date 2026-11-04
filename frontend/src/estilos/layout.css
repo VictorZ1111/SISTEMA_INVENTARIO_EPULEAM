@@ -1,0 +1,29 @@
+/* ========================= */
+/* LAYOUT PRINCIPAL */
+/* ========================= */
+
+.layout-principal {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  background: #fafafa;
+}
+
+.contenido-principal {
+  flex: 1;
+  min-height: 100vh;
+  padding: 34px 42px;
+  margin-left: 300px;
+  background: #fafafa;
+}
+
+/* ========================= */
+/* RESPONSIVE */
+/* ========================= */
+
+@media (max-width: 900px) {
+  .contenido-principal {
+    margin-left: 0;
+    padding: 24px;
+  }
+}
