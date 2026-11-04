@@ -14,20 +14,13 @@ import EncabezadoPagina from "../../componentes/EncabezadoPagina";
 import TablaBase from "../../componentes/TablaBase";
 
 import { useAuth } from "../../contexto/AuthContext";
+import { obtenerBodegasOperativasUsuario } from "../../dominio/bodegas";
 import { useInventario } from "../../contexto/InventarioContext";
 import type { EstadoSolicitud, ItemSolicitud, Solicitud } from "../../tipos/solicitud";
 import type { Producto } from "../../tipos/producto";
 
 type FiltroEstado = "todos" | "pendiente" | "parcial" | "atendida" | "rechazada";
 type OrdenSolicitudes = "asc" | "desc";
-
-const SUCURSALES_TASTY = [
-  "Tasty 1",
-  "Tasty 2",
-  "Tasty 3",
-  "Tasty 4",
-  "Tasty 5",
-];
 
 interface ItemFormularioSolicitud {
   id: string;
@@ -48,39 +41,6 @@ function normalizarTexto(texto: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ");
-}
-
-function esBodegaGastronomiaAgrupada(bodega: string) {
-  const nombre = normalizarTexto(bodega);
-
-  return nombre.includes("gastronom");
-}
-
-function expandirBodegasResponsable(bodegas: string[]) {
-  const resultado: string[] = [];
-
-  bodegas.forEach((bodega) => {
-    if (esBodegaGastronomiaAgrupada(bodega)) {
-      // Gastronomía Tasty funciona como bodega agrupadora para el Supervisor.
-      // Las solicitudes se realizan sobre cada sucursal operativa Tasty 1–5.
-      resultado.push(...SUCURSALES_TASTY);
-      return;
-    }
-
-    resultado.push(bodega);
-  });
-
-  return Array.from(new Set(resultado.filter(Boolean)));
-}
-
-function obtenerBodegasUsuario(usuario: ReturnType<typeof useAuth>["usuarioActual"]) {
-  const bodegasBase = usuario?.bodegasAsignadas?.length
-    ? usuario.bodegasAsignadas
-    : usuario?.bodegaAsignada
-      ? [usuario.bodegaAsignada]
-      : [];
-
-  return expandirBodegasResponsable(bodegasBase);
 }
 
 function limpiarNombreBodega(bodega: string) {
@@ -188,7 +148,7 @@ function SolicitudesSupervisor() {
   const { solicitudes, productos, agregarSolicitud } = useInventario();
 
   const bodegasUsuario = useMemo(
-    () => obtenerBodegasUsuario(usuarioActual),
+    () => obtenerBodegasOperativasUsuario(usuarioActual),
     [usuarioActual]
   );
 

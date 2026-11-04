@@ -13,46 +13,12 @@ import TablaBase from "../../componentes/TablaBase";
 import SelectorFechaFiltro from "../../componentes/SelectorFechaFiltro";
 
 import { useAuth } from "../../contexto/AuthContext";
+import { obtenerBodegasAccesoUsuario } from "../../dominio/bodegas";
 import { useInventario } from "../../contexto/InventarioContext";
 import type { Movimiento, TipoMovimiento } from "../../tipos/movimiento";
 
 type FiltroTipoMovimiento = "todos" | "transferencia" | "baja" | "modificacion";
 type OrdenMovimientos = "recientes" | "antiguos" | "az" | "za";
-
-const SUCURSALES_TASTY = [
-  "Tasty 1",
-  "Tasty 2",
-  "Tasty 3",
-  "Tasty 4",
-  "Tasty 5",
-];
-
-function esBodegaGastronomia(bodega: string) {
-  const nombre = normalizarTexto(bodega);
-  return nombre.includes("gastronomia");
-}
-
-function expandirBodegasAcceso(bodegas: string[]) {
-  const bodegasExpandidas = [...bodegas];
-
-  if (bodegas.some(esBodegaGastronomia)) {
-    bodegasExpandidas.push(...SUCURSALES_TASTY);
-  }
-
-  return Array.from(new Set(bodegasExpandidas.filter(Boolean)));
-}
-
-function obtenerBodegasUsuario(
-  usuario: ReturnType<typeof useAuth>["usuarioActual"],
-) {
-  const bodegas = usuario?.bodegasAsignadas?.length
-    ? usuario.bodegasAsignadas
-    : usuario?.bodegaAsignada
-      ? [usuario.bodegaAsignada]
-      : [];
-
-  return expandirBodegasAcceso(Array.from(new Set(bodegas.filter(Boolean))));
-}
 
 function limpiarNombreBodega(bodega: string) {
   if (bodega === "EPULEAM EP") return "Inventario General";
@@ -150,7 +116,7 @@ function MovimientosSupervisor() {
   const { movimientos, productos } = useInventario();
 
   const bodegasUsuario = useMemo(
-    () => obtenerBodegasUsuario(usuarioActual),
+    () => obtenerBodegasAccesoUsuario(usuarioActual),
     [usuarioActual],
   );
 

@@ -1,12 +1,11 @@
 import type { Usuario } from "../tipos/usuario";
+import {
+  BODEGA_GASTRONOMIA_TASTY,
+  BODEGA_INVENTARIO_GENERAL,
+  SUCURSALES_TASTY,
+} from "../dominio/bodegas";
 
-const SUCURSALES_TASTY = new Set([
-  "Tasty 1",
-  "Tasty 2",
-  "Tasty 3",
-  "Tasty 4",
-  "Tasty 5",
-]);
+const SUCURSALES_TASTY_SET = new Set<string>(SUCURSALES_TASTY);
 
 const ALIAS_SUCURSALES_TASTY: Record<string, string> = {
   "Tasty Centro": "Tasty 1",
@@ -40,7 +39,7 @@ export function obtenerAsignacionesUsuario(usuario: Usuario) {
 }
 
 export function esSucursalTasty(nombreBodega: string) {
-  return SUCURSALES_TASTY.has(normalizarNombreBodega(nombreBodega));
+  return SUCURSALES_TASTY_SET.has(normalizarNombreBodega(nombreBodega));
 }
 
 export function obtenerSupervisoresBodega(
@@ -48,7 +47,7 @@ export function obtenerSupervisoresBodega(
   nombreBodega: string
 ) {
   const asignacionBuscada = esSucursalTasty(nombreBodega)
-    ? "Gastronomía Tasty"
+    ? BODEGA_GASTRONOMIA_TASTY
     : nombreBodega;
 
   return usuarios.filter(
@@ -110,7 +109,7 @@ export function obtenerCustodioAsignado(
   usuarios: Usuario[],
   nombreBodega: string
 ) {
-  if (nombreBodega === "Inventario General" || nombreBodega === "General") {
+  if (nombreBodega === BODEGA_INVENTARIO_GENERAL || nombreBodega === "General") {
     return "Administrador General";
   }
 

@@ -17,20 +17,15 @@ import TablaBase from "../../componentes/TablaBase";
 import CampoDesplegable from "../../componentes/CampoDesplegable";
 
 import { useAuth } from "../../contexto/AuthContext";
+import {
+  obtenerBodegasPrincipalesUsuario,
+  obtenerSucursalesTastyUsuario,
+} from "../../dominio/bodegas";
 import { useConfiguracion } from "../../contexto/ConfiguracionContext";
 import { useInventario } from "../../contexto/InventarioContext";
 import type { Producto } from "../../tipos/producto";
 
 type OrdenInventario = "asc" | "desc";
-
-const BODEGA_GASTRONOMIA_GENERAL = "Gastronomía Tasty";
-const SUCURSALES_TASTY = [
-  "Tasty 1",
-  "Tasty 2",
-  "Tasty 3",
-  "Tasty 4",
-  "Tasty 5",
-];
 
 function limpiarNombreBodega(bodega: string) {
   return bodega.replace(/^Bodega\s+/i, "").trim();
@@ -46,58 +41,6 @@ function normalizarTexto(etiqueta: string) {
 
 function normalizarBodega(bodega: string) {
   return normalizarTexto(limpiarNombreBodega(bodega));
-}
-
-function esBodegaGastronomiaAgrupada(bodega: string) {
-  const nombre = normalizarTexto(bodega);
-
-  return (
-    nombre === "gastronomia" ||
-    nombre === "bodega gastronomia" ||
-    nombre === "gastronomia tasty" ||
-    nombre === "bodega gastronomia tasty"
-  );
-}
-
-function obtenerBodegasBaseUsuario(usuario: ReturnType<typeof useAuth>["usuarioActual"]) {
-  const bodegasBase = usuario?.bodegasAsignadas?.length
-    ? usuario.bodegasAsignadas
-    : usuario?.bodegaAsignada
-      ? [usuario.bodegaAsignada]
-      : [];
-
-  return Array.from(new Set(bodegasBase.filter(Boolean)));
-}
-
-function esSucursalTasty(bodega: string) {
-  return normalizarBodega(bodega).startsWith("tasty ");
-}
-
-function obtenerBodegasPrincipalesUsuario(usuario: ReturnType<typeof useAuth>["usuarioActual"]) {
-  const bodegasBase = obtenerBodegasBaseUsuario(usuario);
-  const tieneGastronomia = bodegasBase.some(esBodegaGastronomiaAgrupada);
-  const bodegasPrincipales = bodegasBase.filter((bodega) => {
-    if (esBodegaGastronomiaAgrupada(bodega)) return false;
-    if (tieneGastronomia && esSucursalTasty(bodega)) return false;
-    return !esSucursalTasty(bodega);
-  });
-
-  return Array.from(
-    new Set([
-      ...bodegasPrincipales,
-      ...(tieneGastronomia ? [BODEGA_GASTRONOMIA_GENERAL] : []),
-    ])
-  );
-}
-
-function obtenerSucursalesUsuario(usuario: ReturnType<typeof useAuth>["usuarioActual"]) {
-  const bodegasBase = obtenerBodegasBaseUsuario(usuario);
-
-  if (bodegasBase.some(esBodegaGastronomiaAgrupada)) {
-    return SUCURSALES_TASTY;
-  }
-
-  return Array.from(new Set(bodegasBase.filter(esSucursalTasty)));
 }
 
 function obtenerTituloBodega(bodega: string) {
@@ -196,7 +139,7 @@ function PanelResponsable() {
   );
 
   const sucursalesTasty = useMemo(
-    () => obtenerSucursalesUsuario(usuarioActual),
+    () => obtenerSucursalesTastyUsuario(usuarioActual),
     [usuarioActual]
   );
 

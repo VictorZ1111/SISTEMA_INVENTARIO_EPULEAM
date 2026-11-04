@@ -19,6 +19,12 @@ import EncabezadoPagina from "../../componentes/EncabezadoPagina";
 import TablaBase from "../../componentes/TablaBase";
 
 import { useAuth } from "../../contexto/AuthContext";
+import {
+  SUCURSALES_TASTY,
+  esBodegaGastronomiaAgrupada,
+  obtenerBodegasPrincipalesUsuario,
+  obtenerSucursalesTastyUsuario,
+} from "../../dominio/bodegas";
 import { useConfiguracion } from "../../contexto/ConfiguracionContext";
 import { useUsuarios } from "../../contexto/UsuariosContext";
 import {
@@ -29,15 +35,6 @@ import {
   formatearNombresUsuarios,
   obtenerResponsablesSucursal,
 } from "../../utilidades/asignacionesUsuarios";
-
-const BODEGA_GASTRONOMIA_GENERAL = "Gastronomía Tasty";
-const SUCURSALES_TASTY = [
-  "Tasty 1",
-  "Tasty 2",
-  "Tasty 3",
-  "Tasty 4",
-  "Tasty 5",
-];
 
 type OrdenBienes = "asc" | "desc";
 type FiltroEstadoBien = "todos" | "bueno" | "regular" | "malo";
@@ -55,63 +52,11 @@ function normalizarTexto(texto: string) {
     .replace(/\s+/g, " ");
 }
 
-function esBodegaGastronomiaAgrupada(bodega: string) {
-  const nombre = normalizarTexto(bodega);
-
-  return (
-    nombre === "gastronomia" ||
-    nombre === "bodega gastronomia" ||
-    nombre === "gastronomia tasty" ||
-    nombre === "bodega gastronomia tasty"
-  );
-}
-
-function obtenerBodegasBaseUsuario(usuario: ReturnType<typeof useAuth>["usuarioActual"]) {
-  const bodegasBase = usuario?.bodegasAsignadas?.length
-    ? usuario.bodegasAsignadas
-    : usuario?.bodegaAsignada
-      ? [usuario.bodegaAsignada]
-      : [];
-
-  return Array.from(new Set(bodegasBase.filter(Boolean)));
-}
-
-function esSucursalTasty(bodega: string) {
-  return normalizarTexto(limpiarNombreBodega(bodega)).startsWith("tasty ");
-}
-
-function obtenerBodegasPrincipalesUsuario(usuario: ReturnType<typeof useAuth>["usuarioActual"]) {
-  const bodegasBase = obtenerBodegasBaseUsuario(usuario);
-  const tieneGastronomia = bodegasBase.some(esBodegaGastronomiaAgrupada);
-  const bodegasPrincipales = bodegasBase.filter((bodega) => {
-    if (esBodegaGastronomiaAgrupada(bodega)) return false;
-    if (tieneGastronomia && esSucursalTasty(bodega)) return false;
-    return !esSucursalTasty(bodega);
-  });
-
-  return Array.from(
-    new Set([
-      ...bodegasPrincipales,
-      ...(tieneGastronomia ? [BODEGA_GASTRONOMIA_GENERAL] : []),
-    ])
-  );
-}
-
-function obtenerSucursalesUsuario(usuario: ReturnType<typeof useAuth>["usuarioActual"]) {
-  const bodegasBase = obtenerBodegasBaseUsuario(usuario);
-
-  if (bodegasBase.some(esBodegaGastronomiaAgrupada)) {
-    return SUCURSALES_TASTY;
-  }
-
-  return Array.from(new Set(bodegasBase.filter(esSucursalTasty)));
-}
-
 function obtenerBodegasAccesoUsuario(usuario: ReturnType<typeof useAuth>["usuarioActual"]) {
   return Array.from(
     new Set([
       ...obtenerBodegasPrincipalesUsuario(usuario),
-      ...obtenerSucursalesUsuario(usuario),
+      ...obtenerSucursalesTastyUsuario(usuario),
     ])
   );
 }
@@ -212,7 +157,7 @@ function BodegasSupervisor() {
     [usuarioActual]
   );
   const sucursalesTasty = useMemo(
-    () => obtenerSucursalesUsuario(usuarioActual),
+    () => obtenerSucursalesTastyUsuario(usuarioActual),
     [usuarioActual]
   );
   const bodegasAcceso = useMemo(
