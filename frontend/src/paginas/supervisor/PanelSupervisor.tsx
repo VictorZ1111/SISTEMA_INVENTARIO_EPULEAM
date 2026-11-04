@@ -22,6 +22,12 @@ import {
   obtenerBodegasPrincipalesUsuario,
   obtenerSucursalesTastyUsuario,
 } from "../../dominio/bodegas";
+import {
+  esBienVisible,
+  obtenerBodegaProducto,
+  obtenerClaseIconoBodega,
+  obtenerTituloBodega,
+} from "../../dominio/inventarioVisual";
 import { useConfiguracion } from "../../contexto/ConfiguracionContext";
 import { useInventario } from "../../contexto/InventarioContext";
 import type { Producto } from "../../tipos/producto";
@@ -40,16 +46,6 @@ function normalizarBodega(bodega: string) {
   return normalizarTexto(limpiarNombreBodega(bodega));
 }
 
-function obtenerTituloBodega(bodega: string) {
-  const nombre = limpiarNombreBodega(bodega);
-  const normalizado = normalizarBodega(bodega);
-
-  if (normalizado.includes("limpieza")) return "Bodega Limpieza";
-  if (normalizado.includes("oficina")) return "Bodega Oficina";
-
-  return nombre;
-}
-
 function obtenerIconoBodega(bodega: string) {
   const nombre = normalizarBodega(bodega);
 
@@ -60,22 +56,6 @@ function obtenerIconoBodega(bodega: string) {
 
   return Warehouse;
 }
-
-function obtenerClaseIconoBodega(bodega: string) {
-  const nombre = normalizarBodega(bodega);
-
-  if (nombre.includes("limpieza")) return "icono-bodega-limpieza";
-  if (nombre.includes("oficina")) return "icono-bodega-oficina";
-  if (nombre.includes("gastronom") || nombre.includes("tasty")) {
-    return "icono-bodega-gastronomia";
-  }
-  if (nombre.includes("inventario") || nombre.includes("general")) {
-    return "icono-bodega-inventario";
-  }
-
-  return "icono-bodega-generica";
-}
-
 
 function obtenerTextoEstadoBien(estadoBien: string) {
   const estado = normalizarTexto(estadoBien || "bueno");
@@ -93,28 +73,6 @@ function obtenerClaseEstadoBien(estadoBien: string) {
   if (estado === "malo") return "malo";
 
   return "bueno";
-}
-
-function esBienVisible(producto: Producto) {
-  const estadoBien = normalizarTexto(String(producto.estadoBien || ""));
-
-  return producto.estado === "activo" && estadoBien !== "baja" && producto.cantidad > 0;
-}
-
-function obtenerBodegaProducto(producto: Producto) {
-  const ubicacion = limpiarNombreBodega(producto.ubicacion || "");
-  const ubicacionNormalizada = normalizarTexto(ubicacion);
-
-  if (
-    ubicacionNormalizada === "" ||
-    ubicacionNormalizada === "general" ||
-    ubicacionNormalizada === "inventario general" ||
-    ubicacionNormalizada === "epuleam ep"
-  ) {
-    return "Inventario General";
-  }
-
-  return ubicacion;
 }
 
 function PanelSupervisor() {
