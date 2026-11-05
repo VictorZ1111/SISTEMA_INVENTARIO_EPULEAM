@@ -3911,7 +3911,6 @@
 
 .responsable-bodegas-accesos {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 14px;
 }
 
@@ -4004,10 +4003,6 @@
 /* RESPONSABLE - CARDS TIPO ADMIN  */
 /* =============================== */
 
-.responsable-bodegas-admin-estilo {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-}
-
 .responsable-bodega-card-admin {
   min-height: 118px;
   align-items: center;
@@ -4063,7 +4058,6 @@
 }
 
 @media (max-width: 760px) {
-  .responsable-bodegas-admin-estilo,
   .modal-responsable-solicitud .solicitud-selector-bienes-categoria {
     grid-template-columns: 1fr;
   }
@@ -4075,7 +4069,6 @@
 
 .responsable-bodegas-admin-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 16px;
 }
 
@@ -6196,9 +6189,6 @@ textarea,
 
 .pagina-supervisor-inicio {
   width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  overflow-x: hidden;
 }
 
 .pagina-supervisor-inicio .responsable-inventario-general-panel,
@@ -6207,75 +6197,15 @@ textarea,
 .pagina-supervisor-inicio .tabla-card,
 .pagina-supervisor-inicio .tabla-contenedor {
   width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-}
-
-.pagina-supervisor-inicio .responsable-filtros-inventario {
-  display: grid !important;
-  grid-template-columns:
-    220px
-    minmax(240px, 1fr)
-    minmax(180px, 0.78fr)
-    minmax(180px, 0.78fr)
-    minmax(220px, 0.92fr)
-    54px
-    54px !important;
-  gap: 12px !important;
-  overflow: visible;
-}
-
-.pagina-supervisor-inicio .responsable-filtros-inventario .responsable-buscador,
-.pagina-supervisor-inicio .responsable-filtros-inventario .campo-desplegable,
-.pagina-supervisor-inicio .responsable-filtros-inventario .filtro-categoria,
-.pagina-supervisor-inicio .responsable-filtros-inventario .filtro-estado,
-.pagina-supervisor-inicio .responsable-filtros-inventario .filtro-tipo,
-.pagina-supervisor-inicio .responsable-filtros-inventario .filtro-bodega {
-  width: 100% !important;
-  min-width: 0 !important;
-  max-width: none !important;
-}
-
-.pagina-supervisor-inicio .responsable-filtros-inventario .responsable-buscador {
-  width: 220px !important;
-  min-width: 220px !important;
-  max-width: 220px !important;
-  flex: initial !important;
-}
-
-.pagina-supervisor-inicio .responsable-filtros-inventario .filtro-categoria {
-  min-width: 240px !important;
-}
-
-.pagina-supervisor-inicio .responsable-filtros-inventario .filtro-estado,
-.pagina-supervisor-inicio .responsable-filtros-inventario .filtro-tipo {
-  min-width: 180px !important;
-}
-
-.pagina-supervisor-inicio .responsable-filtros-inventario .filtro-bodega {
-  min-width: 220px !important;
-}
-
-.pagina-supervisor-inicio .responsable-inventario-tabla .tabla-contenedor {
-  overflow-x: auto !important;
 }
 
 @media (max-width: 1180px) {
-  .pagina-supervisor-inicio .responsable-filtros-inventario {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-
   .pagina-supervisor-inicio .responsable-filtros-inventario .responsable-buscador {
     grid-column: 1 / -1;
   }
 }
 
 @media (max-width: 760px) {
-  .pagina-supervisor-inicio .responsable-filtros-inventario {
-    grid-template-columns: 1fr !important;
-  }
-
   .pagina-supervisor-inicio .responsable-filtros-inventario .boton-filtro-icono {
     width: 100% !important;
     max-width: none !important;
