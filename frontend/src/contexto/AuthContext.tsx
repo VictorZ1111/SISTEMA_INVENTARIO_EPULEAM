@@ -9,40 +9,18 @@ import {
   type ReactNode,
 } from "react";
 
-import { clienteApi, STORAGE_TOKEN } from "../api/clienteApi";
+import {
+  iniciarSesionApi,
+  obtenerAsignacionesMiasApi,
+  obtenerPerfilApi,
+  type RolBackend,
+  type UsuarioBackend,
+} from "../api/authApi";
+import { STORAGE_TOKEN } from "../api/clienteApi";
 import type {
-  EstadoUsuario,
   RolUsuario,
   UsuarioSesion,
 } from "../tipos/usuario";
-
-type RolBackend = "administrador" | "supervisor" | "responsable";
-
-interface UsuarioBackend {
-  id: string;
-  nombre: string;
-  correo: string;
-  telefono: string | null;
-  rol: RolBackend;
-  estado: EstadoUsuario;
-  esAdministradorGeneral: boolean;
-}
-
-interface RespuestaLoginBackend {
-  accessToken: string;
-  tokenType: "Bearer";
-  expiresIn: string;
-  usuario: UsuarioBackend;
-}
-
-interface AsignacionesBackend {
-  asignaciones: Array<{
-    bodega: {
-      id: string;
-      nombre: string;
-    };
-  }>;
-}
 
 interface AuthContexto {
   usuarioActual: UsuarioSesion | null;
@@ -104,9 +82,7 @@ async function construirUsuarioSesion(
   let bodegasAsignadas: string[] = [];
 
   if (rol !== "admin") {
-    const { data } = await clienteApi.get<AsignacionesBackend>(
-      "/asignaciones/mias",
-    );
+    const data = await obtenerAsignacionesMiasApi();
 
     bodegasAsignadas = Array.from(
       new Set(
@@ -158,7 +134,7 @@ export function AuthProvider({ children }: Props) {
       }
 
       try {
-        const { data } = await clienteApi.get<UsuarioBackend>("/auth/perfil");
+        const data = await obtenerPerfilApi();
         const usuario = await construirUsuarioSesion(data);
 
         if (!activo) return;
@@ -187,12 +163,9 @@ export function AuthProvider({ children }: Props) {
   const iniciarSesion = useCallback(
     async (correo: string, codigoAcceso: string): Promise<UsuarioSesion> => {
       try {
-        const { data } = await clienteApi.post<RespuestaLoginBackend>(
-          "/auth/login",
-          {
-            correo: correo.trim().toLowerCase(),
-            codigoAcceso: codigoAcceso.trim(),
-          },
+        const data = await iniciarSesionApi(
+          correo.trim().toLowerCase(),
+          codigoAcceso.trim(),
         );
 
         localStorage.setItem(STORAGE_TOKEN, data.accessToken);
