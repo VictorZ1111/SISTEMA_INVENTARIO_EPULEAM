@@ -2444,7 +2444,6 @@
 }
 
 .pagina-reportes-compacta .reportes-panel-compacto {
-  padding: 12px 16px 14px;
   border-radius: 16px;
 }
 
@@ -2464,20 +2463,9 @@
 .pagina-reportes-compacta .reportes-toolbar {
   flex: 0 0 auto;
   grid-template-columns: 150px 165px 145px;
-  gap: 8px;
-  width: auto;
-  padding: 8px;
-  border-radius: 14px;
-  box-shadow: none;
 }
 
-.pagina-reportes-compacta .reportes-toolbar label {
-  gap: 4px;
-}
 
-.pagina-reportes-compacta .reportes-toolbar span {
-  font-size: 0.72rem;
-}
 
 .pagina-reportes-compacta .reportes-toolbar select,
 .pagina-reportes-compacta .reportes-toolbar input,
@@ -2497,52 +2485,22 @@
 
 .pagina-reportes-compacta .bloque-reportes-compacto h3 {
   margin-bottom: 6px;
-  font-size: 0.95rem;
 }
 
-.pagina-reportes-compacta .grid-reportes-simple,
-.pagina-reportes-compacta .grid-reportes-uno {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 9px;
-}
 
 .pagina-reportes-compacta .tarjeta-reporte-simple {
-  min-height: 64px;
   grid-template-columns: 38px minmax(0, 1fr) auto;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.045);
 }
 
-.pagina-reportes-compacta .tarjeta-reporte-simple:hover {
-  transform: translateY(-1px);
-}
 
-.pagina-reportes-compacta .icono-reporte-simple {
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
-}
 
-.pagina-reportes-compacta .tarjeta-reporte-simple h3 {
-  font-size: 0.88rem;
-  line-height: 1.12;
-}
 
 .pagina-reportes-compacta .tarjeta-reporte-simple .boton-secundario {
   min-height: 32px;
-  padding: 0 10px;
-  border-radius: 10px;
-  gap: 5px;
   font-size: 0.82rem;
 }
 
 @media (min-width: 1500px) {
-  .pagina-reportes-compacta .grid-reportes-simple,
-  .pagina-reportes-compacta .grid-reportes-uno {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 1180px) {
@@ -2552,24 +2510,16 @@
   }
 
   .pagina-reportes-compacta .reportes-toolbar {
-    width: 100%;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 900px) {
-  .pagina-reportes-compacta .grid-reportes-simple,
-  .pagina-reportes-compacta .grid-reportes-uno {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 /* =============================== */
 /* REPORTES - AJUSTE FINAL TARJETAS Y PERIODO */
 /* =============================== */
-.pagina-reportes-compacta .reportes-panel-compacto {
-  padding: 12px 14px 14px;
-}
 
 .pagina-reportes-compacta .reportes-header-simple {
   margin-bottom: 4px;
@@ -2590,10 +2540,6 @@
 
 .pagina-reportes-compacta .reportes-toolbar {
   grid-template-columns: 140px 155px 140px;
-  padding: 7px;
-  gap: 7px;
-  max-width: 470px;
-  border-radius: 13px;
 }
 
 .pagina-reportes-compacta .reportes-toolbar select,
@@ -2603,30 +2549,10 @@
   font-size: 0.82rem;
 }
 
-.pagina-reportes-compacta .grid-reportes-simple,
-.pagina-reportes-compacta .grid-reportes-uno {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 9px;
-}
 
-.pagina-reportes-compacta .grid-reportes-uno {
-  max-width: 310px;
-}
 
-.pagina-reportes-compacta .tarjeta-reporte-simple {
-  min-height: 86px;
-  display: flex;
-  align-items: stretch;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
-}
 
 .pagina-reportes-compacta .tarjeta-reporte-contenido {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
   flex: 1 1 auto;
 }
 
@@ -2642,14 +2568,9 @@
   align-self: end;
   flex: 0 0 auto;
   min-height: 30px;
-  padding: 0 10px;
 }
 
 @media (max-width: 1450px) {
-  .pagina-reportes-compacta .grid-reportes-simple,
-  .pagina-reportes-compacta .grid-reportes-uno {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 1180px) {
@@ -2658,15 +2579,7 @@
     flex-direction: column;
   }
 
-  .pagina-reportes-compacta .reportes-toolbar {
-    max-width: none;
-    width: 100%;
-  }
 
-  .pagina-reportes-compacta .grid-reportes-simple,
-  .pagina-reportes-compacta .grid-reportes-uno {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 /* Ajuste final: periodo en la misma línea de Inventario General sin romper la card */
@@ -2685,22 +2598,10 @@
 }
 
 .pagina-reportes-compacta .reportes-toolbar {
-  width: auto !important;
-  max-width: none !important;
   margin-left: auto !important;
-  display: grid !important;
   grid-template-columns: 130px 170px 150px !important;
-  align-items: end !important;
-  padding: 8px !important;
-  gap: 8px !important;
 }
 
-.pagina-reportes-compacta .grid-reportes-uno {
-  display: grid !important;
-  grid-template-columns: minmax(360px, 420px) !important;
-  max-width: 420px !important;
-  width: 100% !important;
-}
 
 .pagina-reportes-compacta .grid-reportes-uno .tarjeta-reporte-simple {
   width: 100% !important;
@@ -2711,9 +2612,6 @@
   overflow: hidden !important;
 }
 
-.pagina-reportes-compacta .tarjeta-reporte-contenido {
-  min-width: 0 !important;
-}
 
 .pagina-reportes-compacta .tarjeta-reporte-simple h3 {
   overflow: visible !important;
@@ -2730,18 +2628,13 @@
 
   .pagina-reportes-compacta .reportes-toolbar {
     margin-left: 0 !important;
-    width: 100% !important;
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 }
 
 /* Ajuste final solicitado: periodo al nivel de la card de Inventario General */
 .pagina-reportes-compacta .reportes-inventario-fila {
-  display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  width: 100%;
   margin-top: 8px;
 }
 
@@ -2752,39 +2645,20 @@
 }
 
 .pagina-reportes-compacta .reportes-inventario-fila .tarjeta-reporte-simple {
-  min-height: 74px !important;
   padding: 12px 14px !important;
 }
 
 .pagina-reportes-compacta .reportes-inventario-fila .reportes-toolbar {
   margin-left: auto !important;
-  width: auto !important;
-  min-width: 470px !important;
-  max-width: 720px !important;
-  display: flex !important;
-  align-items: end !important;
   justify-content: flex-end !important;
-  gap: 10px !important;
-  padding: 10px 12px !important;
-  border-radius: 14px !important;
 }
 
 .pagina-reportes-compacta .reportes-toolbar p {
   align-self: center;
-  margin: 0 8px 0 0;
-  color: #334155;
-  font-size: 0.9rem;
-  font-weight: 800;
   white-space: nowrap;
 }
 
-.pagina-reportes-compacta .reportes-inventario-fila .reportes-toolbar label {
-  min-width: 150px;
-}
 
-.pagina-reportes-compacta .reportes-inventario-fila .reportes-toolbar label:has(input[type="number"]) {
-  min-width: 105px;
-}
 
 .pagina-reportes-compacta .reportes-inventario-fila .reportes-toolbar select,
 .pagina-reportes-compacta .reportes-inventario-fila .reportes-toolbar input {
@@ -2793,7 +2667,6 @@
 
 @media (max-width: 1280px) {
   .pagina-reportes-compacta .reportes-inventario-fila {
-    align-items: stretch;
     flex-direction: column;
   }
 
@@ -2806,29 +2679,16 @@
   .pagina-reportes-compacta .reportes-inventario-fila .reportes-toolbar {
     justify-content: flex-start !important;
     margin-left: 0 !important;
-    min-width: 0 !important;
-    width: 100% !important;
-    flex-wrap: wrap !important;
   }
 }
 
 /* Ajuste final Reportes: periodo a la misma altura visual de la card de Inventario */
-.pagina-reportes-compacta .reportes-inventario-fila {
-  align-items: flex-start !important;
-}
 
 .pagina-reportes-compacta .reportes-inventario-fila .reportes-toolbar {
   margin-top: 10px !important;
-  min-height: 74px !important;
 }
 
-.pagina-reportes-compacta .reportes-inventario-fila .reportes-toolbar label {
-  min-width: 165px !important;
-}
 
-.pagina-reportes-compacta .reportes-inventario-fila .reportes-toolbar label:has(input[type="date"]) {
-  min-width: 150px !important;
-}
 
 /* Corrección Reportes: periodo dentro de su card, alineado con Inventario y sin scroll horizontal */
 .pagina-reportes-compacta {
@@ -2836,11 +2696,6 @@
 }
 
 .pagina-reportes-compacta .reportes-inventario-fila {
-  display: grid !important;
-  grid-template-columns: minmax(340px, 0.82fr) minmax(520px, 1.18fr) !important;
-  align-items: stretch !important;
-  gap: 18px !important;
-  width: 100% !important;
   margin-top: 8px !important;
 }
 
@@ -2852,43 +2707,17 @@
   grid-template-columns: minmax(0, 1fr) !important;
 }
 
-.pagina-reportes-compacta .reportes-inventario-fila .tarjeta-reporte-simple,
-.pagina-reportes-compacta .reportes-inventario-fila .reportes-toolbar {
-  min-height: 86px !important;
-  height: 86px !important;
-  margin: 0 !important;
-}
 
 .pagina-reportes-compacta .reportes-inventario-fila .reportes-toolbar {
-  width: 100% !important;
-  min-width: 0 !important;
-  max-width: none !important;
-  display: grid !important;
   grid-template-columns: 1.1fr 1fr 1fr !important;
-  align-items: end !important;
-  gap: 8px 10px !important;
-  padding: 10px 12px !important;
-  border-radius: 14px !important;
-  overflow: hidden !important;
 }
 
 .pagina-reportes-compacta .reportes-toolbar p {
   grid-column: 1 / -1 !important;
   align-self: start !important;
-  margin: 0 !important;
-  color: #334155 !important;
-  font-size: 0.88rem !important;
-  font-weight: 800 !important;
-  line-height: 1 !important;
   white-space: nowrap !important;
 }
 
-.pagina-reportes-compacta .reportes-inventario-fila .reportes-toolbar label,
-.pagina-reportes-compacta .reportes-inventario-fila .reportes-toolbar label:has(input[type="date"]),
-.pagina-reportes-compacta .reportes-inventario-fila .reportes-toolbar label:has(input[type="number"]) {
-  min-width: 0 !important;
-  width: 100% !important;
-}
 
 .pagina-reportes-compacta .reportes-inventario-fila .reportes-toolbar select,
 .pagina-reportes-compacta .reportes-inventario-fila .reportes-toolbar input {
@@ -2899,10 +2728,6 @@
 }
 
 @media (max-width: 1380px) {
-  .pagina-reportes-compacta .reportes-inventario-fila {
-    grid-template-columns: minmax(320px, 0.75fr) minmax(500px, 1.25fr) !important;
-    gap: 14px !important;
-  }
 
   .pagina-reportes-compacta .reportes-inventario-fila .reportes-toolbar {
     grid-template-columns: 0.95fr 1fr 1fr !important;
@@ -2910,14 +2735,7 @@
 }
 
 @media (max-width: 1180px) {
-  .pagina-reportes-compacta .reportes-inventario-fila {
-    grid-template-columns: 1fr !important;
-  }
 
-  .pagina-reportes-compacta .reportes-inventario-fila .reportes-toolbar {
-    height: auto !important;
-    min-height: 86px !important;
-  }
 }
 
 /* ========================= */
