@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 
-import type { Producto, TipoProducto } from "../tipos/producto";
+import type { Producto } from "../tipos/producto";
 import type { Movimiento } from "../tipos/movimiento";
 import type {
   Solicitud,
@@ -21,6 +21,16 @@ import type {
 
 import { normalizarNombreBodega } from "../utilidades/asignacionesUsuarios";
 import { clienteApi } from "../api/clienteApi";
+import {
+  ajustarCantidadProductoApi,
+  cambiarEstadoProductoApi,
+  crearProductoApi,
+  editarProductoApi,
+  eliminarProductoApi,
+  obtenerBodegasInventarioApi,
+  obtenerInventarioFrontendApi,
+  type InventarioFrontendBackend,
+} from "../api/inventarioApi";
 import { useAuth } from "./AuthContext";
 import { useConfiguracion } from "./ConfiguracionContext";
 
@@ -276,56 +286,6 @@ function convertirSolicitudBackend(solicitud: SolicitudBackend): Solicitud {
   };
 }
 
-interface ProductoBackend {
-  id: string;
-  codigo: string;
-  nombre: string;
-  descripcion: string | null;
-  descripcionBien: string;
-  categoriaId: string;
-  categoria: { id: string; nombre: string; estado?: string };
-  tipoProducto: TipoProducto;
-  atributo: "BLD" | "BCA" | null;
-  empresa: "BLD" | "BCA" | null;
-  serie: string;
-  modelo: string;
-  marca: string;
-  material: string;
-  color: string;
-  dimensiones: string;
-  estadoBien: "bueno" | "regular" | "malo" | "baja";
-  ubicacion: string | null;
-  custodioActual: string | null;
-  procedencia: string | null;
-  codigoUleam: string | null;
-  unidad: string;
-  observacion: string | null;
-  fechaRegistro: string;
-  cantidad: number;
-  estado: "activo" | "inactivo";
-}
-
-interface InventarioFrontendBackend {
-  id: string;
-  productoId: string;
-  codigo: string;
-  descripcion: string;
-  categoria: string;
-  unidad: string;
-  cantidad: number;
-  bodega: string;
-  fechaAsignacion: string;
-  producto: Omit<ProductoBackend, "categoriaId" | "cantidad"> & {
-    categoria: { id: string; nombre: string };
-  };
-}
-
-interface BodegaBackendInventario {
-  id: string;
-  nombre: string;
-  estado: "activa" | "inactiva";
-}
-
 function convertirProductoBackend(
   producto: InventarioFrontendBackend["producto"],
   cantidad: number,
@@ -418,9 +378,7 @@ export function InventarioProvider({ children }: Props) {
     }
 
     try {
-      const { data } = await clienteApi.get<InventarioFrontendBackend[]>(
-        "/inventario/frontend",
-      );
+      const data = await obtenerInventarioFrontendApi();
 
       const itemsNormalizados = data
         .map((item) => ({
@@ -522,10 +480,10 @@ export function InventarioProvider({ children }: Props) {
     [categoriasActivas],
   );
 
-  const obtenerBodegasBackend = useCallback(async () => {
-    const { data } = await clienteApi.get<BodegaBackendInventario[]>("/bodegas");
-    return data;
-  }, []);
+  const obtenerBodegasBackend = useCallback(
+    async () => obtenerBodegasInventarioApi(),
+    [],
+  );
 
   const buscarBodegaPorNombre = useCallback(
     async (nombre: string) => {
@@ -557,7 +515,7 @@ export function InventarioProvider({ children }: Props) {
     }
 
     try {
-      await clienteApi.post("/productos", {
+      await crearProductoApi({
         codigo: nuevoProducto.codigo,
         nombre: nuevoProducto.descripcion,
         descripcion: nuevoProducto.descripcion,
@@ -620,7 +578,7 @@ export function InventarioProvider({ children }: Props) {
     }
 
     try {
-      await clienteApi.patch(`/productos/${String(id)}`, {
+      await editarProductoApi(String(id), {
         codigo: productoActualizado.codigo,
         nombre: productoActualizado.descripcion,
         descripcion: productoActualizado.descripcion,
@@ -653,7 +611,7 @@ export function InventarioProvider({ children }: Props) {
           };
         }
 
-        await clienteApi.post("/movimientos/ajuste", {
+        await ajustarCantidadProductoApi({
           productoId: String(id),
           bodegaId: bodega.id,
           cantidadNueva: productoActualizado.cantidad,
@@ -681,9 +639,7 @@ export function InventarioProvider({ children }: Props) {
 
   const desactivarProducto = async (id: string | number): Promise<boolean> => {
     try {
-      await clienteApi.patch(`/productos/${String(id)}/estado`, {
-        estado: "inactivo",
-      });
+      await cambiarEstadoProductoApi(String(id), "inactivo");
       await recargarProductosInventario();
       await recargarSolicitudesMovimientos().catch(() => undefined);
       return true;
@@ -699,13 +655,11 @@ export function InventarioProvider({ children }: Props) {
     observacion?: string;
   }): Promise<boolean> => {
     try {
-      await clienteApi.delete(`/productos/${String(datos.id)}`, {
-        data: {
-          observacion:
-            datos.observacion?.trim() ||
-            "Bien dado de baja desde Inventario General.",
-        },
-      });
+      await eliminarProductoApi(
+        String(datos.id),
+        datos.observacion?.trim() ||
+          "Bien dado de baja desde Inventario General.",
+      );
 
       await recargarProductosInventario();
       await recargarSolicitudesMovimientos().catch(() => undefined);
