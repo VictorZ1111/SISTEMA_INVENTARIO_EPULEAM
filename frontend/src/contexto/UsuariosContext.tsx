@@ -9,7 +9,23 @@ import {
   type ReactNode,
 } from "react";
 
-import { clienteApi } from "../api/clienteApi";
+import {
+  cambiarEstadoUsuarioApi,
+  crearUsuarioApi,
+  editarUsuarioApi,
+  eliminarAsignacionesUsuarioApi,
+  eliminarUsuarioApi,
+  obtenerAsignacionesApi,
+  obtenerBodegasActivasApi,
+  obtenerDirectorioAsignacionesApi,
+  obtenerUsuarioApi,
+  obtenerUsuariosApi,
+  reemplazarAsignacionesUsuarioApi,
+  restablecerCodigoAccesoApi,
+  type BodegaBackend,
+  type RolBackend,
+  type UsuarioBackend,
+} from "../api/usuariosApi";
 import { useAuth } from "./AuthContext";
 import type { Bodega } from "../tipos/bodega";
 import type { EstadoUsuario, RolUsuario, Usuario } from "../tipos/usuario";
@@ -32,8 +48,14 @@ interface UsuariosContexto {
   cargandoUsuarios: boolean;
   recargarUsuarios: () => Promise<void>;
   agregarUsuario: (usuario: UsuarioFormulario) => Promise<Usuario>;
-  editarUsuario: (id: string | number, usuario: UsuarioFormulario) => Promise<Usuario>;
-  cambiarEstadoUsuario: (id: string | number, estado: EstadoUsuario) => Promise<Usuario>;
+  editarUsuario: (
+    id: string | number,
+    usuario: UsuarioFormulario,
+  ) => Promise<Usuario>;
+  cambiarEstadoUsuario: (
+    id: string | number,
+    estado: EstadoUsuario,
+  ) => Promise<Usuario>;
   eliminarUsuario: (id: string | number) => Promise<void>;
   obtenerUsuarioPorId: (id: string | number) => Usuario | undefined;
   restablecerCodigoAcceso: (
@@ -41,47 +63,6 @@ interface UsuariosContexto {
     nuevoCodigo: string,
     codigoAdministradorGeneral: string,
   ) => Promise<void>;
-}
-
-type RolBackend = "administrador" | "supervisor" | "responsable";
-
-interface UsuarioBackend {
-  id: string;
-  nombre: string;
-  correo: string;
-  telefono: string | null;
-  rol: RolBackend;
-  estado: EstadoUsuario;
-  esAdministradorGeneral: boolean;
-}
-
-interface BodegaBackend {
-  id: string;
-  nombre: string;
-  descripcion: string | null;
-  tipo: "inventario_general" | "principal" | "sucursal";
-  estado: "activa" | "inactiva";
-}
-
-interface AsignacionBackend {
-  usuario: { id: string };
-  bodega: {
-    id: string;
-    nombre: string;
-  };
-}
-
-interface AsignacionDirectorioBackend {
-  usuario: {
-    id: string;
-    nombre: string;
-    rol: RolBackend;
-    estado: EstadoUsuario;
-  };
-  bodega: {
-    id: string;
-    nombre: string;
-  };
 }
 
 const UsuariosContext = createContext<UsuariosContexto | undefined>(undefined);
@@ -149,49 +130,50 @@ export function UsuariosProvider({ children }: Props) {
 
     try {
       if (usuarioActual.rol === "admin") {
-        const [respuestaUsuarios, respuestaAsignaciones, respuestaBodegas] =
+        const [usuariosBackend, asignacionesBackend, bodegasBackend] =
           await Promise.all([
-            clienteApi.get<UsuarioBackend[]>("/usuarios"),
-            clienteApi.get<AsignacionBackend[]>("/asignaciones"),
-            clienteApi.get<BodegaBackend[]>("/bodegas/activas"),
+            obtenerUsuariosApi(),
+            obtenerAsignacionesApi(),
+            obtenerBodegasActivasApi(),
           ]);
 
         const asignacionesPorUsuario = new Map<string, string[]>();
 
-        respuestaAsignaciones.data.forEach((asignacion) => {
-          const actuales = asignacionesPorUsuario.get(asignacion.usuario.id) || [];
+        asignacionesBackend.forEach((asignacion) => {
+          const actuales =
+            asignacionesPorUsuario.get(asignacion.usuario.id) || [];
           actuales.push(asignacion.bodega.nombre);
           asignacionesPorUsuario.set(asignacion.usuario.id, actuales);
         });
 
-        const usuariosConvertidos: Usuario[] = respuestaUsuarios.data.map((usuario) => {
-          const rol = convertirRolBackend(usuario.rol);
-          const bodegasAsignadas = Array.from(
-            new Set(asignacionesPorUsuario.get(usuario.id) || []),
-          );
+        const usuariosConvertidos: Usuario[] = usuariosBackend.map(
+          (usuario) => {
+            const rol = convertirRolBackend(usuario.rol);
+            const bodegasAsignadas = Array.from(
+              new Set(asignacionesPorUsuario.get(usuario.id) || []),
+            );
 
-          return {
-            id: usuario.id,
-            nombre: usuario.nombre,
-            correo: usuario.correo,
-            rol,
-            estado: usuario.estado,
-            telefono: usuario.telefono || "",
-            cargo: obtenerCargoPorRol(rol),
-            bodegasAsignadas,
-            bodegaAsignada: bodegasAsignadas[0] || "",
-            esAdministradorGeneral: usuario.esAdministradorGeneral,
-          };
-        });
+            return {
+              id: usuario.id,
+              nombre: usuario.nombre,
+              correo: usuario.correo,
+              rol,
+              estado: usuario.estado,
+              telefono: usuario.telefono || "",
+              cargo: obtenerCargoPorRol(rol),
+              bodegasAsignadas,
+              bodegaAsignada: bodegasAsignadas[0] || "",
+              esAdministradorGeneral: usuario.esAdministradorGeneral,
+            };
+          },
+        );
 
         setUsuarios(usuariosConvertidos);
-        setBodegasDisponibles(respuestaBodegas.data.map(convertirBodega));
+        setBodegasDisponibles(bodegasBackend.map(convertirBodega));
         return;
       }
 
-      const { data } = await clienteApi.get<AsignacionDirectorioBackend[]>(
-        "/asignaciones/directorio",
-      );
+      const data = await obtenerDirectorioAsignacionesApi();
       const usuariosPorId = new Map<string, Usuario>();
 
       data.forEach((asignacion) => {
@@ -245,7 +227,8 @@ export function UsuariosProvider({ children }: Props) {
     (nombres: string[] = []) => {
       const ids = nombres.map((nombre) => {
         const bodega = bodegasDisponibles.find(
-          (item) => item.nombre.trim().toLowerCase() === nombre.trim().toLowerCase(),
+          (item) =>
+            item.nombre.trim().toLowerCase() === nombre.trim().toLowerCase(),
         );
 
         if (!bodega) {
@@ -265,49 +248,45 @@ export function UsuariosProvider({ children }: Props) {
       let usuarioCreado: UsuarioBackend | null = null;
 
       try {
-        const respuesta = await clienteApi.post<UsuarioBackend>("/usuarios", {
+        usuarioCreado = await crearUsuarioApi({
           nombre: nuevoUsuario.nombre.trim(),
           telefono: nuevoUsuario.telefono?.trim() || undefined,
           rol: convertirRolFrontend(nuevoUsuario.rol),
           codigoAcceso: nuevoUsuario.codigoAcceso?.trim(),
         });
 
-        usuarioCreado = respuesta.data;
-
         if (nuevoUsuario.rol !== "admin") {
           const bodegaIds = obtenerIdsBodegas(nuevoUsuario.bodegasAsignadas);
-          await clienteApi.put(`/asignaciones/usuario/${usuarioCreado.id}`, {
-            bodegaIds,
-          });
+          await reemplazarAsignacionesUsuarioApi(usuarioCreado.id, bodegaIds);
         }
 
         await recargarUsuarios();
 
-        const creado = await clienteApi.get<UsuarioBackend>(
-          `/usuarios/${usuarioCreado.id}`,
-        );
-        const rol = convertirRolBackend(creado.data.rol);
+        const creado = await obtenerUsuarioApi(usuarioCreado.id);
+        const rol = convertirRolBackend(creado.rol);
+
         const usuarioFinal: Usuario = {
-          id: creado.data.id,
-          nombre: creado.data.nombre,
-          correo: creado.data.correo,
+          id: creado.id,
+          nombre: creado.nombre,
+          correo: creado.correo,
           rol,
-          estado: creado.data.estado,
-          telefono: creado.data.telefono || "",
+          estado: creado.estado,
+          telefono: creado.telefono || "",
           cargo: obtenerCargoPorRol(rol),
           bodegasAsignadas: nuevoUsuario.bodegasAsignadas || [],
           bodegaAsignada: nuevoUsuario.bodegasAsignadas?.[0] || "",
-          esAdministradorGeneral: creado.data.esAdministradorGeneral,
+          esAdministradorGeneral: creado.esAdministradorGeneral,
         };
 
         return usuarioFinal;
       } catch (error) {
         if (usuarioCreado) {
           try {
-            await clienteApi.delete(`/usuarios/${usuarioCreado.id}`);
+            await eliminarUsuarioApi(usuarioCreado.id);
           } catch {
             // El error original es más útil para el usuario.
           }
+
           await recargarUsuarios().catch(() => undefined);
         }
 
@@ -320,7 +299,9 @@ export function UsuariosProvider({ children }: Props) {
   const editarUsuario = useCallback(
     async (id: string | number, usuarioActualizado: UsuarioFormulario) => {
       const idTexto = String(id);
-      const usuarioAnterior = usuarios.find((usuario) => String(usuario.id) === idTexto);
+      const usuarioAnterior = usuarios.find(
+        (usuario) => String(usuario.id) === idTexto,
+      );
 
       try {
         const bodegaIds =
@@ -328,23 +309,21 @@ export function UsuariosProvider({ children }: Props) {
             ? []
             : obtenerIdsBodegas(usuarioActualizado.bodegasAsignadas);
 
-        if (usuarioActualizado.rol === "admin" && usuarioAnterior?.rol !== "admin") {
-          await clienteApi.delete(`/asignaciones/usuario/${idTexto}`);
+        if (
+          usuarioActualizado.rol === "admin" &&
+          usuarioAnterior?.rol !== "admin"
+        ) {
+          await eliminarAsignacionesUsuarioApi(idTexto);
         }
 
-        const { data } = await clienteApi.patch<UsuarioBackend>(
-          `/usuarios/${idTexto}`,
-          {
-            nombre: usuarioActualizado.nombre.trim(),
-            telefono: usuarioActualizado.telefono?.trim() || "",
-            rol: convertirRolFrontend(usuarioActualizado.rol),
-          },
-        );
+        const data = await editarUsuarioApi(idTexto, {
+          nombre: usuarioActualizado.nombre.trim(),
+          telefono: usuarioActualizado.telefono?.trim() || "",
+          rol: convertirRolFrontend(usuarioActualizado.rol),
+        });
 
         if (usuarioActualizado.rol !== "admin") {
-          await clienteApi.put(`/asignaciones/usuario/${idTexto}`, {
-            bodegaIds,
-          });
+          await reemplazarAsignacionesUsuarioApi(idTexto, bodegaIds);
         }
 
         await recargarUsuarios();
@@ -373,11 +352,9 @@ export function UsuariosProvider({ children }: Props) {
   const cambiarEstadoUsuario = useCallback(
     async (id: string | number, estado: EstadoUsuario) => {
       try {
-        const { data } = await clienteApi.patch<UsuarioBackend>(
-          `/usuarios/${String(id)}/estado`,
-          { estado },
-        );
+        const data = await cambiarEstadoUsuarioApi(String(id), estado);
         await recargarUsuarios();
+
         const rol = convertirRolBackend(data.rol);
         return {
           id: data.id,
@@ -399,7 +376,7 @@ export function UsuariosProvider({ children }: Props) {
   const eliminarUsuario = useCallback(
     async (id: string | number) => {
       try {
-        await clienteApi.delete(`/usuarios/${String(id)}`);
+        await eliminarUsuarioApi(String(id));
         await recargarUsuarios();
       } catch (error) {
         throw new Error(obtenerMensajeError(error));
@@ -415,10 +392,11 @@ export function UsuariosProvider({ children }: Props) {
       codigoAdministradorGeneral: string,
     ) => {
       try {
-        await clienteApi.patch(`/usuarios/${String(id)}/codigo`, {
-          nuevoCodigo: nuevoCodigo.trim(),
-          codigoAdministradorGeneral: codigoAdministradorGeneral.trim(),
-        });
+        await restablecerCodigoAccesoApi(
+          String(id),
+          nuevoCodigo.trim(),
+          codigoAdministradorGeneral.trim(),
+        );
       } catch (error) {
         throw new Error(obtenerMensajeError(error));
       }
