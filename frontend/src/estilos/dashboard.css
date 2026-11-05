@@ -1262,10 +1262,6 @@
   padding: 0;
 }
 
-.boton-volver:hover {
-  color: #0f172a;
-}
-
 .boton-link-tabla {
   border: none;
   background: transparent;
@@ -2849,29 +2845,9 @@
 /* SOLICITUDES - ESTADOS Y MODAL FINAL */
 /* ========================= */
 
-.badge-solicitud-atendida {
-  background: #dcfce7 !important;
-  color: #15803d !important;
-  border: 1px solid #bbf7d0 !important;
-}
-
-.badge-solicitud-parcial {
-  background: #e0f2fe !important;
-  color: #0369a1 !important;
-  border: 1px solid #7dd3fc !important;
-}
-
 .modal-solicitud-atencion .tabla-solicitud-atencion {
   border-radius: 16px;
   overflow: hidden;
-}
-
-.modal-solicitud-atencion .tabla-solicitud-atencion thead th {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  background: #ffffff;
-  box-shadow: 0 1px 0 #e5e7eb;
 }
 
 .modal-solicitud-atencion .tabla-solicitud-atencion tbody tr:last-child td {
@@ -3693,10 +3669,6 @@
   gap: 12px;
   align-items: center;
   margin-bottom: 18px;
-}
-
-.responsable-filtros-bodega {
-  grid-template-columns: minmax(260px, 1fr) minmax(190px, 260px) 54px 54px;
 }
 
 .responsable-filtros-movimientos {
@@ -5868,13 +5840,6 @@ textarea,
 /* ========================================================= */
 
 /* Evita que el contenedor externo genere una segunda barra */
-.pagina-responsable .responsable-tabla-scroll {
-  overflow: visible !important;
-  height: auto !important;
-  max-height: none !important;
-  min-height: 0 !important;
-}
-
 /* La tabla no debe forzar altura grande si hay pocos registros */
 .pagina-responsable .responsable-tabla-scroll .tabla-contenedor {
   height: auto !important;
@@ -5900,13 +5865,6 @@ textarea,
 }
 
 /* Si la tabla tiene varios registros, recién ahí activa scroll interno */
-.pagina-responsable .responsable-tabla-scroll .tabla-contenedor:has(tbody tr:nth-child(6)) {
-  max-height: 430px !important;
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-  scrollbar-gutter: stable !important;
-}
-
 /* Encabezado fijo solo cuando ya hay scroll interno */
 .pagina-responsable .responsable-tabla-scroll .tabla-contenedor:has(tbody tr:nth-child(6)) thead th {
   position: sticky !important;
