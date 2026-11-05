@@ -9,20 +9,20 @@ import {
   type ReactNode,
 } from "react";
 
-import { clienteApi } from "../api/clienteApi";
+import {
+  cambiarEstadoCategoriaApi,
+  crearCategoriaApi,
+  editarCategoriaApi,
+  eliminarCategoriaApi,
+  obtenerCategoriasApi,
+  type CategoriaBackend,
+} from "../api/categoriasApi";
 import { useAuth } from "./AuthContext";
 
 export interface CategoriaProducto {
   id: string;
   nombre: string;
   descripcion: string;
-  estado: "activa" | "inactiva";
-}
-
-interface CategoriaBackend {
-  id: string;
-  nombre: string;
-  descripcion: string | null;
   estado: "activa" | "inactiva";
 }
 
@@ -93,7 +93,7 @@ export function ConfiguracionProvider({ children }: Props) {
     setCargandoCategorias(true);
 
     try {
-      const { data } = await clienteApi.get<CategoriaBackend[]>("/categorias");
+      const data = await obtenerCategoriasApi();
       setCategorias(data.map(convertirCategoria));
     } catch (error) {
       throw new Error(obtenerMensajeError(error));
@@ -123,10 +123,7 @@ export function ConfiguracionProvider({ children }: Props) {
   const agregarCategoria = useCallback(
     async (nombre: string, descripcion: string) => {
       try {
-        const { data } = await clienteApi.post<CategoriaBackend>("/categorias", {
-          nombre: nombre.trim(),
-          descripcion: descripcion.trim(),
-        });
+        const data = await crearCategoriaApi(nombre.trim(), descripcion.trim());
 
         const nuevaCategoria = convertirCategoria(data);
         setCategorias((actuales) =>
@@ -146,12 +143,10 @@ export function ConfiguracionProvider({ children }: Props) {
   const editarCategoria = useCallback(
     async (id: string, nombre: string, descripcion: string) => {
       try {
-        const { data } = await clienteApi.patch<CategoriaBackend>(
-          `/categorias/${id}`,
-          {
-            nombre: nombre.trim(),
-            descripcion: descripcion.trim(),
-          },
+        const data = await editarCategoriaApi(
+          id,
+          nombre.trim(),
+          descripcion.trim(),
         );
 
         const actualizada = convertirCategoria(data);
@@ -175,7 +170,7 @@ export function ConfiguracionProvider({ children }: Props) {
 
   const eliminarCategoria = useCallback(async (id: string) => {
     try {
-      await clienteApi.delete(`/categorias/${id}`);
+      await eliminarCategoriaApi(id);
       setCategorias((actuales) =>
         actuales.filter((categoria) => categoria.id !== id),
       );
@@ -187,10 +182,7 @@ export function ConfiguracionProvider({ children }: Props) {
   const cambiarEstadoCategoria = useCallback(
     async (id: string, estado: "activa" | "inactiva") => {
       try {
-        const { data } = await clienteApi.patch<CategoriaBackend>(
-          `/categorias/${id}/estado`,
-          { estado },
-        );
+        const data = await cambiarEstadoCategoriaApi(id, estado);
 
         const actualizada = convertirCategoria(data);
         setCategorias((actuales) =>
