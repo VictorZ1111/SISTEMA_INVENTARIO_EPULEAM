@@ -32,6 +32,11 @@ import {
   transferirProductoApi,
   type InventarioFrontendBackend,
 } from "../api/inventarioApi";
+import {
+  obtenerMovimientosApi,
+  reversarMovimientoApi,
+  type MovimientoBackend,
+} from "../api/movimientosApi";
 import { useAuth } from "./AuthContext";
 import { useConfiguracion } from "./ConfiguracionContext";
 
@@ -128,26 +133,6 @@ const InventarioContext = createContext<InventarioContexto | undefined>(
 
 interface Props {
   children: ReactNode;
-}
-
-interface MovimientoBackend {
-  id: string;
-  tipo: "entrada" | "transferencia" | "modificacion" | "baja" | "salida" | "ajuste";
-  cantidad: number;
-  cantidadAnterior: number | null;
-  cantidadNueva: number | null;
-  observacion: string | null;
-  createdAt: string;
-  solicitudId: string | null;
-  solicitudDetalleId: string | null;
-  movimientoOriginalId: string | null;
-  modulo: string | null;
-  accion: string | null;
-  registroId: string | null;
-  producto: { id: string; codigo: string; nombre: string } | null;
-  bodegaOrigen: { id: string; nombre: string } | null;
-  bodegaDestino: { id: string; nombre: string } | null;
-  usuario: { id: string; nombre: string; rol: string };
 }
 
 interface SolicitudBackend {
@@ -354,16 +339,13 @@ export function InventarioProvider({ children }: Props) {
     try {
       const rutaSolicitudes =
         usuarioActual.rol === "admin" ? "/solicitudes" : "/solicitudes/mias";
-      const rutaMovimientos =
-        usuarioActual.rol === "admin" ? "/movimientos" : "/movimientos/mios";
-
-      const [respuestaSolicitudes, respuestaMovimientos] = await Promise.all([
+      const [respuestaSolicitudes, movimientosBackend] = await Promise.all([
         clienteApi.get<SolicitudBackend[]>(rutaSolicitudes),
-        clienteApi.get<MovimientoBackend[]>(rutaMovimientos),
+        obtenerMovimientosApi(usuarioActual.rol === "admin"),
       ]);
 
       setSolicitudes(respuestaSolicitudes.data.map(convertirSolicitudBackend));
-      setMovimientos(respuestaMovimientos.data.map(convertirMovimientoBackend));
+      setMovimientos(movimientosBackend.map(convertirMovimientoBackend));
     } catch (error) {
       setSolicitudes([]);
       setMovimientos([]);
@@ -1038,9 +1020,7 @@ export function InventarioProvider({ children }: Props) {
     }
 
     try {
-      await clienteApi.post(`/movimientos/${String(movimientoId)}/revertir`, {
-        motivo,
-      });
+      await reversarMovimientoApi(String(movimientoId), motivo);
 
       await Promise.all([
         recargarSolicitudesMovimientos(),
