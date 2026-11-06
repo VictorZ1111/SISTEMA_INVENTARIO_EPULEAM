@@ -126,3 +126,17 @@ export async function eliminarProductoApi(
     data: { observacion },
   });
 }
+
+export interface TransferirProductoPayload {
+  productoId: string;
+  bodegaOrigenId: string;
+  bodegaDestinoId: string;
+  cantidad: number;
+  observacion: string;
+}
+
+export async function transferirProductoApi(
+  payload: TransferirProductoPayload,
+) {
+  await clienteApi.post("/movimientos/transferencia", payload);
+}

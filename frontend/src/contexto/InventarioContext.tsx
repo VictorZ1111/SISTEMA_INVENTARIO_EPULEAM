@@ -29,6 +29,7 @@ import {
   eliminarProductoApi,
   obtenerBodegasInventarioApi,
   obtenerInventarioFrontendApi,
+  transferirProductoApi,
   type InventarioFrontendBackend,
 } from "../api/inventarioApi";
 import { useAuth } from "./AuthContext";
@@ -692,7 +693,7 @@ export function InventarioProvider({ children }: Props) {
       if (!bodegaOrigen || !bodegaDestino) return false;
       if (bodegaOrigen.id === bodegaDestino.id) return false;
 
-      await clienteApi.post("/movimientos/transferencia", {
+      await transferirProductoApi({
         productoId: String(datos.productoId),
         bodegaOrigenId: bodegaOrigen.id,
         bodegaDestinoId: bodegaDestino.id,
@@ -747,10 +748,23 @@ export function InventarioProvider({ children }: Props) {
 
       if (destinos.some((destino) => !destino)) return false;
 
-      for (const destino of destinos) {
-        if (!destino || destino.id === bodegaOrigen.id) return false;
+      const destinosResueltos = destinos.filter(
+        (destino): destino is NonNullable<typeof destino> => Boolean(destino),
+      );
 
-        await clienteApi.post("/movimientos/transferencia", {
+      const destinosTasty = destinosResueltos.filter((destino) =>
+        /^Tasty\s+[1-5]$/i.test(normalizarNombreBodega(destino.nombre)),
+      );
+
+      const destinosDirectos = destinosResueltos.filter(
+        (destino) =>
+          !/^Tasty\s+[1-5]$/i.test(normalizarNombreBodega(destino.nombre)),
+      );
+
+      for (const destino of destinosDirectos) {
+        if (destino.id === bodegaOrigen.id) return false;
+
+        await transferirProductoApi({
           productoId: String(datos.productoId),
           bodegaOrigenId: bodegaOrigen.id,
           bodegaDestinoId: destino.id,
@@ -759,6 +773,48 @@ export function InventarioProvider({ children }: Props) {
             datos.observacion.trim() ||
             `Distribución automática de ${productoEncontrado.descripcion}: ${cantidadPorDestino} hacia ${destino.nombre}.`,
         });
+      }
+
+      if (destinosTasty.length > 0) {
+        const bodegaGastronomia = bodegas.find(
+          (bodega) =>
+            normalizarNombreBodega(bodega.nombre).localeCompare(
+              normalizarNombreBodega("Gastronomía Tasty"),
+              "es",
+              { sensitivity: "base" },
+            ) === 0,
+        );
+
+        if (!bodegaGastronomia || bodegaGastronomia.id === bodegaOrigen.id) {
+          return false;
+        }
+
+        const cantidadGastronomia =
+          cantidadPorDestino * destinosTasty.length;
+
+        await transferirProductoApi({
+          productoId: String(datos.productoId),
+          bodegaOrigenId: bodegaOrigen.id,
+          bodegaDestinoId: bodegaGastronomia.id,
+          cantidad: cantidadGastronomia,
+          observacion:
+            datos.observacion.trim() ||
+            `Distribución automática de ${productoEncontrado.descripcion} hacia Gastronomía Tasty.`,
+        });
+
+        for (const destino of destinosTasty) {
+          if (destino.id === bodegaGastronomia.id) return false;
+
+          await transferirProductoApi({
+            productoId: String(datos.productoId),
+            bodegaOrigenId: bodegaGastronomia.id,
+            bodegaDestinoId: destino.id,
+            cantidad: cantidadPorDestino,
+            observacion:
+              datos.observacion.trim() ||
+              `Distribución automática de ${productoEncontrado.descripcion}: ${cantidadPorDestino} hacia ${destino.nombre}.`,
+          });
+        }
       }
 
       await recargarProductosInventario();
