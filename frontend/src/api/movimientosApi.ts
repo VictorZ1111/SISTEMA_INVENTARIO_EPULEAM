@@ -8,7 +8,8 @@ export interface MovimientoBackend {
     | "modificacion"
     | "baja"
     | "salida"
-    | "ajuste";
+    | "ajuste"
+    | "devolucion";
   cantidad: number;
   cantidadAnterior: number | null;
   cantidadNueva: number | null;

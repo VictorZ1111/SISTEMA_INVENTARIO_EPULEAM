@@ -24,6 +24,7 @@ import PanelSupervisor from "../paginas/supervisor/PanelSupervisor";
 import BodegasSupervisor from "../paginas/supervisor/BodegasSupervisor";
 import MovimientosSupervisor from "../paginas/supervisor/MovimientosSupervisor";
 import SolicitudesSupervisor from "../paginas/supervisor/SolicitudesSupervisor";
+import StockSupervisor from "../paginas/supervisor/StockSupervisor";
 
 function RedireccionInicial() {
   const {
@@ -212,6 +213,17 @@ function RutasAplicacion() {
       <Route
         path="/supervisor/inventario"
         element={<Navigate to="/supervisor" replace />}
+      />
+
+      <Route
+        path="/supervisor/stock"
+        element={
+          <RutaProtegida rolesPermitidos={["supervisor"]}>
+            <LayoutPrincipal>
+              <StockSupervisor />
+            </LayoutPrincipal>
+          </RutaProtegida>
+        }
       />
 
       <Route

@@ -8,6 +8,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import {
   DataSource,
   In,
+  MoreThan,
   Repository,
 } from "typeorm";
 
@@ -15,6 +16,7 @@ import type { UsuarioAutenticado } from "../auth/interfaces/usuario-autenticado.
 import { AuditoriaService } from "../auditoria/auditoria.service";
 import { Bodega } from "../bodegas/entities/bodega.entity";
 import { EstadoBodega } from "../bodegas/enums/estado-bodega.enum";
+import { Existencia } from "../inventario/entities/existencia.entity";
 import { TipoBodega } from "../bodegas/enums/tipo-bodega.enum";
 import { Usuario } from "../usuarios/entities/usuario.entity";
 import { EstadoUsuario } from "../usuarios/enums/estado-usuario.enum";
@@ -89,6 +91,8 @@ export class AsignacionesService {
     private readonly usuariosRepository: Repository<Usuario>,
     @InjectRepository(Bodega)
     private readonly bodegasRepository: Repository<Bodega>,
+    @InjectRepository(Existencia)
+    private readonly existenciasRepository: Repository<Existencia>,
     private readonly dataSource: DataSource,
     private readonly auditoriaService: AuditoriaService,
   ) {}
@@ -106,89 +110,6 @@ export class AsignacionesService {
 
     return asignaciones.map((asignacion) =>
       this.convertirAPublica(asignacion),
-    );
-  }
-
-  async listarDirectorio(
-    actor: UsuarioAutenticado,
-  ): Promise<AsignacionDirectorioPublica[]> {
-    if (actor.rol === RolUsuario.ADMINISTRADOR) {
-      const asignaciones = await this.listarTodas();
-      return asignaciones.map((asignacion) =>
-        this.convertirADirectorio(asignacion),
-      );
-    }
-
-    const asignacionesPropias = await this.asignacionesRepository.find({
-      where: {
-        usuarioId: actor.id,
-      },
-      relations: {
-        bodega: true,
-      },
-    });
-
-    if (asignacionesPropias.length === 0) {
-      return [];
-    }
-
-    let bodegaIdsVisibles: string[] = [];
-    let rolVisible: RolUsuario;
-
-    if (actor.rol === RolUsuario.SUPERVISOR) {
-      const bodegasPrincipalesIds = Array.from(
-        new Set(
-          asignacionesPropias
-            .map((asignacion) => asignacion.bodega.id)
-            .filter(Boolean),
-        ),
-      );
-
-      const sucursales = bodegasPrincipalesIds.length
-        ? await this.bodegasRepository.find({
-            where: {
-              bodegaPadreId: In(bodegasPrincipalesIds),
-              estado: EstadoBodega.ACTIVA,
-            },
-          })
-        : [];
-
-      bodegaIdsVisibles = sucursales.map((bodega) => bodega.id);
-      rolVisible = RolUsuario.RESPONSABLE;
-    } else {
-      bodegaIdsVisibles = Array.from(
-        new Set(
-          asignacionesPropias
-            .map((asignacion) => asignacion.bodega.bodegaPadreId)
-            .filter((id): id is string => Boolean(id)),
-        ),
-      );
-      rolVisible = RolUsuario.SUPERVISOR;
-    }
-
-    if (bodegaIdsVisibles.length === 0) {
-      return [];
-    }
-
-    const asignacionesVisibles = await this.asignacionesRepository.find({
-      where: {
-        bodegaId: In(bodegaIdsVisibles),
-        usuario: {
-          rol: rolVisible,
-          estado: EstadoUsuario.ACTIVO,
-        },
-      },
-      relations: {
-        usuario: true,
-        bodega: true,
-      },
-      order: {
-        createdAt: "ASC",
-      },
-    });
-
-    return asignacionesVisibles.map((asignacion) =>
-      this.convertirADirectorio(this.convertirAPublica(asignacion)),
     );
   }
 
@@ -218,6 +139,93 @@ export class AsignacionesService {
     };
   }
 
+  async listarDirectorio(
+    actor: UsuarioAutenticado,
+  ): Promise<AsignacionDirectorioPublica[]> {
+    const asignaciones = await this.asignacionesRepository.find({
+      relations: {
+        usuario: true,
+        bodega: true,
+      },
+      order: {
+        createdAt: "ASC",
+      },
+    });
+
+    const convertir = (
+      asignacion: UsuarioBodega,
+    ): AsignacionDirectorioPublica => ({
+      usuario: {
+        id: asignacion.usuario.id,
+        nombre: asignacion.usuario.nombre,
+        rol: asignacion.usuario.rol,
+        estado: asignacion.usuario.estado,
+      },
+      bodega: {
+        id: asignacion.bodega.id,
+        nombre: asignacion.bodega.nombre,
+      },
+    });
+
+    if (actor.rol === RolUsuario.ADMINISTRADOR) {
+      return asignaciones.map(convertir);
+    }
+
+    const asignacionesActor = asignaciones.filter(
+      (asignacion) => asignacion.usuarioId === actor.id,
+    );
+
+    if (asignacionesActor.length === 0) {
+      return [];
+    }
+
+    const bodegas = await this.bodegasRepository.find();
+    const alcance = new Set<string>();
+
+    for (const asignacion of asignacionesActor) {
+      const bodega = asignacion.bodega;
+      alcance.add(bodega.id);
+
+      if (actor.rol === RolUsuario.SUPERVISOR) {
+        for (const posibleSucursal of bodegas) {
+          if (
+            posibleSucursal.bodegaPadreId === bodega.id &&
+            posibleSucursal.tipo === TipoBodega.SUCURSAL
+          ) {
+            alcance.add(posibleSucursal.id);
+          }
+        }
+      }
+
+      if (
+        actor.rol === RolUsuario.RESPONSABLE &&
+        bodega.bodegaPadreId
+      ) {
+        alcance.add(bodega.bodegaPadreId);
+      }
+    }
+
+    const rolRelacionado =
+      actor.rol === RolUsuario.SUPERVISOR
+        ? RolUsuario.RESPONSABLE
+        : actor.rol === RolUsuario.RESPONSABLE
+          ? RolUsuario.SUPERVISOR
+          : null;
+
+    if (!rolRelacionado) {
+      return [];
+    }
+
+    return asignaciones
+      .filter(
+        (asignacion) =>
+          asignacion.usuario.estado === EstadoUsuario.ACTIVO &&
+          asignacion.usuario.rol === rolRelacionado &&
+          alcance.has(asignacion.bodegaId),
+      )
+      .map(convertir);
+  }
+
   async reemplazarAsignaciones(
     usuarioId: string,
     bodegaIds: string[],
@@ -228,6 +236,13 @@ export class AsignacionesService {
 
     const bodegas = await this.obtenerBodegas(bodegaIds);
     this.validarBodegasSegunRol(usuario, bodegas);
+
+    if (usuario.rol === RolUsuario.SUPERVISOR) {
+      await this.validarStocksAntesDeReasignar(
+        usuario.id,
+        bodegas.map((bodega) => bodega.id),
+      );
+    }
 
     const tipoAsignacion = this.obtenerTipoAsignacion(usuario.rol);
 
@@ -252,6 +267,10 @@ export class AsignacionesService {
       await repositorio.save(nuevasAsignaciones);
     });
 
+    if (usuario.rol === RolUsuario.SUPERVISOR) {
+      await this.sincronizarStocksSupervisor(usuario, bodegas);
+    }
+
     await this.auditoriaService.registrar({
       usuarioId: actor.id,
       modulo: "asignaciones",
@@ -273,7 +292,15 @@ export class AsignacionesService {
     const usuario = await this.obtenerUsuario(usuarioId);
     this.validarUsuarioAsignable(usuario);
 
+    if (usuario.rol === RolUsuario.SUPERVISOR) {
+      await this.validarStocksAntesDeReasignar(usuario.id, []);
+    }
+
     await this.asignacionesRepository.delete({ usuarioId });
+
+    if (usuario.rol === RolUsuario.SUPERVISOR) {
+      await this.sincronizarStocksSupervisor(usuario, []);
+    }
     await this.auditoriaService.registrar({
       usuarioId: actor.id,
       modulo: "asignaciones",
@@ -392,6 +419,95 @@ export class AsignacionesService {
     }
   }
 
+  private async validarStocksAntesDeReasignar(
+    supervisorId: string,
+    bodegaIdsNuevas: string[],
+  ): Promise<void> {
+    const stocks = await this.bodegasRepository.find({
+      where: {
+        tipo: TipoBodega.STOCK_SUPERVISOR,
+        supervisorId,
+      },
+    });
+
+    const nuevas = new Set(bodegaIdsNuevas);
+
+    for (const stock of stocks) {
+      if (stock.bodegaPadreId && nuevas.has(stock.bodegaPadreId)) {
+        continue;
+      }
+
+      const existenciasPendientes = await this.existenciasRepository.count({
+        where: {
+          bodegaId: stock.id,
+          cantidad: MoreThan(0),
+        },
+      });
+
+      if (existenciasPendientes > 0) {
+        throw new ConflictException(
+          "No se puede retirar esta asignación porque el Supervisor todavía tiene productos en stock. Debe distribuirlos o devolverlos al Inventario General.",
+        );
+      }
+    }
+  }
+
+  private async sincronizarStocksSupervisor(
+    supervisor: Usuario,
+    bodegas: Bodega[],
+  ): Promise<void> {
+    const stocksActuales = await this.bodegasRepository.find({
+      where: {
+        tipo: TipoBodega.STOCK_SUPERVISOR,
+        supervisorId: supervisor.id,
+      },
+    });
+
+    const stocksPorPadre = new Map(
+      stocksActuales
+        .filter((stock) => stock.bodegaPadreId)
+        .map((stock) => [stock.bodegaPadreId!, stock]),
+    );
+
+    const padresActivos = new Set<string>();
+
+    for (const bodega of bodegas) {
+      padresActivos.add(bodega.id);
+      const existente = stocksPorPadre.get(bodega.id);
+
+      if (existente) {
+        if (existente.estado !== EstadoBodega.ACTIVA) {
+          existente.estado = EstadoBodega.ACTIVA;
+          await this.bodegasRepository.save(existente);
+        }
+        continue;
+      }
+
+      const stock = this.bodegasRepository.create({
+        nombre: `Stock Supervisor ${supervisor.id} ${bodega.id}`,
+        descripcion: `Stock interno de ${supervisor.nombre} para ${bodega.nombre}.`,
+        tipo: TipoBodega.STOCK_SUPERVISOR,
+        estado: EstadoBodega.ACTIVA,
+        esSistema: true,
+        bodegaPadreId: bodega.id,
+        supervisorId: supervisor.id,
+      });
+
+      await this.bodegasRepository.save(stock);
+    }
+
+    for (const stock of stocksActuales) {
+      if (
+        stock.bodegaPadreId &&
+        !padresActivos.has(stock.bodegaPadreId) &&
+        stock.estado !== EstadoBodega.INACTIVA
+      ) {
+        stock.estado = EstadoBodega.INACTIVA;
+        await this.bodegasRepository.save(stock);
+      }
+    }
+  }
+
   private obtenerTipoAsignacion(
     rol: RolUsuario,
   ): TipoAsignacion {
@@ -422,23 +538,6 @@ export class AsignacionesService {
         tipo: asignacion.bodega.tipo,
         estado: asignacion.bodega.estado,
         bodegaPadreId: asignacion.bodega.bodegaPadreId,
-      },
-    };
-  }
-
-  private convertirADirectorio(
-    asignacion: AsignacionPublica,
-  ): AsignacionDirectorioPublica {
-    return {
-      usuario: {
-        id: asignacion.usuario.id,
-        nombre: asignacion.usuario.nombre,
-        rol: asignacion.usuario.rol,
-        estado: asignacion.usuario.estado,
-      },
-      bodega: {
-        id: asignacion.bodega.id,
-        nombre: asignacion.bodega.nombre,
       },
     };
   }

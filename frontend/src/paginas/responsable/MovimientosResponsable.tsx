@@ -31,7 +31,8 @@ type FiltroTipoMovimiento =
   | "todos"
   | "transferencia"
   | "modificacion"
-  | "baja";
+  | "baja"
+  | "devolucion";
 type OrdenMovimientos = "recientes" | "antiguos" | "az" | "za";
 
 function limpiarNombreBodega(bodega: string) {
@@ -225,6 +226,7 @@ function MovimientosResponsable() {
             opciones={[
               { valor: "todos", etiqueta: "Todos los tipos" },
               { valor: "transferencia", etiqueta: "Transferencias" },
+              { valor: "devolucion", etiqueta: "Devoluciones" },
               { valor: "modificacion", etiqueta: "Modificaciones" },
               { valor: "baja", etiqueta: "Bajas" },
             ]}

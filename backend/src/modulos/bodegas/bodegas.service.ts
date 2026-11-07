@@ -9,7 +9,7 @@ import {
 import { InjectRepository } from "@nestjs/typeorm";
 import type { UsuarioAutenticado } from "../auth/interfaces/usuario-autenticado.interface";
 import { AuditoriaService } from "../auditoria/auditoria.service";
-import { Repository } from "typeorm";
+import { Not, Repository } from "typeorm";
 
 import { ActualizarBodegaDto } from "./dto/actualizar-bodega.dto";
 import { CrearBodegaDto } from "./dto/crear-bodega.dto";
@@ -85,6 +85,9 @@ export class BodegasService implements OnApplicationBootstrap {
 
   async listar(): Promise<BodegaPublica[]> {
     const bodegas = await this.bodegasRepository.find({
+      where: {
+        tipo: Not(TipoBodega.STOCK_SUPERVISOR),
+      },
       relations: {
         bodegaPadre: true,
       },
@@ -101,6 +104,7 @@ export class BodegasService implements OnApplicationBootstrap {
     const bodegas = await this.bodegasRepository.find({
       where: {
         estado: EstadoBodega.ACTIVA,
+        tipo: Not(TipoBodega.STOCK_SUPERVISOR),
       },
       relations: {
         bodegaPadre: true,
@@ -125,6 +129,12 @@ export class BodegasService implements OnApplicationBootstrap {
     if (dto.tipo === TipoBodega.INVENTARIO_GENERAL) {
       throw new ConflictException(
         "El sistema ya cuenta con un Inventario General.",
+      );
+    }
+
+    if (dto.tipo === TipoBodega.STOCK_SUPERVISOR) {
+      throw new ConflictException(
+        "Los stocks de Supervisor son internos y los administra el sistema.",
       );
     }
 
@@ -170,6 +180,12 @@ export class BodegasService implements OnApplicationBootstrap {
     if (tipoFinal === TipoBodega.INVENTARIO_GENERAL) {
       throw new ConflictException(
         "No se puede crear otro Inventario General.",
+      );
+    }
+
+    if (tipoFinal === TipoBodega.STOCK_SUPERVISOR) {
+      throw new ConflictException(
+        "Los stocks de Supervisor son internos y no pueden administrarse como bodegas normales.",
       );
     }
 

@@ -14,6 +14,7 @@ import {
 
 import type { UsuarioAutenticado } from "../auth/interfaces/usuario-autenticado.interface";
 import { UsuarioBodega } from "../asignaciones/entities/usuario-bodega.entity";
+import { TipoAsignacion } from "../asignaciones/enums/tipo-asignacion.enum";
 import { Bodega } from "../bodegas/entities/bodega.entity";
 import { EstadoBodega } from "../bodegas/enums/estado-bodega.enum";
 import { TipoBodega } from "../bodegas/enums/tipo-bodega.enum";
@@ -21,7 +22,10 @@ import { Existencia } from "../inventario/entities/existencia.entity";
 import { Producto } from "../productos/entities/producto.entity";
 import { EstadoBienProducto } from "../productos/enums/estado-bien-producto.enum";
 import { EstadoProducto } from "../productos/enums/estado-producto.enum";
+import { EstadoUsuario } from "../usuarios/enums/estado-usuario.enum";
 import { RolUsuario } from "../usuarios/enums/rol-usuario.enum";
+import { DevolverStockSupervisorDto } from "./dto/devolver-stock-supervisor.dto";
+import { DistribuirStockSupervisorDto } from "./dto/distribuir-stock-supervisor.dto";
 import { FiltrarMovimientosDto } from "./dto/filtrar-movimientos.dto";
 import { RegistrarAjusteDto } from "./dto/registrar-ajuste.dto";
 import { RegistrarEntradaDto } from "./dto/registrar-entrada.dto";
@@ -90,9 +94,7 @@ export class MovimientosService {
       .orderBy("movimiento.createdAt", "DESC")
       .getMany();
 
-    return movimientos.map((movimiento) =>
-      this.convertirAPublico(movimiento),
-    );
+    return movimientos.map((movimiento) => this.convertirAPublico(movimiento));
   }
 
   async listarMios(
@@ -102,9 +104,7 @@ export class MovimientosService {
       return this.listar({});
     }
 
-    const bodegaIds = await this.obtenerBodegasAsignadas(
-      usuario.id,
-    );
+    const bodegaIds = await this.obtenerBodegasAccesoMovimiento(usuario);
 
     if (bodegaIds.length === 0) {
       return [];
@@ -118,9 +118,7 @@ export class MovimientosService {
       .orderBy("movimiento.createdAt", "DESC")
       .getMany();
 
-    return movimientos.map((movimiento) =>
-      this.convertirAPublico(movimiento),
-    );
+    return movimientos.map((movimiento) => this.convertirAPublico(movimiento));
   }
 
   async registrarEntrada(
@@ -150,7 +148,7 @@ export class MovimientosService {
         let existencia = await existencias.findOne({
           where: {
             productoId: dto.productoId,
-            bodegaId: dto.bodegaDestinoId,
+            bodegaId: destino.id,
           },
           lock: {
             mode: "pessimistic_write",
@@ -162,7 +160,7 @@ export class MovimientosService {
         if (!existencia) {
           existencia = existencias.create({
             productoId: dto.productoId,
-            bodegaId: dto.bodegaDestinoId,
+            bodegaId: destino.id,
             cantidad: 0,
           });
         }
@@ -174,7 +172,7 @@ export class MovimientosService {
           tipo: TipoMovimiento.ENTRADA,
           productoId: dto.productoId,
           bodegaOrigenId: null,
-          bodegaDestinoId: dto.bodegaDestinoId,
+          bodegaDestinoId: destino.id,
           usuarioId: usuario.id,
           cantidad: dto.cantidad,
           cantidadAnterior: anterior,
@@ -202,7 +200,12 @@ export class MovimientosService {
 
     const producto = await this.obtenerProducto(dto.productoId);
     const origen = await this.obtenerBodega(dto.bodegaOrigenId);
-    const destino = await this.obtenerBodega(dto.bodegaDestinoId);
+    const destinoSolicitado = await this.obtenerBodega(dto.bodegaDestinoId);
+    const destino = await this.resolverDestinoTransferencia(
+      usuario,
+      origen,
+      destinoSolicitado,
+    );
 
     this.validarProductoActivo(producto);
     this.validarBodegaActiva(origen);
@@ -244,7 +247,7 @@ export class MovimientosService {
         let existenciaDestino = await existencias.findOne({
           where: {
             productoId: dto.productoId,
-            bodegaId: dto.bodegaDestinoId,
+            bodegaId: destino.id,
           },
           lock: {
             mode: "pessimistic_write",
@@ -254,7 +257,7 @@ export class MovimientosService {
         if (!existenciaDestino) {
           existenciaDestino = existencias.create({
             productoId: dto.productoId,
-            bodegaId: dto.bodegaDestinoId,
+            bodegaId: destino.id,
             cantidad: 0,
           });
         }
@@ -271,7 +274,216 @@ export class MovimientosService {
           tipo: TipoMovimiento.TRANSFERENCIA,
           productoId: dto.productoId,
           bodegaOrigenId: dto.bodegaOrigenId,
-          bodegaDestinoId: dto.bodegaDestinoId,
+          bodegaDestinoId: destino.id,
+          usuarioId: usuario.id,
+          cantidad: dto.cantidad,
+          cantidadAnterior: null,
+          cantidadNueva: null,
+          observacion: this.normalizarObservacion(dto.observacion),
+        });
+
+        const guardado = await movimientos.save(movimiento);
+        return guardado.id;
+      },
+    );
+
+    return this.buscarPorId(movimientoId);
+  }
+
+  async distribuirStockSupervisor(
+    dto: DistribuirStockSupervisorDto,
+    usuario: UsuarioAutenticado,
+  ): Promise<void> {
+    if (usuario.rol !== RolUsuario.SUPERVISOR) {
+      throw new ForbiddenException(
+        "Solo los Supervisores pueden distribuir productos desde su stock.",
+      );
+    }
+
+    const producto = await this.obtenerProducto(dto.productoId);
+    const stock = await this.obtenerBodega(dto.bodegaStockId);
+
+    this.validarProductoActivo(producto);
+    this.validarBodegaActiva(stock);
+    this.validarStockSupervisorPropio(stock, usuario);
+
+    const destinosIds = Array.from(new Set(dto.bodegaDestinoIds));
+
+    if (destinosIds.length === 0) {
+      throw new ConflictException(
+        "Debes seleccionar al menos una bodega destino.",
+      );
+    }
+
+    if (dto.cantidadTotal % destinosIds.length !== 0) {
+      throw new ConflictException(
+        `La cantidad ${dto.cantidadTotal} no se puede repartir en partes iguales entre ${destinosIds.length} bodegas.`,
+      );
+    }
+
+    const cantidadPorDestino = dto.cantidadTotal / destinosIds.length;
+    const destinosPermitidos = await this.obtenerDestinosPermitidosStock(stock);
+    const permitidosPorId = new Map(
+      destinosPermitidos.map((destino) => [destino.id, destino]),
+    );
+
+    const destinos = destinosIds.map((destinoId) => {
+      const destino = permitidosPorId.get(destinoId);
+
+      if (!destino) {
+        throw new ForbiddenException(
+          "Una de las bodegas seleccionadas no pertenece al área de este stock.",
+        );
+      }
+
+      return destino;
+    });
+
+    await this.dataSource.transaction(
+      async (administrador) => {
+        const existencias = administrador.getRepository(Existencia);
+
+        const existenciaOrigen = await existencias.findOne({
+          where: {
+            productoId: dto.productoId,
+            bodegaId: stock.id,
+          },
+          lock: {
+            mode: "pessimistic_write",
+          },
+        });
+
+        if (!existenciaOrigen || existenciaOrigen.cantidad < dto.cantidadTotal) {
+          throw new ConflictException(
+            "No tienes stock suficiente para realizar esta asignación.",
+          );
+        }
+
+        existenciaOrigen.cantidad -= dto.cantidadTotal;
+        await existencias.save(existenciaOrigen);
+
+        const movimientos = administrador.getRepository(Movimiento);
+
+        for (const destino of destinos) {
+          let existenciaDestino = await existencias.findOne({
+            where: {
+              productoId: dto.productoId,
+              bodegaId: destino.id,
+            },
+            lock: {
+              mode: "pessimistic_write",
+            },
+          });
+
+          if (!existenciaDestino) {
+            existenciaDestino = existencias.create({
+              productoId: dto.productoId,
+              bodegaId: destino.id,
+              cantidad: 0,
+            });
+          }
+
+          existenciaDestino.cantidad += cantidadPorDestino;
+          await existencias.save(existenciaDestino);
+
+          await movimientos.save(
+            movimientos.create({
+              tipo: TipoMovimiento.TRANSFERENCIA,
+              productoId: dto.productoId,
+              bodegaOrigenId: stock.id,
+              bodegaDestinoId: destino.id,
+              usuarioId: usuario.id,
+              cantidad: cantidadPorDestino,
+              cantidadAnterior: null,
+              cantidadNueva: null,
+              observacion: this.normalizarObservacion(dto.observacion),
+            }),
+          );
+        }
+      },
+    );
+  }
+
+  async devolverStockSupervisor(
+    dto: DevolverStockSupervisorDto,
+    usuario: UsuarioAutenticado,
+  ): Promise<MovimientoPublico> {
+    if (usuario.rol !== RolUsuario.SUPERVISOR) {
+      throw new ForbiddenException(
+        "Solo los Supervisores pueden devolver productos desde su stock.",
+      );
+    }
+
+    const producto = await this.obtenerProducto(dto.productoId);
+    const stock = await this.obtenerBodega(dto.bodegaStockId);
+
+    this.validarProductoActivo(producto);
+    this.validarBodegaActiva(stock);
+    this.validarStockSupervisorPropio(stock, usuario);
+
+    const inventarioGeneral = await this.bodegasRepository.findOne({
+      where: {
+        tipo: TipoBodega.INVENTARIO_GENERAL,
+        nombre: "Inventario General",
+        estado: EstadoBodega.ACTIVA,
+      },
+    });
+
+    if (!inventarioGeneral) {
+      throw new ConflictException(
+        "No se encontró el Inventario General activo.",
+      );
+    }
+
+    const movimientoId = await this.dataSource.transaction(
+      async (administrador) => {
+        const existencias = administrador.getRepository(Existencia);
+        const movimientos = administrador.getRepository(Movimiento);
+
+        const existenciaOrigen = await existencias.findOne({
+          where: {
+            productoId: dto.productoId,
+            bodegaId: stock.id,
+          },
+          lock: {
+            mode: "pessimistic_write",
+          },
+        });
+
+        if (!existenciaOrigen || existenciaOrigen.cantidad < dto.cantidad) {
+          throw new ConflictException(
+            "No tienes stock suficiente para realizar esta devolución.",
+          );
+        }
+
+        let existenciaDestino = await existencias.findOne({
+          where: {
+            productoId: dto.productoId,
+            bodegaId: inventarioGeneral.id,
+          },
+          lock: {
+            mode: "pessimistic_write",
+          },
+        });
+
+        if (!existenciaDestino) {
+          existenciaDestino = existencias.create({
+            productoId: dto.productoId,
+            bodegaId: inventarioGeneral.id,
+            cantidad: 0,
+          });
+        }
+
+        existenciaOrigen.cantidad -= dto.cantidad;
+        existenciaDestino.cantidad += dto.cantidad;
+
+        await existencias.save([existenciaOrigen, existenciaDestino]);
+
+        const movimiento = movimientos.create({
+          tipo: TipoMovimiento.DEVOLUCION,
+          productoId: dto.productoId,
+          bodegaOrigenId: stock.id,
+          bodegaDestinoId: inventarioGeneral.id,
           usuarioId: usuario.id,
           cantidad: dto.cantidad,
           cantidadAnterior: null,
@@ -434,8 +646,16 @@ export class MovimientosService {
         "bodegaOrigen",
       )
       .leftJoinAndSelect(
+        "bodegaOrigen.bodegaPadre",
+        "bodegaOrigenPadre",
+      )
+      .leftJoinAndSelect(
         "movimiento.bodegaDestino",
         "bodegaDestino",
+      )
+      .leftJoinAndSelect(
+        "bodegaDestino.bodegaPadre",
+        "bodegaDestinoPadre",
       )
       .leftJoinAndSelect("movimiento.usuario", "usuario");
   }
@@ -528,18 +748,102 @@ export class MovimientosService {
   ): void {
     const desdeInventarioGeneral =
       origen.tipo === TipoBodega.INVENTARIO_GENERAL &&
-      destino.tipo === TipoBodega.PRINCIPAL;
+      destino.tipo === TipoBodega.STOCK_SUPERVISOR;
 
-    const desdeGastronomia =
-      origen.nombre === "Gastronomía Tasty" &&
-      destino.tipo === TipoBodega.SUCURSAL &&
-      destino.bodegaPadreId === origen.id;
+    const desdeStockSupervisor =
+      origen.tipo === TipoBodega.STOCK_SUPERVISOR &&
+      (destino.id === origen.bodegaPadreId ||
+        destino.bodegaPadreId === origen.bodegaPadreId);
 
-    if (!desdeInventarioGeneral && !desdeGastronomia) {
+    if (!desdeInventarioGeneral && !desdeStockSupervisor) {
       throw new ConflictException(
         "La transferencia no respeta la jerarquía permitida de bodegas.",
       );
     }
+  }
+
+  private async resolverDestinoTransferencia(
+    usuario: UsuarioAutenticado,
+    origen: Bodega,
+    destinoSolicitado: Bodega,
+  ): Promise<Bodega> {
+    if (
+      usuario.rol !== RolUsuario.ADMINISTRADOR ||
+      origen.tipo !== TipoBodega.INVENTARIO_GENERAL
+    ) {
+      return destinoSolicitado;
+    }
+
+    let bodegaPrincipal = destinoSolicitado;
+
+    if (destinoSolicitado.tipo === TipoBodega.SUCURSAL) {
+      if (!destinoSolicitado.bodegaPadreId) {
+        throw new ConflictException(
+          "La sucursal seleccionada no tiene una bodega principal asociada.",
+        );
+      }
+
+      bodegaPrincipal = await this.obtenerBodega(
+        destinoSolicitado.bodegaPadreId,
+      );
+    }
+
+    if (bodegaPrincipal.tipo !== TipoBodega.PRINCIPAL) {
+      throw new ConflictException(
+        "El Administrador solo puede asignar productos a una bodega principal o a una sucursal asociada.",
+      );
+    }
+
+    const asignacionesSupervisor =
+      await this.asignacionesRepository.find({
+        where: {
+          bodegaId: bodegaPrincipal.id,
+          tipoAsignacion: TipoAsignacion.SUPERVISOR,
+        },
+        relations: {
+          usuario: true,
+        },
+      });
+
+    const supervisoresActivos = asignacionesSupervisor.filter(
+      (asignacion) =>
+        asignacion.usuario.rol === RolUsuario.SUPERVISOR &&
+        asignacion.usuario.estado === EstadoUsuario.ACTIVO,
+    );
+
+    if (supervisoresActivos.length === 0) {
+      throw new ConflictException(
+        `No existe un Supervisor activo asignado a "${bodegaPrincipal.nombre}".`,
+      );
+    }
+
+    if (supervisoresActivos.length > 1) {
+      throw new ConflictException(
+        `La bodega "${bodegaPrincipal.nombre}" tiene más de un Supervisor activo. Corrige las asignaciones antes de entregar productos.`,
+      );
+    }
+
+    const supervisor = supervisoresActivos[0].usuario;
+
+    const stockSupervisor = await this.bodegasRepository.findOne({
+      where: {
+        tipo: TipoBodega.STOCK_SUPERVISOR,
+        supervisorId: supervisor.id,
+        bodegaPadreId: bodegaPrincipal.id,
+        estado: EstadoBodega.ACTIVA,
+      },
+      relations: {
+        bodegaPadre: true,
+      },
+    });
+
+    if (!stockSupervisor) {
+      throw new ConflictException(
+        `No se encontró el stock interno del Supervisor de "${bodegaPrincipal.nombre}".`,
+      );
+    }
+
+    return stockSupervisor;
   }
 
   private async validarPermisoMovimiento(
@@ -574,11 +878,17 @@ export class MovimientosService {
     }
 
     if (bodegaDestinoId) {
-      const destino = await this.obtenerBodega(bodegaDestinoId);
+      const [origen, destino] = await Promise.all([
+        this.obtenerBodega(bodegaOrigenId),
+        this.obtenerBodega(bodegaDestinoId),
+      ]);
 
       const permitidoPorJerarquia =
         asignadas.has(bodegaDestinoId) ||
-        destino.bodegaPadreId === bodegaOrigenId;
+        destino.bodegaPadreId === bodegaOrigenId ||
+        (origen.tipo === TipoBodega.STOCK_SUPERVISOR &&
+          (destino.id === origen.bodegaPadreId ||
+            destino.bodegaPadreId === origen.bodegaPadreId));
 
       if (!permitidoPorJerarquia) {
         throw new ForbiddenException(
@@ -591,18 +901,110 @@ export class MovimientosService {
   private async obtenerBodegasAsignadas(
     usuarioId: string,
   ): Promise<string[]> {
-    const asignaciones = await this.asignacionesRepository.find({
+    const [asignaciones, stocksSupervisor] = await Promise.all([
+      this.asignacionesRepository.find({
+        where: {
+          usuarioId,
+        },
+        select: {
+          bodegaId: true,
+        },
+      }),
+      this.bodegasRepository.find({
+        where: {
+          tipo: TipoBodega.STOCK_SUPERVISOR,
+          supervisorId: usuarioId,
+          estado: EstadoBodega.ACTIVA,
+        },
+        select: {
+          id: true,
+        },
+      }),
+    ]);
+
+    return Array.from(
+      new Set([
+        ...asignaciones.map((asignacion) => asignacion.bodegaId),
+        ...stocksSupervisor.map((stock) => stock.id),
+      ]),
+    );
+  }
+
+
+  private async obtenerBodegasAccesoMovimiento(
+    usuario: UsuarioAutenticado,
+  ): Promise<string[]> {
+    const directasYStocks = await this.obtenerBodegasAsignadas(usuario.id);
+
+    if (usuario.rol !== RolUsuario.SUPERVISOR) {
+      return directasYStocks;
+    }
+
+    const asignacionesDirectas = await this.asignacionesRepository.find({
+      where: { usuarioId: usuario.id },
+      select: { bodegaId: true },
+    });
+    const principales = asignacionesDirectas.map(
+      (asignacion) => asignacion.bodegaId,
+    );
+
+    const sucursales = principales.length
+      ? await this.bodegasRepository.find({
+          where: {
+            bodegaPadreId: In(principales),
+            tipo: TipoBodega.SUCURSAL,
+            estado: EstadoBodega.ACTIVA,
+          },
+          select: { id: true },
+        })
+      : [];
+
+    return Array.from(
+      new Set([
+        ...directasYStocks,
+        ...sucursales.map((sucursal) => sucursal.id),
+      ]),
+    );
+  }
+
+  private validarStockSupervisorPropio(
+    stock: Bodega,
+    usuario: UsuarioAutenticado,
+  ): void {
+    if (
+      stock.tipo !== TipoBodega.STOCK_SUPERVISOR ||
+      stock.supervisorId !== usuario.id
+    ) {
+      throw new ForbiddenException(
+        "El stock seleccionado no pertenece al Supervisor autenticado.",
+      );
+    }
+  }
+
+  private async obtenerDestinosPermitidosStock(
+    stock: Bodega,
+  ): Promise<Bodega[]> {
+    if (!stock.bodegaPadreId) {
+      throw new ConflictException(
+        "El stock del Supervisor no tiene un área asociada.",
+      );
+    }
+
+    const area = await this.obtenerBodega(stock.bodegaPadreId);
+    this.validarBodegaActiva(area);
+
+    const sucursales = await this.bodegasRepository.find({
       where: {
-        usuarioId,
+        bodegaPadreId: area.id,
+        tipo: TipoBodega.SUCURSAL,
+        estado: EstadoBodega.ACTIVA,
       },
-      select: {
-        bodegaId: true,
+      order: {
+        nombre: "ASC",
       },
     });
 
-    return asignaciones.map(
-      (asignacion) => asignacion.bodegaId,
-    );
+    return sucursales.length > 0 ? sucursales : [area];
   }
 
   private normalizarObservacion(
@@ -610,6 +1012,16 @@ export class MovimientosService {
   ): string | null {
     const valor = observacion?.trim();
     return valor ? valor : null;
+  }
+
+  private obtenerNombreBodegaMovimiento(
+    bodega: Bodega,
+  ): string {
+    if (bodega.tipo !== TipoBodega.STOCK_SUPERVISOR) {
+      return bodega.nombre;
+    }
+
+    return bodega.bodegaPadre?.nombre ?? "Bodega asignada";
   }
 
   private convertirAPublico(
@@ -639,13 +1051,13 @@ export class MovimientosService {
       bodegaOrigen: movimiento.bodegaOrigen
         ? {
             id: movimiento.bodegaOrigen.id,
-            nombre: movimiento.bodegaOrigen.nombre,
+            nombre: this.obtenerNombreBodegaMovimiento(movimiento.bodegaOrigen),
           }
         : null,
       bodegaDestino: movimiento.bodegaDestino
         ? {
             id: movimiento.bodegaDestino.id,
-            nombre: movimiento.bodegaDestino.nombre,
+            nombre: this.obtenerNombreBodegaMovimiento(movimiento.bodegaDestino),
           }
         : null,
       usuario: {

@@ -6,6 +6,7 @@ import {
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import {
+  In,
   Repository,
   SelectQueryBuilder,
 } from "typeorm";
@@ -14,6 +15,7 @@ import { UsuarioBodega } from "../asignaciones/entities/usuario-bodega.entity";
 import type { UsuarioAutenticado } from "../auth/interfaces/usuario-autenticado.interface";
 import { Bodega } from "../bodegas/entities/bodega.entity";
 import { EstadoBodega } from "../bodegas/enums/estado-bodega.enum";
+import { TipoBodega } from "../bodegas/enums/tipo-bodega.enum";
 import { Producto } from "../productos/entities/producto.entity";
 import { EstadoBienProducto } from "../productos/enums/estado-bien-producto.enum";
 import { EstadoProducto } from "../productos/enums/estado-producto.enum";
@@ -81,6 +83,27 @@ export interface InventarioFrontendItem {
   producto: ProductoInventarioPublico;
 }
 
+
+export interface StockSupervisorItem {
+  existenciaId: string;
+  productoId: string;
+  codigo: string;
+  descripcion: string;
+  categoria: string;
+  unidad: string;
+  cantidad: number;
+  bodegaStockId: string;
+  area: {
+    id: string;
+    nombre: string;
+  };
+  destinos: Array<{
+    id: string;
+    nombre: string;
+  }>;
+  producto: ProductoInventarioPublico;
+}
+
 @Injectable()
 export class InventarioService {
   constructor(
@@ -101,6 +124,9 @@ export class InventarioService {
       this.crearConsultaBase(),
       filtros,
     )
+      .andWhere("bodega.tipo <> :tipoStockSupervisor", {
+        tipoStockSupervisor: TipoBodega.STOCK_SUPERVISOR,
+      })
       .orderBy("bodega.nombre", "ASC")
       .addOrderBy("producto.nombre", "ASC")
       .getMany();
@@ -118,6 +144,9 @@ export class InventarioService {
       this.crearConsultaBase(),
       filtros,
     )
+      .andWhere("bodega.tipo <> :tipoStockSupervisor", {
+        tipoStockSupervisor: TipoBodega.STOCK_SUPERVISOR,
+      })
       .andWhere("producto.estado = :estadoProducto", {
         estadoProducto: EstadoProducto.ACTIVO,
       })
@@ -160,9 +189,7 @@ export class InventarioService {
       return this.listar({});
     }
 
-    const bodegaIds = await this.obtenerBodegasAsignadas(
-      usuario.id,
-    );
+    const bodegaIds = await this.obtenerBodegasAcceso(usuario);
 
     if (bodegaIds.length === 0) {
       return [];
@@ -179,6 +206,114 @@ export class InventarioService {
     return existencias.map((existencia) =>
       this.convertirAPublica(existencia),
     );
+  }
+
+  async listarStockSupervisor(
+    usuario: UsuarioAutenticado,
+  ): Promise<StockSupervisorItem[]> {
+    if (usuario.rol !== RolUsuario.SUPERVISOR) {
+      throw new ForbiddenException(
+        "Solo los Supervisores pueden consultar sus productos en stock.",
+      );
+    }
+
+    const stocks = await this.bodegasRepository.find({
+      where: {
+        tipo: TipoBodega.STOCK_SUPERVISOR,
+        supervisorId: usuario.id,
+        estado: EstadoBodega.ACTIVA,
+      },
+      relations: {
+        bodegaPadre: true,
+      },
+      order: {
+        createdAt: "ASC",
+      },
+    });
+
+    if (stocks.length === 0) {
+      return [];
+    }
+
+    const stockIds = stocks.map((stock) => stock.id);
+    const stocksPorId = new Map(
+      stocks.map((stock) => [stock.id, stock]),
+    );
+    const areaIds = Array.from(
+      new Set(
+        stocks
+          .map((stock) => stock.bodegaPadreId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+
+    const sucursales =
+      areaIds.length > 0
+        ? await this.bodegasRepository.find({
+            where: {
+              bodegaPadreId: In(areaIds),
+              tipo: TipoBodega.SUCURSAL,
+              estado: EstadoBodega.ACTIVA,
+            },
+            order: {
+              nombre: "ASC",
+            },
+          })
+        : [];
+
+    const sucursalesPorArea = new Map<string, Bodega[]>();
+
+    sucursales.forEach((sucursal) => {
+      if (!sucursal.bodegaPadreId) return;
+      const actuales = sucursalesPorArea.get(sucursal.bodegaPadreId) || [];
+      actuales.push(sucursal);
+      sucursalesPorArea.set(sucursal.bodegaPadreId, actuales);
+    });
+
+    const existencias = await this.crearConsultaBase()
+      .where("existencia.bodegaId IN (:...stockIds)", { stockIds })
+      .andWhere("existencia.cantidad > 0")
+      .andWhere("producto.estado = :estadoProducto", {
+        estadoProducto: EstadoProducto.ACTIVO,
+      })
+      .andWhere("producto.estadoBien <> :estadoBienBaja", {
+        estadoBienBaja: EstadoBienProducto.BAJA,
+      })
+      .orderBy("producto.nombre", "ASC")
+      .getMany();
+
+    return existencias.map((existencia) => {
+      const stock = stocksPorId.get(existencia.bodegaId);
+      const area = stock?.bodegaPadre;
+
+      if (!stock || !area) {
+        throw new ConflictException(
+          "Existe un stock de Supervisor sin bodega principal asociada.",
+        );
+      }
+
+      return {
+        existenciaId: existencia.id,
+        productoId: existencia.producto.id,
+        codigo: existencia.producto.codigo,
+        descripcion: existencia.producto.nombre,
+        categoria: existencia.producto.categoria.nombre,
+        unidad: existencia.producto.unidad,
+        cantidad: existencia.cantidad,
+        bodegaStockId: stock.id,
+        area: {
+          id: area.id,
+          nombre: area.nombre,
+        },
+        destinos: (sucursalesPorArea.get(area.id) || [area]).map(
+          (destino) => ({
+            id: destino.id,
+            nombre: destino.nombre,
+          }),
+        ),
+        producto: this.convertirProductoInventario(existencia),
+      };
+    });
   }
 
   async registrarInicial(
@@ -242,6 +377,7 @@ export class InventarioService {
       .leftJoinAndSelect("existencia.producto", "producto")
       .leftJoinAndSelect("producto.categoria", "categoria")
       .leftJoinAndSelect("existencia.bodega", "bodega")
+      .leftJoinAndSelect("bodega.bodegaPadre", "bodegaPadre")
       .leftJoinAndSelect("bodega.asignaciones", "asignacionBodega")
       .leftJoinAndSelect("asignacionBodega.usuario", "usuarioAsignado")
       .distinct(true);
@@ -319,9 +455,7 @@ export class InventarioService {
       return;
     }
 
-    const bodegaIds = await this.obtenerBodegasAsignadas(
-      usuario.id,
-    );
+    const bodegaIds = await this.obtenerBodegasAcceso(usuario);
 
     const inventarioGeneral = await this.bodegasRepository.findOne({
       where: {
@@ -424,6 +558,37 @@ export class InventarioService {
     );
   }
 
+  private async obtenerBodegasAcceso(
+    usuario: UsuarioAutenticado,
+  ): Promise<string[]> {
+    const asignadas = await this.obtenerBodegasAsignadas(usuario.id);
+
+    if (
+      usuario.rol !== RolUsuario.SUPERVISOR ||
+      asignadas.length === 0
+    ) {
+      return asignadas;
+    }
+
+    const sucursales = await this.bodegasRepository.find({
+      where: {
+        bodegaPadreId: In(asignadas),
+        tipo: TipoBodega.SUCURSAL,
+        estado: EstadoBodega.ACTIVA,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    return Array.from(
+      new Set([
+        ...asignadas,
+        ...sucursales.map((sucursal) => sucursal.id),
+      ]),
+    );
+  }
+
   private async validarAccesoABodega(
     usuario: UsuarioAutenticado,
     bodegaId: string,
@@ -432,14 +597,9 @@ export class InventarioService {
       return;
     }
 
-    const asignacion = await this.asignacionesRepository.findOne({
-      where: {
-        usuarioId: usuario.id,
-        bodegaId,
-      },
-    });
+    const permitidas = await this.obtenerBodegasAcceso(usuario);
 
-    if (!asignacion) {
+    if (!permitidas.includes(bodegaId)) {
       throw new ForbiddenException(
         "No tienes acceso al inventario de esta bodega.",
       );

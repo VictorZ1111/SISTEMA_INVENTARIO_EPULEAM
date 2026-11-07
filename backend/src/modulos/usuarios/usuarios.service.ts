@@ -11,10 +11,13 @@ import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import * as bcrypt from "bcrypt";
 import { createHmac } from "node:crypto";
-import { Repository } from "typeorm";
+import { MoreThan, Repository } from "typeorm";
 
 import type { UsuarioAutenticado } from "../auth/interfaces/usuario-autenticado.interface";
 import { AuditoriaService } from "../auditoria/auditoria.service";
+import { Bodega } from "../bodegas/entities/bodega.entity";
+import { TipoBodega } from "../bodegas/enums/tipo-bodega.enum";
+import { Existencia } from "../inventario/entities/existencia.entity";
 
 import { ActualizarUsuarioDto } from "./dto/actualizar-usuario.dto";
 import { CrearUsuarioDto } from "./dto/crear-usuario.dto";
@@ -42,6 +45,10 @@ export class UsuariosService implements OnApplicationBootstrap {
   constructor(
     @InjectRepository(Usuario)
     private readonly usuariosRepository: Repository<Usuario>,
+    @InjectRepository(Bodega)
+    private readonly bodegasRepository: Repository<Bodega>,
+    @InjectRepository(Existencia)
+    private readonly existenciasRepository: Repository<Existencia>,
     private readonly configService: ConfigService,
     private readonly auditoriaService: AuditoriaService,
   ) {}
@@ -162,6 +169,14 @@ export class UsuariosService implements OnApplicationBootstrap {
       usuario.telefono = this.normalizarTelefono(dto.telefono);
     }
 
+    if (
+      dto.rol !== undefined &&
+      usuario.rol === RolUsuario.SUPERVISOR &&
+      dto.rol !== RolUsuario.SUPERVISOR
+    ) {
+      await this.validarSupervisorSinStock(usuario.id);
+    }
+
     if (dto.rol !== undefined) {
       usuario.rol = dto.rol;
       usuario.correo = this.obtenerCorreoPorRol(dto.rol);
@@ -186,6 +201,13 @@ export class UsuariosService implements OnApplicationBootstrap {
     const usuario = await this.obtenerPorId(id);
     this.validarNoAdministradorGeneral(usuario);
 
+    if (
+      usuario.rol === RolUsuario.SUPERVISOR &&
+      estado === EstadoUsuario.INACTIVO
+    ) {
+      await this.validarSupervisorSinStock(usuario.id);
+    }
+
     usuario.estado = estado;
 
     const guardado = await this.usuariosRepository.save(usuario);
@@ -202,6 +224,10 @@ export class UsuariosService implements OnApplicationBootstrap {
   async eliminar(id: string): Promise<{ message: string }> {
     const usuario = await this.obtenerPorId(id);
     this.validarNoAdministradorGeneral(usuario);
+
+    if (usuario.rol === RolUsuario.SUPERVISOR) {
+      await this.validarSupervisorSinStock(usuario.id);
+    }
 
     await this.usuariosRepository.remove(usuario);
 
@@ -265,6 +291,37 @@ export class UsuariosService implements OnApplicationBootstrap {
     }
 
     return usuario;
+  }
+
+  private async validarSupervisorSinStock(
+    supervisorId: string,
+  ): Promise<void> {
+    const stocks = await this.bodegasRepository.find({
+      where: {
+        tipo: TipoBodega.STOCK_SUPERVISOR,
+        supervisorId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (stocks.length === 0) {
+      return;
+    }
+
+    const existenciasPendientes = await this.existenciasRepository.count({
+      where: stocks.map((stock) => ({
+        bodegaId: stock.id,
+        cantidad: MoreThan(0),
+      })),
+    });
+
+    if (existenciasPendientes > 0) {
+      throw new ConflictException(
+        "No se puede inactivar, eliminar ni cambiar el rol de este Supervisor mientras tenga productos en stock. Debe distribuirlos o devolverlos al Inventario General.",
+      );
+    }
   }
 
   private obtenerCorreoPorRol(rol: RolUsuario): string {

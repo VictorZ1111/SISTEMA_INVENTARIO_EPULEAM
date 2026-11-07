@@ -4,7 +4,8 @@ export type TipoMovimiento =
   | "modificacion"
   | "baja"
   | "salida"
-  | "ajuste";
+  | "ajuste"
+  | "devolucion";
 
 export interface Movimiento {
   id: string | number;

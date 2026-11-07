@@ -18,7 +18,10 @@ import { useConfiguracion } from "../../contexto/ConfiguracionContext";
 import { clienteApi } from "../../api/clienteApi";
 import { useUsuarios } from "../../contexto/UsuariosContext";
 import { obtenerCustodioAsignado } from "../../utilidades/asignacionesUsuarios";
-import { useInventario } from "../../contexto/InventarioContext";
+import {
+  useInventario,
+  type InventarioBodega,
+} from "../../contexto/InventarioContext";
 import type { Bodega } from "../../tipos/bodega";
 import type {
   EstadoBien,
@@ -78,7 +81,6 @@ interface FormularioProducto {
   procedencia: string;
   codigoUleam: string;
   categoria: string;
-  categoriaId: string;
   observacion: string;
 }
 
@@ -141,7 +143,6 @@ const formularioProductoInicial: FormularioProducto = {
   procedencia: "",
   codigoUleam: "",
   categoria: "",
-  categoriaId: "",
   observacion: "",
 };
 
@@ -183,9 +184,40 @@ function obtenerItemDesdeProducto(producto: Producto): ItemInventarioGeneral {
   };
 }
 
+function obtenerItemDesdeBodega(item: InventarioBodega): ItemInventarioGeneral {
+  const producto = item.producto;
+
+  return {
+    id: `bodega-${item.id}`,
+    productoId: item.productoId,
+    codigo: item.codigo,
+    descripcion: item.descripcion,
+    categoria: item.categoria,
+    cantidad: item.cantidad,
+    ubicacion: item.bodega,
+    custodioActual: producto?.custodioActual || item.bodega,
+    estadoBien: producto?.estadoBien || "bueno",
+    tipoProducto: producto?.tipoProducto || "no_consumible",
+    empresa: producto?.empresa || "",
+    serie: producto?.serie || "S/N",
+    modelo: producto?.modelo || "No especificado",
+    marca: producto?.marca || "No especificada",
+    material: producto?.material || "No especificado",
+    color: producto?.color || "No especificado",
+    dimensiones: producto?.dimensiones || "No especificadas",
+    procedencia: producto?.procedencia || "Asignación a bodega",
+    codigoUleam: producto?.codigoUleam || item.codigo,
+    observacion: producto?.observacion || "Bien físico asignado a bodega.",
+    fechaRegistro: producto?.fechaRegistro || item.fechaAsignacion,
+    editable: Boolean(producto),
+    productoOriginal: producto,
+  };
+}
+
 function InventarioAdmin() {
   const {
     productos,
+    inventarioBodegas,
     agregarProducto,
     editarProducto,
     eliminarProducto,
@@ -271,19 +303,16 @@ function InventarioAdmin() {
   }
 
   const itemsInventarioGeneral = useMemo(() => {
-    // El contexto ya entrega `productos` con la regla completa de Inventario
-    // General: consumibles con stock físico en General + no consumibles
-    // activos en su ubicación actual. No se agregan aquí existencias de otras
-    // bodegas para evitar volver a mostrar consumibles ya transferidos.
     const itemsProductos = productos.map(obtenerItemDesdeProducto);
+    const itemsBodegas = inventarioBodegas.map(obtenerItemDesdeBodega);
 
-    return itemsProductos.map((item) => ({
+    return [...itemsProductos, ...itemsBodegas].map((item) => ({
       ...item,
       custodioActual:
         item.productoOriginal?.custodioActual ||
         obtenerCustodioAutomatico(item.ubicacion),
     }));
-  }, [productos, usuarios]);
+  }, [productos, inventarioBodegas, usuarios]);
 
   const filtrosActivos =
     busqueda.trim() !== "" ||
@@ -387,12 +416,9 @@ function InventarioAdmin() {
   ]);
 
   const abrirModalCrearProducto = () => {
-    const categoriaInicial = categoriasActivas[0];
-
     setFormularioProducto({
       ...formularioProductoInicial,
-      categoria: categoriaInicial?.nombre || "",
-      categoriaId: categoriaInicial?.id || "",
+      categoria: categoriasActivas[0]?.nombre || "",
     });
 
     setModalCrearProducto(true);
@@ -428,7 +454,7 @@ function InventarioAdmin() {
       return;
     }
 
-    if (!formularioProducto.categoriaId) {
+    if (!formularioProducto.categoria) {
       mostrarMensaje("error", "Selecciona una categoría.");
       return;
     }
@@ -458,7 +484,7 @@ function InventarioAdmin() {
       return;
     }
 
-    const resultadoAgregar = await agregarProducto({
+    const agregado = await agregarProducto({
       codigo: formularioProducto.codigo.trim(),
       descripcion: formularioProducto.descripcion.trim(),
       cantidad,
@@ -481,17 +507,13 @@ function InventarioAdmin() {
         formularioProducto.codigoUleam.trim() ||
         formularioProducto.codigo.trim(),
       categoria: formularioProducto.categoria,
-      categoriaId: formularioProducto.categoriaId,
       unidad: "Unidad",
       observacion: formularioProducto.observacion.trim(),
       estado: "activo",
     });
 
-    if (!resultadoAgregar.ok) {
-      mostrarMensaje(
-        "error",
-        resultadoAgregar.mensaje || "No se pudo agregar el bien.",
-      );
+    if (!agregado) {
+      mostrarMensaje("error", "No se pudo agregar el bien. Revisa los datos ingresados.");
       return;
     }
 
@@ -522,10 +544,6 @@ function InventarioAdmin() {
       procedencia: producto.procedencia,
       codigoUleam: producto.codigoUleam,
       categoria: producto.categoria,
-      categoriaId:
-        producto.categoriaId ||
-        categoriasActivas.find((categoria) => categoria.nombre === producto.categoria)?.id ||
-        "",
       observacion: producto.observacion || "",
     });
   };
@@ -552,7 +570,7 @@ function InventarioAdmin() {
       return;
     }
 
-    if (!formularioProducto.categoriaId) {
+    if (!formularioProducto.categoria) {
       mostrarMensaje("error", "Selecciona una categoría.");
       return;
     }
@@ -571,7 +589,7 @@ function InventarioAdmin() {
       return;
     }
 
-    const resultadoEdicion = await editarProducto(productoEditar.id, {
+    const editado = await editarProducto(productoEditar.id, {
       codigo: formularioProducto.codigo.trim(),
       descripcion: formularioProducto.descripcion.trim(),
       cantidad,
@@ -595,17 +613,13 @@ function InventarioAdmin() {
         formularioProducto.codigoUleam.trim() ||
         formularioProducto.codigo.trim(),
       categoria: formularioProducto.categoria,
-      categoriaId: formularioProducto.categoriaId,
       unidad: "Unidad",
       observacion: formularioProducto.observacion.trim(),
       estado: productoEditar.estado,
     });
 
-    if (!resultadoEdicion.ok) {
-      mostrarMensaje(
-        "error",
-        resultadoEdicion.mensaje || "No se pudo actualizar el bien.",
-      );
+    if (!editado) {
+      mostrarMensaje("error", "No se pudo actualizar el bien. Revisa los datos ingresados.");
       return;
     }
 
@@ -650,11 +664,7 @@ function InventarioAdmin() {
   };
 
   const obtenerDestinosReales = (destinos: string[]) => {
-    const destinosExpandidos = destinos.flatMap((destino) =>
-      esBodegaGastronomia(destino) ? sucursalesTasty : [destino]
-    );
-
-    return Array.from(new Set(destinosExpandidos));
+    return Array.from(new Set(destinos.filter(Boolean)));
   };
 
   const obtenerBodegasDisponiblesParaAgregar = (
@@ -841,7 +851,7 @@ function InventarioAdmin() {
         cerrarModalDistribuir();
         mostrarMensaje(
           "exito",
-          "Producto distribuido automáticamente entre los destinos seleccionados."
+          "Producto asignado al stock de los Supervisores seleccionados."
         );
         return;
       }
@@ -868,7 +878,7 @@ function InventarioAdmin() {
     mostrarMensaje(
       "exito",
       productoDistribuir.tipoProducto === "consumible"
-        ? "Producto consumible asignado correctamente."
+        ? "Producto enviado al stock del Supervisor correctamente."
         : "Bien asignado o reasignado correctamente."
     );
   };
@@ -1870,23 +1880,13 @@ function InventarioAdmin() {
                     <div className="campo-formulario">
                       <label>Categoría *</label>
                       <CampoDesplegable mostrarIconoFiltro={false}
-                        valor={formularioProducto.categoriaId}
+                        valor={formularioProducto.categoria}
                         ariaLabel="Seleccionar categoría"
-                        onChange={(valor) => {
-                          const categoria = categoriasActivas.find(
-                            (item) => item.id === valor,
-                          );
-
-                          setFormularioProducto((formularioActual) => ({
-                            ...formularioActual,
-                            categoriaId: valor,
-                            categoria: categoria?.nombre || "",
-                          }));
-                        }}
+                        onChange={(valor) => actualizarCampoProducto("categoria", valor)}
                         opciones={[
                           { valor: "", texto: "Selecciona una categoría" },
                           ...categoriasActivas.map((categoria) => ({
-                            valor: categoria.id,
+                            valor: categoria.nombre,
                             texto: categoria.nombre,
                           })),
                         ]}
@@ -2139,23 +2139,13 @@ function InventarioAdmin() {
                 <div className="campo-formulario">
                   <label>Categoría *</label>
                   <CampoDesplegable mostrarIconoFiltro={false}
-                    valor={formularioProducto.categoriaId}
+                    valor={formularioProducto.categoria}
                     ariaLabel="Seleccionar categoría"
-                    onChange={(valor) => {
-                      const categoria = categoriasActivas.find(
-                        (item) => item.id === valor,
-                      );
-
-                      setFormularioProducto((formularioActual) => ({
-                        ...formularioActual,
-                        categoriaId: valor,
-                        categoria: categoria?.nombre || "",
-                      }));
-                    }}
+                    onChange={(valor) => actualizarCampoProducto("categoria", valor)}
                     opciones={[
                       { valor: "", texto: "Selecciona una categoría" },
                       ...categoriasActivas.map((categoria) => ({
-                        valor: categoria.id,
+                        valor: categoria.nombre,
                         texto: categoria.nombre,
                       })),
                     ]}

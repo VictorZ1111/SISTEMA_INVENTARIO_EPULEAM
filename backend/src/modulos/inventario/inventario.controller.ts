@@ -23,6 +23,7 @@ import {
   InventarioService,
   type ExistenciaPublica,
   type InventarioFrontendItem,
+  type StockSupervisorItem,
 } from "./inventario.service";
 
 @Controller("inventario")
@@ -54,6 +55,14 @@ export class InventarioController {
       usuario,
       filtros,
     );
+  }
+
+  @Get("stock-supervisor/mio")
+  @Roles(RolUsuario.SUPERVISOR)
+  listarStockSupervisor(
+    @UsuarioActual() usuario: UsuarioAutenticado,
+  ): Promise<StockSupervisorItem[]> {
+    return this.inventarioService.listarStockSupervisor(usuario);
   }
 
   @Get("mio")

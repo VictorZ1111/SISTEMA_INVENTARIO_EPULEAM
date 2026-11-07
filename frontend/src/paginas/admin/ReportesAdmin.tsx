@@ -22,7 +22,8 @@ type TipoMovimientoBackend =
   | "entrada"
   | "transferencia"
   | "baja"
-  | "modificacion";
+  | "modificacion"
+  | "devolucion";
 
 interface BodegaBackend {
   id: string;
@@ -131,6 +132,7 @@ interface ReporteMovimientosPublico {
     totalMovimientos: number;
     totalEntradas: number;
     totalTransferencias: number;
+    totalDevoluciones: number;
     totalBajas: number;
     totalModificaciones: number;
   };
@@ -185,6 +187,7 @@ function obtenerNombreMovimiento(tipo: TipoMovimientoBackend) {
   if (tipo === "entrada") return "Entrada";
   if (tipo === "transferencia") return "Transferencia";
   if (tipo === "baja") return "Baja";
+  if (tipo === "devolucion") return "Devolución";
   return "Modificación";
 }
 

@@ -198,6 +198,16 @@ function BarraLateral() {
               </NavLink>
 
               <NavLink
+                to="/supervisor/stock"
+                className={({ isActive }) =>
+                  isActive ? "sidebar-link activo" : "sidebar-link"
+                }
+              >
+                <Package size={21} />
+                <span>Productos en stock</span>
+              </NavLink>
+
+              <NavLink
                 to="/supervisor/bodegas"
                 className={({ isActive }) =>
                   isActive ? "sidebar-link activo" : "sidebar-link"

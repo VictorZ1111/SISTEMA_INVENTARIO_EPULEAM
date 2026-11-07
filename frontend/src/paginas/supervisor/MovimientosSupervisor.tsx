@@ -1,7 +1,9 @@
 import {
   ArrowDownAZ,
   ArrowUpAZ,
+  FileText,
   Paintbrush,
+  RotateCcw,
   Search,
   X,
 } from "lucide-react";
@@ -14,12 +16,14 @@ import SelectorFechaFiltro from "../../componentes/SelectorFechaFiltro";
 
 import { useAuth } from "../../contexto/AuthContext";
 import { obtenerBodegasAccesoUsuario } from "../../dominio/bodegas";
+import { LIMITE_REVERSA_MS } from "../../dominio/reversiones";
 import {
   normalizarTipoMovimiento,
   obtenerTextoMovimiento,
 } from "../../dominio/movimientos";
 import { useInventario } from "../../contexto/InventarioContext";
 import type { Movimiento } from "../../tipos/movimiento";
+import { generarReporteMovimientoPdf } from "../../utilidades/reportesMovimientos";
 import {
   formatearFechaMovimiento,
   obtenerFechaHoraOrden,
@@ -27,7 +31,12 @@ import {
 } from "../../utilidades/fechas";
 
 
-type FiltroTipoMovimiento = "todos" | "transferencia" | "baja" | "modificacion";
+type FiltroTipoMovimiento =
+  | "todos"
+  | "transferencia"
+  | "baja"
+  | "modificacion"
+  | "devolucion";
 type OrdenMovimientos = "recientes" | "antiguos" | "az" | "za";
 
 function limpiarNombreBodega(bodega: string) {
@@ -43,6 +52,10 @@ function normalizarTexto(texto: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/^bodega\s+/i, "")
     .replace(/\s+/g, " ");
+}
+
+function obtenerAreaMovimientoStock(texto: string) {
+  return normalizarTexto(texto).replace(/^productos en stock - /, "");
 }
 
 function esMovimientoModificacionDeSolicitud(movimiento: Movimiento) {
@@ -70,7 +83,7 @@ function limpiarObservacionMovimiento(observacion: string) {
 
 function MovimientosSupervisor() {
   const { usuarioActual } = useAuth();
-  const { movimientos, productos } = useInventario();
+  const { movimientos, productos, reversarMovimientoSolicitud } = useInventario();
 
   const bodegasUsuario = useMemo(
     () => obtenerBodegasAccesoUsuario(usuarioActual),
@@ -85,6 +98,13 @@ function MovimientosSupervisor() {
   const [detalleMovimiento, setDetalleMovimiento] = useState<Movimiento | null>(
     null,
   );
+  const [movimientoReversar, setMovimientoReversar] =
+    useState<Movimiento | null>(null);
+  const [motivoReversion, setMotivoReversion] = useState("");
+  const [mensajeSistema, setMensajeSistema] = useState<{
+    tipo: "exito" | "error";
+    texto: string;
+  } | null>(null);
 
   const movimientosUsuario = useMemo(() => {
     const bodegasNormalizadas = bodegasUsuario.map(normalizarTexto);
@@ -96,16 +116,22 @@ function MovimientosSupervisor() {
         return false;
       }
 
-      if (tipoNormalizado === "modificacion" && !esMovimientoModificacionDeSolicitud(movimiento)) {
+      if (
+        tipoNormalizado === "modificacion" &&
+        !esMovimientoModificacionDeSolicitud(movimiento) &&
+        !movimiento.movimientoOriginalId
+      ) {
         return false;
       }
 
       const origen = normalizarTexto(movimiento.origen);
       const destino = normalizarTexto(movimiento.destino);
+      const areaStock = obtenerAreaMovimientoStock(movimiento.origen);
 
       return (
         bodegasNormalizadas.includes(origen) ||
-        bodegasNormalizadas.includes(destino)
+        bodegasNormalizadas.includes(destino) ||
+        bodegasNormalizadas.includes(areaStock)
       );
     });
   }, [movimientos, bodegasUsuario]);
@@ -125,7 +151,9 @@ function MovimientosSupervisor() {
       const coincideBodega =
         bodegaFiltro === "todas" ||
         normalizarTexto(movimiento.origen) === normalizarTexto(bodegaFiltro) ||
-        normalizarTexto(movimiento.destino) === normalizarTexto(bodegaFiltro);
+        normalizarTexto(movimiento.destino) === normalizarTexto(bodegaFiltro) ||
+        obtenerAreaMovimientoStock(movimiento.origen) ===
+          normalizarTexto(bodegaFiltro);
       const coincideFecha =
         fechaFiltro === "" || obtenerFechaIso(movimiento.fecha) === fechaFiltro;
 
@@ -194,8 +222,76 @@ function MovimientosSupervisor() {
     ? obtenerProductoMovimiento(detalleMovimiento)
     : undefined;
 
+  const movimientoEstaDentroDeTiempo = (movimiento: Movimiento) => {
+    const fecha = new Date(movimiento.createdAt || movimiento.fecha).getTime();
+    if (Number.isNaN(fecha)) return false;
+    return Date.now() - fecha <= LIMITE_REVERSA_MS;
+  };
+
+  const movimientoYaFueReversado = (movimiento: Movimiento) =>
+    movimientos.some(
+      (item) => item.movimientoOriginalId === String(movimiento.id),
+    );
+
+  const esMovimientoConReversa = (movimiento: Movimiento) => {
+    const tipo = normalizarTipoMovimiento(movimiento.tipo);
+    return (
+      (tipo === "transferencia" ||
+        tipo === "devolucion" ||
+        tipo === "baja") &&
+      movimiento.cantidad > 0
+    );
+  };
+
+  const puedeReversarMovimiento = (movimiento: Movimiento) =>
+    esMovimientoConReversa(movimiento) &&
+    movimientoEstaDentroDeTiempo(movimiento) &&
+    !movimientoYaFueReversado(movimiento);
+
+  const obtenerTituloReversionMovimiento = (movimiento: Movimiento) => {
+    if (!esMovimientoConReversa(movimiento)) {
+      return "Este movimiento no requiere reversión";
+    }
+    if (movimientoYaFueReversado(movimiento)) {
+      return "Este movimiento ya fue reversado";
+    }
+    if (!movimientoEstaDentroDeTiempo(movimiento)) {
+      return "Tiempo vencido: solo se puede reversar durante 3 horas";
+    }
+    return "Reversar movimiento";
+  };
+
+  const mostrarMensaje = (tipo: "exito" | "error", texto: string) => {
+    setMensajeSistema({ tipo, texto });
+    window.setTimeout(() => setMensajeSistema(null), 3000);
+  };
+
+  const confirmarReversionMovimiento = async () => {
+    if (!movimientoReversar) return;
+
+    const resultado = await reversarMovimientoSolicitud(
+      movimientoReversar.id,
+      motivoReversion,
+    );
+
+    if (!resultado.exito) {
+      mostrarMensaje("error", resultado.mensaje);
+      return;
+    }
+
+    setMovimientoReversar(null);
+    setMotivoReversion("");
+    mostrarMensaje("exito", resultado.mensaje);
+  };
+
   return (
     <div className="pagina-admin pagina-responsable">
+      {mensajeSistema ? (
+        <div className={`mensaje-flotante mensaje-flotante-${mensajeSistema.tipo}`}>
+          {mensajeSistema.texto}
+        </div>
+      ) : null}
+
       <EncabezadoPagina
         titulo="Movimientos"
         descripcion="Consulta el historial relacionado con tus bodegas asignadas."
@@ -226,6 +322,7 @@ function MovimientosSupervisor() {
             opciones={[
               { valor: "todos", texto: "Todos los tipos" },
               { valor: "transferencia", texto: "Transferencias" },
+              { valor: "devolucion", texto: "Devoluciones" },
               { valor: "modificacion", texto: "Modificaciones" },
               { valor: "baja", texto: "Bajas" },
             ]}
@@ -329,6 +426,29 @@ function MovimientosSupervisor() {
                         >
                           !
                         </button>
+                        <button
+                          className="boton-icono-tabla"
+                          type="button"
+                          title="Generar reporte PDF"
+                          onClick={() => generarReporteMovimientoPdf(movimiento)}
+                        >
+                          <FileText size={18} />
+                        </button>
+
+                        {esMovimientoConReversa(movimiento) ? (
+                          <button
+                            className="boton-icono-tabla boton-icono-reversar"
+                            type="button"
+                            title={obtenerTituloReversionMovimiento(movimiento)}
+                            disabled={!puedeReversarMovimiento(movimiento)}
+                            onClick={() => {
+                              setMovimientoReversar(movimiento);
+                              setMotivoReversion("");
+                            }}
+                          >
+                            <RotateCcw size={17} />
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -420,6 +540,75 @@ function MovimientosSupervisor() {
           </div>
         </div>
       )}
+
+      {movimientoReversar ? (
+        <div className="modal-fondo">
+          <div className="modal-contenedor modal-confirmacion-solicitud modal-confirmacion-reversion">
+            <div className="modal-header">
+              <div>
+                <h2>Reversar movimiento</h2>
+                <p>Esta acción devolverá el producto a su ubicación anterior y dejará registro de la corrección.</p>
+              </div>
+              <button
+                className="modal-cerrar"
+                type="button"
+                onClick={() => {
+                  setMovimientoReversar(null);
+                  setMotivoReversion("");
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="formulario-modal formulario-reversion-solicitud">
+              <div className="detalle-producto-grid detalle-reversion-grid">
+                <div className="detalle-producto-item">
+                  <span>Bien</span>
+                  <strong>{movimientoReversar.producto}</strong>
+                </div>
+                <div className="detalle-producto-item">
+                  <span>Cantidad</span>
+                  <strong>{movimientoReversar.cantidad}</strong>
+                </div>
+              </div>
+
+              <div className="campo-formulario campo-completo">
+                <label>Motivo de reversión *</label>
+                <textarea
+                  rows={3}
+                  maxLength={255}
+                  value={motivoReversion}
+                  onChange={(event) => setMotivoReversion(event.target.value)}
+                  placeholder="Escribe el motivo de la corrección"
+                />
+              </div>
+            </div>
+
+            <div className="modal-acciones">
+              <button
+                className="boton-secundario"
+                type="button"
+                onClick={() => {
+                  setMovimientoReversar(null);
+                  setMotivoReversion("");
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                className="boton-principal"
+                type="button"
+                disabled={!motivoReversion.trim()}
+                onClick={confirmarReversionMovimiento}
+              >
+                Confirmar reversión
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
     </div>
   );
 }

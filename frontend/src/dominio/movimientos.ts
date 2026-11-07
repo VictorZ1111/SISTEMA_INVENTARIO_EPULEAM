@@ -4,7 +4,8 @@ export type TipoMovimientoNormalizado =
   | "entrada"
   | "transferencia"
   | "modificacion"
-  | "baja";
+  | "baja"
+  | "devolucion";
 
 export function normalizarTipoMovimiento(
   tipo: TipoMovimiento,
@@ -15,6 +16,7 @@ export function normalizarTipoMovimiento(
   if (tipo === "modificacion") return "modificacion";
   if (tipo === "baja") return "baja";
   if (tipo === "transferencia") return "transferencia";
+  if (tipo === "devolucion") return "devolucion";
   return "transferencia";
 }
 
@@ -25,5 +27,6 @@ export function obtenerTextoMovimiento(tipo: TipoMovimiento) {
   if (tipoNormalizado === "entrada") return "Entrada";
   if (tipoNormalizado === "baja") return "Baja";
   if (tipoNormalizado === "modificacion") return "Modificación";
+  if (tipoNormalizado === "devolucion") return "Devolución";
   return "Movimiento";
 }

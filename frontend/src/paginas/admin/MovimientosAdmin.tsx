@@ -40,6 +40,7 @@ import type { Movimiento, TipoMovimiento } from "../../tipos/movimiento";
 
 import CampoDesplegable from "../../componentes/CampoDesplegable";
 import SelectorFechaFiltro from "../../componentes/SelectorFechaFiltro";
+import { generarReporteMovimientoPdf } from "../../utilidades/reportesMovimientos";
 import {
   formatearFechaMovimiento,
   obtenerFechaHoraOrden,
@@ -56,7 +57,9 @@ type FiltroTipoMovimiento =
 
   | "modificacion"
 
-  | "baja";
+  | "baja"
+
+  | "devolucion";
 
 type OrdenMovimientos = "recientes" | "antiguos" | "az" | "za";
 
@@ -68,6 +71,8 @@ function obtenerTextoTipo(tipo: TipoMovimiento) {
 
   if (tipo === "baja") return "Baja";
 
+  if (tipo === "devolucion") return "Devolución";
+
   return "Modificación";
 
 }
@@ -78,7 +83,12 @@ function obtenerTipoNormalizado(tipo: TipoMovimiento): FiltroTipoMovimiento {
 
   if (tipo === "ajuste") return "modificacion";
 
-  if (tipo === "entrada" || tipo === "transferencia" || tipo === "baja") {
+  if (
+    tipo === "entrada" ||
+    tipo === "transferencia" ||
+    tipo === "baja" ||
+    tipo === "devolucion"
+  ) {
 
     return tipo;
 
@@ -155,82 +165,6 @@ function obtenerDestinoMovimiento(movimiento: Movimiento) {
   }
 
   return limpiarNombreBodega(movimiento.destino) || "General";
-
-}
-
-function generarPdfBlanco(movimiento: Movimiento) {
-
-  const contenidoPdf = `%PDF-1.4
-
-1 0 obj
-
-<< /Type /Catalog /Pages 2 0 R >>
-
-endobj
-
-2 0 obj
-
-<< /Type /Pages /Kids [3 0 R] /Count 1 >>
-
-endobj
-
-3 0 obj
-
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << >> >>
-
-endobj
-
-4 0 obj
-
-<< /Length 0 >>
-
-stream
-
-endstream
-
-endobj
-
-xref
-
-0 5
-
-0000000000 65535 f
-
-0000000010 00000 n
-
-0000000059 00000 n
-
-0000000116 00000 n
-
-0000000211 00000 n
-
-trailer
-
-<< /Size 5 /Root 1 0 R >>
-
-startxref
-
-260
-
-%%EOF`;
-
-  const archivo = new Blob([contenidoPdf], { type: "application/pdf" });
-
-  const url = URL.createObjectURL(archivo);
-
-  const enlace = document.createElement("a");
-
-  enlace.href = url;
-
-  enlace.download = `movimiento-${movimiento.id}.pdf`;
-
-  document.body.appendChild(enlace);
-
-  enlace.click();
-
-  enlace.remove();
-
-  URL.revokeObjectURL(url);
 
 }
 
@@ -472,7 +406,9 @@ function MovimientosAdmin() {
 
     return (
 
-      (tipoNormalizado === "transferencia" || tipoNormalizado === "baja") &&
+      (tipoNormalizado === "transferencia" ||
+        tipoNormalizado === "devolucion" ||
+        tipoNormalizado === "baja") &&
 
       movimiento.cantidad > 0
 
@@ -786,6 +722,8 @@ function MovimientosAdmin() {
 
               { valor: "baja", texto: "Baja" },
 
+              { valor: "devolucion", texto: "Devolución" },
+
               { valor: "modificacion", texto: "Modificación" },
 
             ]}
@@ -970,7 +908,7 @@ function MovimientosAdmin() {
 
                           title="Generar reporte PDF"
 
-                          onClick={() => generarPdfBlanco(movimiento)}
+                          onClick={() => generarReporteMovimientoPdf(movimiento)}
 
                         >
 
@@ -1156,7 +1094,7 @@ function MovimientosAdmin() {
 
                 type="button"
 
-                onClick={() => generarPdfBlanco(movimientoDetalle)}
+                onClick={() => generarReporteMovimientoPdf(movimientoDetalle)}
 
               >
 

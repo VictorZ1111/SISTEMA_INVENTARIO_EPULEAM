@@ -1,17 +1,23 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { DataSource, EntityManager } from "typeorm";
+import { DataSource, EntityManager, In } from "typeorm";
 
 import { LIMITE_REVERSA_MS } from "../../comun/constantes/reversiones";
 
 import type { UsuarioAutenticado } from "../auth/interfaces/usuario-autenticado.interface";
+import { UsuarioBodega } from "../asignaciones/entities/usuario-bodega.entity";
+import { Bodega } from "../bodegas/entities/bodega.entity";
+import { EstadoBodega } from "../bodegas/enums/estado-bodega.enum";
+import { TipoBodega } from "../bodegas/enums/tipo-bodega.enum";
 import { Existencia } from "../inventario/entities/existencia.entity";
 import { Producto } from "../productos/entities/producto.entity";
 import { EstadoBienProducto } from "../productos/enums/estado-bien-producto.enum";
 import { EstadoProducto } from "../productos/enums/estado-producto.enum";
+import { RolUsuario } from "../usuarios/enums/rol-usuario.enum";
 import { SolicitudDetalle } from "../solicitudes/entities/solicitud-detalle.entity";
 import { Solicitud } from "../solicitudes/entities/solicitud.entity";
 import { EstadoSolicitud } from "../solicitudes/enums/estado-solicitud.enum";
@@ -42,12 +48,19 @@ export class ReversionesMovimientosService {
         );
       }
 
+      await this.validarPermisoReversion(
+        administrador,
+        movimiento,
+        usuario,
+      );
+
       if (
         movimiento.tipo !== TipoMovimiento.TRANSFERENCIA &&
+        movimiento.tipo !== TipoMovimiento.DEVOLUCION &&
         movimiento.tipo !== TipoMovimiento.BAJA
       ) {
         throw new ConflictException(
-          "Las entradas y modificaciones no requieren reversión.",
+          "Este tipo de movimiento no requiere reversión.",
         );
       }
 
@@ -91,6 +104,69 @@ export class ReversionesMovimientosService {
         usuario.id,
       );
     });
+  }
+
+  private async validarPermisoReversion(
+    administrador: EntityManager,
+    movimiento: Movimiento,
+    usuario: UsuarioAutenticado,
+  ): Promise<void> {
+    if (usuario.rol === RolUsuario.ADMINISTRADOR) {
+      return;
+    }
+
+    if (usuario.rol !== RolUsuario.SUPERVISOR) {
+      throw new ForbiddenException(
+        "No tienes permiso para reversar movimientos.",
+      );
+    }
+
+    const asignaciones = await administrador.getRepository(UsuarioBodega).find({
+      where: { usuarioId: usuario.id },
+      select: { bodegaId: true },
+    });
+    const principales = asignaciones.map((asignacion) => asignacion.bodegaId);
+
+    const [sucursales, stocks] = await Promise.all([
+      principales.length
+        ? administrador.getRepository(Bodega).find({
+            where: {
+              bodegaPadreId: In(principales),
+              tipo: TipoBodega.SUCURSAL,
+              estado: EstadoBodega.ACTIVA,
+            },
+            select: { id: true },
+          })
+        : Promise.resolve([]),
+      administrador.getRepository(Bodega).find({
+        where: {
+          tipo: TipoBodega.STOCK_SUPERVISOR,
+          supervisorId: usuario.id,
+          estado: EstadoBodega.ACTIVA,
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    const permitidas = new Set([
+      ...principales,
+      ...sucursales.map((bodega) => bodega.id),
+      ...stocks.map((bodega) => bodega.id),
+    ]);
+
+    const tieneAcceso =
+      (movimiento.bodegaOrigenId
+        ? permitidas.has(movimiento.bodegaOrigenId)
+        : false) ||
+      (movimiento.bodegaDestinoId
+        ? permitidas.has(movimiento.bodegaDestinoId)
+        : false);
+
+    if (!tieneAcceso) {
+      throw new ForbiddenException(
+        "No tienes permiso para reversar este movimiento.",
+      );
+    }
   }
 
   private async revertirTransferencia(

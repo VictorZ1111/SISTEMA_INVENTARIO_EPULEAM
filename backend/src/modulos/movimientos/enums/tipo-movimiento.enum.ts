@@ -5,4 +5,5 @@ export enum TipoMovimiento {
   BAJA = "baja",
   SALIDA = "salida",
   AJUSTE = "ajuste",
+  DEVOLUCION = "devolucion",
 }

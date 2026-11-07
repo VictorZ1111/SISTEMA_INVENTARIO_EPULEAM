@@ -15,6 +15,8 @@ import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
 import type { UsuarioAutenticado } from "../auth/interfaces/usuario-autenticado.interface";
 import { RolUsuario } from "../usuarios/enums/rol-usuario.enum";
+import { DevolverStockSupervisorDto } from "./dto/devolver-stock-supervisor.dto";
+import { DistribuirStockSupervisorDto } from "./dto/distribuir-stock-supervisor.dto";
 import { FiltrarMovimientosDto } from "./dto/filtrar-movimientos.dto";
 import { RegistrarAjusteDto } from "./dto/registrar-ajuste.dto";
 import { RegistrarEntradaDto } from "./dto/registrar-entrada.dto";
@@ -90,6 +92,30 @@ export class MovimientosController {
     );
   }
 
+  @Post("distribucion-stock")
+  @Roles(RolUsuario.SUPERVISOR)
+  distribuirStockSupervisor(
+    @Body() dto: DistribuirStockSupervisorDto,
+    @UsuarioActual() usuario: UsuarioAutenticado,
+  ): Promise<void> {
+    return this.movimientosService.distribuirStockSupervisor(
+      dto,
+      usuario,
+    );
+  }
+
+  @Post("devolucion-stock")
+  @Roles(RolUsuario.SUPERVISOR)
+  devolverStockSupervisor(
+    @Body() dto: DevolverStockSupervisorDto,
+    @UsuarioActual() usuario: UsuarioAutenticado,
+  ): Promise<MovimientoPublico> {
+    return this.movimientosService.devolverStockSupervisor(
+      dto,
+      usuario,
+    );
+  }
+
   @Post("salida")
   @Roles(
     RolUsuario.ADMINISTRADOR,
@@ -106,7 +132,7 @@ export class MovimientosController {
   }
 
   @Post(":id/revertir")
-  @Roles(RolUsuario.ADMINISTRADOR)
+  @Roles(RolUsuario.ADMINISTRADOR, RolUsuario.SUPERVISOR)
   async revertir(
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() dto: RevertirMovimientoDto,

@@ -12,6 +12,7 @@ import {
 
 import { UsuarioBodega } from "../asignaciones/entities/usuario-bodega.entity";
 import { Bodega } from "../bodegas/entities/bodega.entity";
+import { TipoBodega } from "../bodegas/enums/tipo-bodega.enum";
 import { Existencia } from "../inventario/entities/existencia.entity";
 import { Movimiento } from "../movimientos/entities/movimiento.entity";
 import { TipoMovimiento } from "../movimientos/enums/tipo-movimiento.enum";
@@ -116,6 +117,7 @@ export interface ReporteMovimientosPublico {
     totalMovimientos: number;
     totalEntradas: number;
     totalTransferencias: number;
+    totalDevoluciones: number;
     totalBajas: number;
     totalModificaciones: number;
   };
@@ -221,6 +223,9 @@ export class ReportesService {
         totalTransferencias: items.filter(
           (item) => item.tipo === TipoMovimiento.TRANSFERENCIA,
         ).length,
+        totalDevoluciones: items.filter(
+          (item) => item.tipo === TipoMovimiento.DEVOLUCION,
+        ).length,
         totalBajas: items.filter(
           (item) => item.tipo === TipoMovimiento.BAJA,
         ).length,
@@ -273,7 +278,9 @@ export class ReportesService {
       .leftJoinAndSelect("movimiento.producto", "producto")
       .leftJoinAndSelect("producto.categoria", "categoria")
       .leftJoinAndSelect("movimiento.bodegaOrigen", "bodegaOrigen")
+      .leftJoinAndSelect("bodegaOrigen.bodegaPadre", "bodegaOrigenPadre")
       .leftJoinAndSelect("movimiento.bodegaDestino", "bodegaDestino")
+      .leftJoinAndSelect("bodegaDestino.bodegaPadre", "bodegaDestinoPadre")
       .leftJoinAndSelect("movimiento.usuario", "usuario");
   }
 
@@ -674,6 +681,19 @@ export class ReportesService {
     };
   }
 
+  private obtenerNombreBodegaMovimientoReporte(
+    bodega: Bodega | null,
+    respaldo: string,
+  ): string {
+    if (!bodega) return respaldo;
+
+    if (bodega.tipo === TipoBodega.STOCK_SUPERVISOR) {
+      return bodega.bodegaPadre?.nombre ?? "Bodega asignada";
+    }
+
+    return bodega.nombre;
+  }
+
   private convertirMovimientoItem(
     movimiento: Movimiento,
   ): ReporteMovimientoItem {
@@ -685,8 +705,14 @@ export class ReportesService {
       productoId: producto?.id ?? null,
       codigo: producto?.codigo ?? null,
       producto: producto?.nombre ?? "Sin producto",
-      origen: movimiento.bodegaOrigen?.nombre ?? "Entrada externa",
-      destino: movimiento.bodegaDestino?.nombre ?? "Sin destino",
+      origen: this.obtenerNombreBodegaMovimientoReporte(
+        movimiento.bodegaOrigen,
+        "Entrada externa",
+      ),
+      destino: this.obtenerNombreBodegaMovimientoReporte(
+        movimiento.bodegaDestino,
+        "Sin destino",
+      ),
       cantidad: movimiento.cantidad,
       cantidadAnterior: movimiento.cantidadAnterior,
       cantidadNueva: movimiento.cantidadNueva,

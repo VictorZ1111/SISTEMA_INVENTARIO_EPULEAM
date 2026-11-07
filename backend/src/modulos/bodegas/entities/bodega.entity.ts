@@ -11,6 +11,7 @@ import {
 } from "typeorm";
 
 import { UsuarioBodega } from "../../asignaciones/entities/usuario-bodega.entity";
+import { Usuario } from "../../usuarios/entities/usuario.entity";
 import { EstadoBodega } from "../enums/estado-bodega.enum";
 import { TipoBodega } from "../enums/tipo-bodega.enum";
 
@@ -71,6 +72,23 @@ export class Bodega {
     (bodega) => bodega.bodegaPadre,
   )
   sucursales!: Bodega[];
+
+  @Column({
+    name: "supervisor_id",
+    type: "uuid",
+    nullable: true,
+  })
+  supervisorId!: string | null;
+
+  @ManyToOne(
+    () => Usuario,
+    {
+      nullable: true,
+      onDelete: "RESTRICT",
+    },
+  )
+  @JoinColumn({ name: "supervisor_id" })
+  supervisor!: Usuario | null;
 
   @OneToMany(
     () => UsuarioBodega,

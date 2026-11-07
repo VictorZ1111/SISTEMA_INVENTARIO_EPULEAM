@@ -20,7 +20,6 @@ import type {
 } from "../tipos/solicitud";
 
 import { normalizarNombreBodega } from "../utilidades/asignacionesUsuarios";
-import { clienteApi } from "../api/clienteApi";
 import {
   ajustarCantidadProductoApi,
   cambiarEstadoProductoApi,
@@ -37,6 +36,14 @@ import {
   reversarMovimientoApi,
   type MovimientoBackend,
 } from "../api/movimientosApi";
+import {
+  atenderSolicitudApi,
+  crearSolicitudApi,
+  obtenerSolicitudesApi,
+  rechazarSolicitudApi,
+  revertirSolicitudApi,
+  type SolicitudBackend,
+} from "../api/solicitudesApi";
 import { useAuth } from "./AuthContext";
 import { useConfiguracion } from "./ConfiguracionContext";
 
@@ -81,6 +88,7 @@ interface InventarioContexto {
   movimientos: Movimiento[];
   inventarioBodegas: InventarioBodega[];
   solicitudes: Solicitud[];
+  recargarDatosInventario: () => Promise<void>;
 
   agregarProducto: (
     producto: Omit<Producto, "id" | "fechaRegistro">,
@@ -133,40 +141,6 @@ const InventarioContext = createContext<InventarioContexto | undefined>(
 
 interface Props {
   children: ReactNode;
-}
-
-interface SolicitudBackend {
-  id: string;
-  codigo: string;
-  estado: "pendiente" | "parcial" | "atendida" | "rechazada";
-  observacionSolicitante: string | null;
-  observacionAtencion: string | null;
-  createdAt: string;
-  updatedAt: string;
-  atendidaAt: string | null;
-  usuarioSolicitante: {
-    id: string;
-    nombre: string;
-    correo: string;
-    rol: string;
-  };
-  usuarioAtencion: { id: string; nombre: string; rol: string } | null;
-  reversa: { id: string; motivo: string; createdAt: string } | null;
-  bodegaSolicitante: { id: string; nombre: string; tipo: string };
-  detalles: Array<{
-    id: string;
-    producto: {
-      id: string;
-      codigo: string;
-      nombre: string;
-      tipoProducto: string;
-      atributo: string | null;
-    };
-    cantidadSolicitada: number;
-    cantidadEntregada: number;
-    cantidadRechazada: number;
-    cantidadPendiente: number;
-  }>;
 }
 
 function convertirMovimientoBackend(movimiento: MovimientoBackend): Movimiento {
@@ -337,14 +311,12 @@ export function InventarioProvider({ children }: Props) {
     }
 
     try {
-      const rutaSolicitudes =
-        usuarioActual.rol === "admin" ? "/solicitudes" : "/solicitudes/mias";
-      const [respuestaSolicitudes, movimientosBackend] = await Promise.all([
-        clienteApi.get<SolicitudBackend[]>(rutaSolicitudes),
+      const [solicitudesBackend, movimientosBackend] = await Promise.all([
+        obtenerSolicitudesApi(usuarioActual.rol === "admin"),
         obtenerMovimientosApi(usuarioActual.rol === "admin"),
       ]);
 
-      setSolicitudes(respuestaSolicitudes.data.map(convertirSolicitudBackend));
+      setSolicitudes(solicitudesBackend.map(convertirSolicitudBackend));
       setMovimientos(movimientosBackend.map(convertirMovimientoBackend));
     } catch (error) {
       setSolicitudes([]);
@@ -718,6 +690,7 @@ export function InventarioProvider({ children }: Props) {
       const bodegas = await obtenerBodegasBackend();
       const destinos = datos.destinos.map((nombre) => {
         const normalizado = normalizarNombreBodega(nombre);
+
         return bodegas.find(
           (bodega) =>
             normalizarNombreBodega(bodega.nombre).localeCompare(
@@ -730,21 +703,8 @@ export function InventarioProvider({ children }: Props) {
 
       if (destinos.some((destino) => !destino)) return false;
 
-      const destinosResueltos = destinos.filter(
-        (destino): destino is NonNullable<typeof destino> => Boolean(destino),
-      );
-
-      const destinosTasty = destinosResueltos.filter((destino) =>
-        /^Tasty\s+[1-5]$/i.test(normalizarNombreBodega(destino.nombre)),
-      );
-
-      const destinosDirectos = destinosResueltos.filter(
-        (destino) =>
-          !/^Tasty\s+[1-5]$/i.test(normalizarNombreBodega(destino.nombre)),
-      );
-
-      for (const destino of destinosDirectos) {
-        if (destino.id === bodegaOrigen.id) return false;
+      for (const destino of destinos) {
+        if (!destino || destino.id === bodegaOrigen.id) return false;
 
         await transferirProductoApi({
           productoId: String(datos.productoId),
@@ -753,50 +713,8 @@ export function InventarioProvider({ children }: Props) {
           cantidad: cantidadPorDestino,
           observacion:
             datos.observacion.trim() ||
-            `Distribución automática de ${productoEncontrado.descripcion}: ${cantidadPorDestino} hacia ${destino.nombre}.`,
+            `Asignación de ${productoEncontrado.descripcion}: ${cantidadPorDestino} hacia ${destino.nombre}.`,
         });
-      }
-
-      if (destinosTasty.length > 0) {
-        const bodegaGastronomia = bodegas.find(
-          (bodega) =>
-            normalizarNombreBodega(bodega.nombre).localeCompare(
-              normalizarNombreBodega("Gastronomía Tasty"),
-              "es",
-              { sensitivity: "base" },
-            ) === 0,
-        );
-
-        if (!bodegaGastronomia || bodegaGastronomia.id === bodegaOrigen.id) {
-          return false;
-        }
-
-        const cantidadGastronomia =
-          cantidadPorDestino * destinosTasty.length;
-
-        await transferirProductoApi({
-          productoId: String(datos.productoId),
-          bodegaOrigenId: bodegaOrigen.id,
-          bodegaDestinoId: bodegaGastronomia.id,
-          cantidad: cantidadGastronomia,
-          observacion:
-            datos.observacion.trim() ||
-            `Distribución automática de ${productoEncontrado.descripcion} hacia Gastronomía Tasty.`,
-        });
-
-        for (const destino of destinosTasty) {
-          if (destino.id === bodegaGastronomia.id) return false;
-
-          await transferirProductoApi({
-            productoId: String(datos.productoId),
-            bodegaOrigenId: bodegaGastronomia.id,
-            bodegaDestinoId: destino.id,
-            cantidad: cantidadPorDestino,
-            observacion:
-              datos.observacion.trim() ||
-              `Distribución automática de ${productoEncontrado.descripcion}: ${cantidadPorDestino} hacia ${destino.nombre}.`,
-          });
-        }
       }
 
       await recargarProductosInventario();
@@ -845,7 +763,7 @@ export function InventarioProvider({ children }: Props) {
         };
       }
 
-      await clienteApi.post("/solicitudes", {
+      await crearSolicitudApi({
         bodegaSolicitanteId: bodega.id,
         observacionSolicitante: solicitud.descripcion?.trim() || undefined,
         detalles,
@@ -879,9 +797,9 @@ export function InventarioProvider({ children }: Props) {
     }
 
     try {
-      const { data } = await clienteApi.post<SolicitudBackend>(
-        `/solicitudes/${String(id)}/rechazar`,
-        { observacionAtencion: observacionAdmin.trim() },
+      const data = await rechazarSolicitudApi(
+        String(id),
+        observacionAdmin.trim(),
       );
 
       await Promise.all([
@@ -929,13 +847,10 @@ export function InventarioProvider({ children }: Props) {
     }
 
     try {
-      const { data } = await clienteApi.post<SolicitudBackend>(
-        `/solicitudes/${String(id)}/atender`,
-        {
-          detalles,
-          observacionAtencion: observacionAdmin.trim() || undefined,
-        },
-      );
+      const data = await atenderSolicitudApi(String(id), {
+        detalles,
+        observacionAtencion: observacionAdmin.trim() || undefined,
+      });
 
       await Promise.all([
         recargarSolicitudesMovimientos(),
@@ -973,10 +888,7 @@ export function InventarioProvider({ children }: Props) {
     }
 
     try {
-      const { data } = await clienteApi.post<SolicitudBackend>(
-        `/solicitudes/${String(id)}/revertir`,
-        { motivo },
-      );
+      const data = await revertirSolicitudApi(String(id), motivo);
 
       await Promise.all([
         recargarSolicitudesMovimientos(),
@@ -1039,6 +951,13 @@ export function InventarioProvider({ children }: Props) {
     }
   };
 
+  const recargarDatosInventario = useCallback(async () => {
+    await Promise.all([
+      recargarSolicitudesMovimientos(),
+      recargarProductosInventario(),
+    ]);
+  }, [recargarProductosInventario, recargarSolicitudesMovimientos]);
+
   const obtenerProductoPorId = (id: string | number) => {
     return (
       productos.find((producto) => producto.id === id) ||
@@ -1062,6 +981,7 @@ export function InventarioProvider({ children }: Props) {
       movimientos,
       inventarioBodegas,
       solicitudes,
+      recargarDatosInventario,
       agregarProducto,
       editarProducto,
       desactivarProducto,
@@ -1079,7 +999,13 @@ export function InventarioProvider({ children }: Props) {
       obtenerInventarioPorBodega,
       obtenerStockBodega,
     }),
-    [productos, movimientos, inventarioBodegas, solicitudes]
+    [
+      productos,
+      movimientos,
+      inventarioBodegas,
+      solicitudes,
+      recargarDatosInventario,
+    ]
   );
 
   return (

@@ -1,5 +1,5 @@
-/* ========================= */
-/* ENCABEZADO DE PÁGINA */
+﻿/* ========================= */
+/* ENCABEZADO DE PÃGINA */
 /* ========================= */
 
 .encabezado-pagina {
@@ -33,7 +33,7 @@
 }
 
 /* ========================= */
-/* PÁGINA ADMIN */
+/* PÃGINA ADMIN */
 /* ========================= */
 
 .pagina-admin {
@@ -283,14 +283,14 @@
 /* COMPONENTES REUTILIZABLES */
 /* ========================= */
 /* Estos no se usan ahora en el dashboard inicial,
-   pero sí nos servirán para Usuarios, Productos,
+   pero sÃ­ nos servirÃ¡n para Usuarios, Productos,
    Inventario, Movimientos, Solicitudes y Reportes. */
 
 .grid-resumen {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 14px;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
 }
 
 .tarjeta-resumen {
@@ -799,6 +799,11 @@
   color: #b91c1c;
 }
 
+.badge-movimiento-devolucion {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
 .avatar-bodega {
   border-radius: 12px;
 }
@@ -853,7 +858,7 @@
 }
 
 /* ========================= */
-/* CONFIGURACIÓN */
+/* CONFIGURACIÃ“N */
 /* ========================= */
 
 .grid-configuracion {
@@ -1152,7 +1157,7 @@
 
 
 /* ========================= */
-/* ANIMACIÓN MODAL */
+/* ANIMACIÃ“N MODAL */
 /* ========================= */
 
 @keyframes aparecerModal {
@@ -1214,7 +1219,7 @@
 }
 
 /* ========================= */
-/* DISTRIBUCIÓN INVENTARIO */
+/* DISTRIBUCIÃ“N INVENTARIO */
 /* ========================= */
 
 .mensaje-distribucion {
@@ -1303,7 +1308,7 @@
 }
 
 /* ========================= */
-/* RESUMEN DE LÓGICA BODEGA */
+/* RESUMEN DE LÃ“GICA BODEGA */
 /* ========================= */
 
 .resumen-logica-bodega {
@@ -1424,11 +1429,11 @@
 }
 
 .tarjeta-reporte .boton-secundario {
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 /* ========================= */
-/* CONFIGURACIÓN DEL SISTEMA */
+/* CONFIGURACIÃ“N DEL SISTEMA */
 /* ========================= */
 
 .grid-configuracion-reglas {
@@ -2578,7 +2583,7 @@
 
 }
 
-/* Ajuste final: periodo en la misma línea de Inventario General sin romper la card */
+/* Ajuste final: periodo en la misma lÃ­nea de Inventario General sin romper la card */
 .pagina-reportes-compacta .bloque-reportes-titulo-linea {
   display: flex !important;
   align-items: center !important;
@@ -2686,7 +2691,7 @@
 
 
 
-/* Corrección Reportes: periodo dentro de su card, alineado con Inventario y sin scroll horizontal */
+/* CorrecciÃ³n Reportes: periodo dentro de su card, alineado con Inventario y sin scroll horizontal */
 .pagina-reportes-compacta {
   overflow-x: hidden !important;
 }
@@ -2859,7 +2864,7 @@
 }
 
 /* ========================= */
-/* COLORES DE ÍCONOS POR ÁREA */
+/* COLORES DE ÃCONOS POR ÃREA */
 /* ========================= */
 
 .icono-inventario,
@@ -2913,7 +2918,7 @@
 
 .grid-formulario-editar-producto .campo-formulario input,
 .grid-formulario-editar-producto .campo-formulario select {
-  min-height: 44px;
+  min-height: 40px;
 }
 
 .campo-editar-descripcion,
@@ -2951,7 +2956,7 @@
 }
 
 /* ========================= */
-/* CONFIGURACIÓN - CATEGORÍAS */
+/* CONFIGURACIÃ“N - CATEGORÃAS */
 /* ========================= */
 
 .pagina-configuracion-categorias .encabezado-pagina {
@@ -3068,7 +3073,7 @@
 }
 
 /* ========================= */
-/* SOLICITUDES - CONFIRMACIÓN */
+/* SOLICITUDES - CONFIRMACIÃ“N */
 /* ========================= */
 
 .badge-solicitud-atendida {
@@ -4269,7 +4274,7 @@
 }
 
 /* ========================= */
-/* USUARIOS - GASTRONOMÍA    */
+/* USUARIOS - GASTRONOMÃA    */
 /* ========================= */
 
 .mensaje-gastronomia-usuario {
@@ -4285,7 +4290,7 @@
 }
 
 /* =============================== */
-/* RESPONSABLE - AGRUPACIÓN TASTY  */
+/* RESPONSABLE - AGRUPACIÃ“N TASTY  */
 /* =============================== */
 .responsable-sucursales-seccion {
   margin-top: 24px;
@@ -4295,7 +4300,7 @@
   margin-top: 0;
 }
 
-/* Observación administrativa en atención de solicitudes */
+/* ObservaciÃ³n administrativa en atenciÃ³n de solicitudes */
 .campo-observacion-admin-solicitud {
   margin-top: 16px;
 }
@@ -4311,7 +4316,7 @@
 }
 
 /* =============================== */
-/* ADMIN SOLICITUDES - OBSERVACIÓN OPCIONAL */
+/* ADMIN SOLICITUDES - OBSERVACIÃ“N OPCIONAL */
 /* =============================== */
 .modal-solicitud-atencion .tabla-solicitud-atencion {
   margin: 0 28px 16px;
@@ -4774,7 +4779,7 @@
 }
 
 /* ===================================================== */
-/* AJUSTE SOLICITUDES ADMIN: búsqueda amplia sin cortar años */
+/* AJUSTE SOLICITUDES ADMIN: bÃºsqueda amplia sin cortar aÃ±os */
 /* ===================================================== */
 .solicitudes-filtros .filtro-estado-personalizado {
   min-width: 0 !important;
@@ -4793,7 +4798,7 @@
 }
 
 /* ===================================================== */
-/* CORRECCIÓN REAL SOLICITUDES ADMIN: filtros compactos sin scroll horizontal */
+/* CORRECCIÃ“N REAL SOLICITUDES ADMIN: filtros compactos sin scroll horizontal */
 /* ===================================================== */
 .solicitudes-filtros > .filtro-select-contenedor:nth-of-type(1) {
   flex: 0 0 200px !important;
@@ -5362,7 +5367,7 @@
   margin-left: 2px !important;
 }
 
-/* La tabla crece según sus registros y solo hace scroll cuando hay muchos */
+/* La tabla crece segÃºn sus registros y solo hace scroll cuando hay muchos */
 .movimientos-tabla-scroll .tabla-card {
   overflow: hidden !important;
 }
@@ -5393,7 +5398,7 @@
   border-bottom: none !important;
 }
 
-/* Header del modal: estado y X en una sola línea */
+/* Header del modal: estado y X en una sola lÃ­nea */
 .modal-movimiento-header-acciones {
   display: inline-flex !important;
   align-items: center !important;
@@ -5737,7 +5742,7 @@ textarea,
    Pegar al final de: frontend/src/estilos/dashboard.css
    ========================================================= */
 
-/* Separación general de filtros en Responsable */
+/* SeparaciÃ³n general de filtros en Responsable */
 .pagina-responsable .responsable-filtros,
 .pagina-responsable .responsable-filtros-bodega-completos,
 .pagina-responsable .responsable-filtros-inventario,
@@ -5763,7 +5768,7 @@ textarea,
   margin-left: 4px;
 }
 
-/* Botón reporte de inventario del responsable */
+/* BotÃ³n reporte de inventario del responsable */
 .pagina-responsable .boton-reporte-inventario-responsable {
   min-height: 48px;
   padding: 0 22px;
@@ -5790,7 +5795,7 @@ textarea,
   border-color: #000000;
 }
 
-/* Tablas responsables: no crecer gigante cuando hay pocos o ningún registro */
+/* Tablas responsables: no crecer gigante cuando hay pocos o ningÃºn registro */
 .pagina-responsable .tabla-scroll-adaptable {
   width: 100%;
   min-height: 0 !important;
@@ -5836,7 +5841,7 @@ textarea,
 }
 
 /* ========================================================= */
-/* RESPONSABLE - CORRECCIÓN DE TABLAS SIN DOBLE SCROLL       */
+/* RESPONSABLE - CORRECCIÃ“N DE TABLAS SIN DOBLE SCROLL       */
 /* ========================================================= */
 
 /* Evita que el contenedor externo genere una segunda barra */
@@ -5864,7 +5869,7 @@ textarea,
   height: 72px;
 }
 
-/* Si la tabla tiene varios registros, recién ahí activa scroll interno */
+/* Si la tabla tiene varios registros, reciÃ©n ahÃ­ activa scroll interno */
 /* Encabezado fijo solo cuando ya hay scroll interno */
 .pagina-responsable .responsable-tabla-scroll .tabla-contenedor:has(tbody tr:nth-child(6)) thead th {
   position: sticky !important;
@@ -5878,13 +5883,13 @@ textarea,
   display: none;
 }
 
-/* Mensaje vacío sin dejar una tabla enorme */
+/* Mensaje vacÃ­o sin dejar una tabla enorme */
 .pagina-responsable .tabla-vacia {
   height: 120px !important;
   padding: 28px !important;
 }
 
-/* Separación correcta entre filtros y botones */
+/* SeparaciÃ³n correcta entre filtros y botones */
 .pagina-responsable .responsable-filtros,
 .pagina-responsable .responsable-filtros-inventario,
 .pagina-responsable .responsable-filtros-bodega-completos,
@@ -6034,7 +6039,7 @@ textarea,
 }
 
 /* ========================================================= */
-/* RESPONSABLE - BOTONES ORDEN/LIMPIAR MISMO TAMAÑO FILTROS */
+/* RESPONSABLE - BOTONES ORDEN/LIMPIAR MISMO TAMAÃ‘O FILTROS */
 /* ========================================================= */
 
 .pagina-responsable .responsable-filtros .boton-filtro-icono {
@@ -6059,7 +6064,7 @@ textarea,
   max-height: 54px !important;
 }
 /* ========================= */
-/* REVERSIÓN DE SOLICITUDES  */
+/* REVERSIÃ“N DE SOLICITUDES  */
 /* ========================= */
 
 .boton-icono-reversar:hover,
@@ -6124,7 +6129,7 @@ textarea,
 }
 
 /* ===================================================== */
-/* REVERSIÓN - BOTÓN DESACTIVADO POR TIEMPO              */
+/* REVERSIÃ“N - BOTÃ“N DESACTIVADO POR TIEMPO              */
 /* ===================================================== */
 .boton-icono-reversar:disabled {
   opacity: 0.38 !important;
@@ -6167,6 +6172,436 @@ textarea,
   .pagina-supervisor-inicio .responsable-filtros-inventario .boton-filtro-icono {
     width: 100% !important;
     max-width: none !important;
+  }
+}
+
+/* ===================================================== */
+/* SUPERVISOR - PRODUCTOS EN STOCK                       */
+/* ===================================================== */
+.pagina-stock-supervisor {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+}
+
+.stock-supervisor-seccion {
+  min-width: 0;
+  overflow: visible;
+}
+
+.stock-supervisor-encabezado {
+  margin-bottom: 12px !important;
+}
+
+.stock-supervisor-encabezado p {
+  margin-bottom: 0 !important;
+}
+
+.pagina-supervisor-inicio .stock-supervisor-filtros {
+  display: grid !important;
+  grid-template-columns:
+    minmax(240px, 1fr)
+    minmax(215px, 0.82fr)
+    minmax(170px, 0.64fr)
+    minmax(170px, 0.64fr)
+    54px
+    54px !important;
+  gap: 12px !important;
+  align-items: center !important;
+  width: 100% !important;
+  margin: 0 0 10px !important;
+  overflow: visible !important;
+}
+
+.pagina-supervisor-inicio .stock-supervisor-filtros > * {
+  min-width: 0 !important;
+}
+
+.pagina-supervisor-inicio .stock-supervisor-filtros .responsable-buscador,
+.pagina-supervisor-inicio .stock-supervisor-filtros .campo-desplegable,
+.pagina-supervisor-inicio .stock-supervisor-filtros .filtro-categoria,
+.pagina-supervisor-inicio .stock-supervisor-filtros .filtro-tipo,
+.pagina-supervisor-inicio .stock-supervisor-filtros .filtro-estado {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+}
+
+.pagina-supervisor-inicio .stock-supervisor-filtros .responsable-buscador {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+}
+
+.pagina-supervisor-inicio .stock-supervisor-filtros .buscador-input-contenedor,
+.pagina-supervisor-inicio .stock-supervisor-filtros .campo-desplegable__boton,
+.pagina-supervisor-inicio .stock-supervisor-filtros .boton-filtro-icono {
+  height: 46px !important;
+  min-height: 46px !important;
+}
+
+.pagina-supervisor-inicio .stock-supervisor-filtros .boton-filtro-icono {
+  width: 54px !important;
+  min-width: 54px !important;
+  max-width: 54px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.stock-supervisor-tabla-scroll {
+  min-width: 0;
+  width: 100%;
+}
+
+.stock-supervisor-tabla-scroll .tabla-card {
+  overflow: hidden !important;
+}
+
+.stock-supervisor-tabla-scroll .tabla-contenedor {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: 420px !important;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  scrollbar-gutter: stable !important;
+}
+
+.stock-supervisor-tabla-scroll .tabla-contenedor table {
+  width: 100% !important;
+  min-width: 940px;
+}
+
+.stock-supervisor-tabla-scroll .tabla-contenedor thead th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 6 !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+.stock-supervisor-tabla-scroll .tabla-contenedor tbody tr:last-child td {
+  border-bottom: none !important;
+}
+
+.stock-supervisor-tabla-scroll .tabla-contenedor th:nth-child(1),
+.stock-supervisor-tabla-scroll .tabla-contenedor td:nth-child(1) {
+  min-width: 145px;
+}
+
+.stock-supervisor-tabla-scroll .tabla-contenedor th:nth-child(2),
+.stock-supervisor-tabla-scroll .tabla-contenedor td:nth-child(2) {
+  min-width: 210px;
+}
+
+.stock-supervisor-tabla-scroll .tabla-contenedor th:nth-child(3),
+.stock-supervisor-tabla-scroll .tabla-contenedor td:nth-child(3) {
+  min-width: 185px;
+}
+
+.stock-supervisor-tabla-scroll .tabla-contenedor th:nth-child(4),
+.stock-supervisor-tabla-scroll .tabla-contenedor td:nth-child(4) {
+  min-width: 130px;
+}
+
+.stock-supervisor-tabla-scroll .tabla-contenedor th:nth-child(5),
+.stock-supervisor-tabla-scroll .tabla-contenedor td:nth-child(5),
+.stock-supervisor-tabla-scroll .tabla-contenedor th:nth-child(6),
+.stock-supervisor-tabla-scroll .tabla-contenedor td:nth-child(6),
+.stock-supervisor-tabla-scroll .tabla-contenedor th:nth-child(7),
+.stock-supervisor-tabla-scroll .tabla-contenedor td:nth-child(7) {
+  white-space: nowrap;
+}
+
+.modal-stock-supervisor-detalle {
+  max-width: 900px !important;
+}
+
+.modal-stock-supervisor-detalle .modal-header {
+  padding: 22px 28px 18px !important;
+}
+
+.modal-stock-supervisor-detalle .modal-cerrar {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  border-radius: 10px !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.modal-stock-supervisor-detalle .detalle-producto-cabecera {
+  padding: 18px 28px 0 !important;
+}
+
+.modal-stock-supervisor-detalle .detalle-producto-resumen {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 18px !important;
+  padding: 16px 18px !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 14px !important;
+  background: #f8fafc !important;
+}
+
+.stock-supervisor-resumen-texto {
+  flex: 1;
+  min-width: 0;
+}
+
+.stock-supervisor-resumen-texto h3 {
+  margin: 0 0 5px !important;
+  color: #0f172a !important;
+  font-size: 18px !important;
+}
+
+.stock-supervisor-resumen-texto p {
+  margin: 0 !important;
+  color: #64748b !important;
+  font-size: 13px !important;
+}
+
+.stock-supervisor-detalle-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+  padding: 16px 28px 8px !important;
+}
+
+.stock-supervisor-detalle-grid > div {
+  padding: 13px 14px !important;
+}
+
+.stock-supervisor-modal-acciones {
+  margin: 8px 28px 0 !important;
+  padding: 14px 0 22px !important;
+}
+
+.modal-stock-supervisor-accion {
+  width: min(980px, calc(100vw - 48px)) !important;
+  max-width: 980px !important;
+  max-height: 90vh !important;
+}
+
+.modal-stock-supervisor-accion .modal-header {
+  padding: 22px 28px 18px !important;
+}
+
+.modal-stock-supervisor-accion .modal-header p {
+  max-width: 620px;
+  margin: 6px 0 0 !important;
+}
+
+.modal-stock-supervisor-accion .formulario-modal {
+  padding: 16px 28px 20px !important;
+}
+
+.stock-supervisor-accion-resumen {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(130px, 0.8fr) minmax(110px, 0.55fr);
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.stock-supervisor-accion-resumen > div {
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.stock-supervisor-accion-resumen span {
+  display: block;
+  margin-bottom: 5px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.stock-supervisor-accion-resumen strong {
+  display: block;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stock-supervisor-accion-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+.stock-supervisor-destino-fijo {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  padding: 0 13px;
+  border: 1px solid #dbe2ea;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.stock-supervisor-destinos-campo {
+  margin-top: 16px;
+}
+
+.stock-supervisor-destinos-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+  gap: 8px;
+}
+
+.stock-supervisor-destino-opcion {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #dbe2ea;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.stock-supervisor-destino-opcion:hover {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.stock-supervisor-destino-opcion-activa {
+  border-color: #111827;
+  background: #f8fafc;
+}
+
+.stock-supervisor-destino-opcion input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  accent-color: #111827;
+}
+
+.stock-supervisor-destino-opcion span {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stock-supervisor-reparto {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+  background: #f0fdf4;
+  color: #166534;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.stock-supervisor-reparto-error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.stock-supervisor-aviso-devolucion {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid #ddd6fe;
+  border-radius: 10px;
+  background: #f5f3ff;
+  color: #5b21b6;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+
+.modal-stock-supervisor-accion textarea {
+  min-height: 68px !important;
+  resize: vertical;
+}
+
+.modal-stock-supervisor-accion .campo-formulario {
+  gap: 6px !important;
+}
+.stock-supervisor-accion-botones {
+  position: static !important;
+  margin-top: 16px !important;
+  padding-top: 16px !important;
+  border-top: 1px solid #e5e7eb !important;
+  background: #ffffff !important;
+}
+
+.stock-supervisor-tabla-scroll .acciones-tabla {
+  display: grid !important;
+  grid-template-columns: repeat(3, 34px) !important;
+  justify-content: start !important;
+  gap: 7px !important;
+}
+
+.stock-supervisor-tabla-scroll .tabla-contenedor th:nth-child(7),
+.stock-supervisor-tabla-scroll .tabla-contenedor td:nth-child(7) {
+  min-width: 145px;
+}
+
+@media (max-width: 1180px) {
+  .pagina-supervisor-inicio .stock-supervisor-filtros {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .pagina-supervisor-inicio .stock-supervisor-filtros .responsable-buscador {
+    grid-column: 1 / -1;
+  }
+
+  .pagina-supervisor-inicio .stock-supervisor-filtros .boton-filtro-icono {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .stock-supervisor-detalle-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .pagina-supervisor-inicio .stock-supervisor-filtros {
+    grid-template-columns: 1fr !important;
+  }
+
+  .pagina-supervisor-inicio .stock-supervisor-filtros .responsable-buscador {
+    grid-column: auto;
+  }
+
+  .stock-supervisor-detalle-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .modal-stock-supervisor-detalle .detalle-producto-resumen {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+  }
+}
+
+
+@media (max-width: 760px) {
+  .stock-supervisor-accion-resumen,
+  .stock-supervisor-accion-grid,
+  .stock-supervisor-destinos-lista {
+    grid-template-columns: 1fr !important;
   }
 }
 
@@ -6599,7 +7034,7 @@ textarea,
 /* ===================================================== */
 
 /* El layout global usa sidebar fija + margen izquierdo. En esta pantalla
-   limitamos explícitamente el ancho disponible para que no se genere
+   limitamos explÃ­citamente el ancho disponible para que no se genere
    desplazamiento horizontal del navegador. */
 .contenido-principal:has(.seccion-movimientos-admin) {
   width: calc(100% - 300px);
@@ -6781,7 +7216,7 @@ textarea,
 /* AJUSTE 3F - FECHA A LA IZQUIERDA + SOLICITUDES POR FECHA */
 /* ===================================================== */
 
-/* Evita que la página de Movimientos exceda el ancho real disponible. */
+/* Evita que la pÃ¡gina de Movimientos exceda el ancho real disponible. */
 .contenido-principal:has(.seccion-movimientos-admin) {
   flex: 0 0 calc(100% - 300px) !important;
   width: calc(100% - 300px) !important;
@@ -6791,7 +7226,7 @@ textarea,
   overflow-x: hidden !important;
 }
 
-/* Barra algo más compacta para liberar espacio sin deformar textos. */
+/* Barra algo mÃ¡s compacta para liberar espacio sin deformar textos. */
 .movimientos-filtros .movimientos-buscador {
   min-width: 0 !important;
 }
@@ -6926,7 +7361,7 @@ textarea,
   box-sizing: border-box !important;
 }
 
-/* Filtros más compactos y equilibrados para no robar ancho a la tabla. */
+/* Filtros mÃ¡s compactos y equilibrados para no robar ancho a la tabla. */
 .movimientos-filtros {
   grid-template-columns:
     minmax(210px, 1.1fr)
@@ -6983,12 +7418,12 @@ textarea,
 
 .movimientos-tabla-scroll .tabla-contenedor th,
 .movimientos-tabla-scroll .tabla-contenedor td {
-  padding: 15px 12px !important;
+  padding: 14px 8px !important;
   vertical-align: middle !important;
   box-sizing: border-box !important;
 }
 
-/* Reparto pensado para la información real que muestra cada columna. */
+/* Reparto pensado para la informaciÃ³n real que muestra cada columna. */
 .movimientos-tabla-scroll .tabla-contenedor th:nth-child(1),
 .movimientos-tabla-scroll .tabla-contenedor td:nth-child(1) {
   width: 13% !important;
@@ -7033,7 +7468,7 @@ textarea,
   white-space: nowrap !important;
 }
 
-/* El badge nunca se parte: "Transferencia" queda en una sola línea. */
+/* El badge nunca se parte: "Transferencia" queda en una sola lÃ­nea. */
 .movimientos-tabla-scroll .badge-movimiento {
   display: inline-flex !important;
   align-items: center !important;
@@ -7048,7 +7483,7 @@ textarea,
   white-space: nowrap !important;
 }
 
-/* Acciones compactas, centradas y siempre en una sola línea. */
+/* Acciones compactas, centradas y siempre en una sola lÃ­nea. */
 .acciones-movimientos {
   display: inline-flex !important;
   align-items: center !important;
@@ -7128,7 +7563,7 @@ textarea,
 /* MOVIMIENTOS ADMIN - AJUSTE FINAL TIPO / ACCIONES */
 /* ===================================================== */
 
-/* Se compacta Tipo y se reserva más espacio para los tres botones de Acciones. */
+/* Se compacta Tipo y se reserva mÃ¡s espacio para los tres botones de Acciones. */
 
 .movimientos-tabla-scroll .tabla-contenedor th:nth-child(2),
 .movimientos-tabla-scroll .tabla-contenedor td:nth-child(2) {
@@ -7185,7 +7620,7 @@ textarea,
 /* UNIFORMIDAD GLOBAL - COLUMNAS DE CANTIDADES / ACCIONES */
 /* ===================================================== */
 
-/* TablaBase marca automáticamente las columnas numéricas de cantidades. */
+/* TablaBase marca automÃ¡ticamente las columnas numÃ©ricas de cantidades. */
 .tabla-columna-centro-1 th:nth-child(1),
 .tabla-columna-centro-1 td:nth-child(1),
 .tabla-columna-centro-2 th:nth-child(2),
@@ -7213,7 +7648,7 @@ textarea,
   text-align: center !important;
 }
 
-/* En Movimientos, las acciones siempre arrancan desde la misma posición.
+/* En Movimientos, las acciones siempre arrancan desde la misma posiciÃ³n.
    Si no existe Reversa, Detalle y Reporte permanecen en los dos primeros espacios. */
 .movimientos-tabla-scroll .acciones-movimientos {
   display: grid !important;
@@ -7235,7 +7670,7 @@ textarea,
   text-align: center !important;
 }
 
-/* Cantidades en tablas internas de solicitudes (modal de creación/atención/detalle). */
+/* Cantidades en tablas internas de solicitudes (modal de creaciÃ³n/atenciÃ³n/detalle). */
 .tabla-solicitud-items th:nth-child(4),
 .tabla-solicitud-items td:nth-child(4),
 .tabla-solicitud-atencion th:nth-child(3),
@@ -7265,7 +7700,7 @@ textarea,
 /* MOVIMIENTOS - UNIFORMIDAD FINAL PARA LOS 3 ROLES      */
 /* ===================================================== */
 
-/* La pantalla de Movimientos usa el mismo ancho útil en Admin,
+/* La pantalla de Movimientos usa el mismo ancho Ãºtil en Admin,
    Supervisor y Responsable, sin generar scroll horizontal global. */
 .contenido-principal:has(.seccion-movimientos-sistema) {
   flex: 0 0 calc(100% - 300px) !important;
@@ -7291,7 +7726,7 @@ textarea,
 }
 
 /* Admin: se reduce el espacio sobrante de Acciones y se aprovecha en
-   Registro/Destino/Custodio, que son las columnas que más texto contienen. */
+   Registro/Destino/Custodio, que son las columnas que mÃ¡s texto contienen. */
 .movimientos-tabla-scroll .tabla-contenedor th:nth-child(1),
 .movimientos-tabla-scroll .tabla-contenedor td:nth-child(1) {
   width: 11.5% !important;
@@ -7353,19 +7788,19 @@ textarea,
 .movimientos-tabla-rol-scroll .tabla-contenedor th:nth-child(1),
 .movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(1) { width: 11% !important; }
 .movimientos-tabla-rol-scroll .tabla-contenedor th:nth-child(2),
-.movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(2) { width: 17% !important; }
+.movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(2) { width: 14% !important; }
 .movimientos-tabla-rol-scroll .tabla-contenedor th:nth-child(3),
-.movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(3) { width: 15% !important; }
+.movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(3) { width: 16% !important; }
 .movimientos-tabla-rol-scroll .tabla-contenedor th:nth-child(4),
 .movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(4) { width: 15% !important; }
 .movimientos-tabla-rol-scroll .tabla-contenedor th:nth-child(5),
-.movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(5) { width: 8% !important; }
+.movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(5) { width: 7% !important; }
 .movimientos-tabla-rol-scroll .tabla-contenedor th:nth-child(6),
-.movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(6) { width: 12% !important; }
+.movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(6) { width: 10% !important; }
 .movimientos-tabla-rol-scroll .tabla-contenedor th:nth-child(7),
-.movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(7) { width: 13% !important; }
+.movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(7) { width: 10% !important; }
 .movimientos-tabla-rol-scroll .tabla-contenedor th:nth-child(8),
-.movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(8) { width: 9% !important; }
+.movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(8) { width: 17% !important; }
 
 .movimientos-tabla-rol-scroll .tabla-contenedor th:nth-child(1),
 .movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(1),
@@ -7427,7 +7862,7 @@ textarea,
 
 
 /* ===================================================== */
-/* MOVIMIENTOS - ALINEACIÓN DE ACCIONES EN LOS 3 ROLES  */
+/* MOVIMIENTOS - ALINEACIÃ“N DE ACCIONES EN LOS 3 ROLES  */
 /* ===================================================== */
 
 /* El encabezado y el contenido de Acciones comparten el mismo centro visual. */
@@ -7448,7 +7883,7 @@ textarea,
   justify-content: start !important;
 }
 
-/* Supervisor y Responsable: un único botón centrado exactamente bajo Acciones. */
+/* Supervisor y Responsable: un Ãºnico botÃ³n centrado exactamente bajo Acciones. */
 .movimientos-tabla-rol-scroll .acciones-movimientos-rol {
   display: flex !important;
   width: 100% !important;
@@ -7464,7 +7899,7 @@ textarea,
 /* ===================================================== */
 
 /* Supervisor y Responsable recuperan el scroll interno de la tabla,
-   con el encabezado fijo, sin convertir toda la página en el área de scroll. */
+   con el encabezado fijo, sin convertir toda la pÃ¡gina en el Ã¡rea de scroll. */
 .movimientos-tabla-rol-scroll {
   overflow: visible !important;
 }
@@ -7477,7 +7912,7 @@ textarea,
   max-height: calc(100vh - 300px) !important;
   min-height: 340px !important;
   overflow-y: auto !important;
-  overflow-x: auto !important;
+  overflow-x: hidden !important;
   scrollbar-gutter: stable !important;
 }
 
@@ -7489,9 +7924,9 @@ textarea,
   box-shadow: 0 1px 0 #e5e7eb !important;
 }
 
-/* Acciones: el título queda alineado a la izquierda en los tres roles.
-   Los botones parten de la misma línea visual y se acomodan horizontalmente
-   según la cantidad disponible para cada rol/fila. */
+/* Acciones: el tÃ­tulo queda alineado a la izquierda en los tres roles.
+   Los botones parten de la misma lÃ­nea visual y se acomodan horizontalmente
+   segÃºn la cantidad disponible para cada rol/fila. */
 .movimientos-tabla-scroll .tabla-contenedor th:nth-child(8),
 .movimientos-tabla-rol-scroll .tabla-contenedor th:nth-child(8) {
   text-align: left !important;
@@ -7506,7 +7941,7 @@ textarea,
   padding-right: 10px !important;
 }
 
-/* Admin: Detalle -> Reporte -> Reversa, todos en línea y comenzando
+/* Admin: Detalle -> Reporte -> Reversa, todos en lÃ­nea y comenzando
    debajo del encabezado Acciones. Si falta Reversa, los otros dos no saltan. */
 .movimientos-tabla-scroll .acciones-movimientos {
   display: inline-flex !important;
@@ -7518,8 +7953,8 @@ textarea,
   margin: 0 !important;
 }
 
-/* Supervisor / Responsable: el único botón queda en la misma línea de inicio
-   que el encabezado, conservando el mismo patrón visual. */
+/* Supervisor / Responsable: el Ãºnico botÃ³n queda en la misma lÃ­nea de inicio
+   que el encabezado, conservando el mismo patrÃ³n visual. */
 .movimientos-tabla-rol-scroll .acciones-movimientos-rol {
   display: inline-flex !important;
   width: max-content !important;
@@ -7534,3 +7969,68 @@ textarea,
   flex: 0 0 auto !important;
   margin: 0 !important;
 }
+
+/* === FIX MOVIMIENTOS ROLES - APROVECHAR ANCHO: INICIO === */
+/* Supervisor y Responsable: la tabla ocupa todo el ancho Ãºtil sin scroll horizontal.
+   Se reduce Ãºnicamente el espacio sobrante de Acciones y se reparte en las columnas
+   con mÃ¡s texto: Registro, Origen y Destino. */
+.movimientos-tabla-rol-scroll,
+.movimientos-tabla-rol-scroll .tabla-card,
+.movimientos-tabla-rol-scroll .tabla-contenedor {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.movimientos-tabla-rol-scroll .tabla-contenedor {
+  overflow-x: hidden !important;
+}
+
+.movimientos-tabla-rol-scroll .tabla-contenedor table {
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+  table-layout: fixed !important;
+}
+
+.movimientos-tabla-rol-scroll .tabla-contenedor th:nth-child(1),
+.movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(1) { width: 10% !important; }
+
+.movimientos-tabla-rol-scroll .tabla-contenedor th:nth-child(2),
+.movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(2) { width: 14% !important; }
+
+.movimientos-tabla-rol-scroll .tabla-contenedor th:nth-child(3),
+.movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(3) { width: 18% !important; }
+
+.movimientos-tabla-rol-scroll .tabla-contenedor th:nth-child(4),
+.movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(4) { width: 18% !important; }
+
+.movimientos-tabla-rol-scroll .tabla-contenedor th:nth-child(5),
+.movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(5) { width: 7% !important; }
+
+.movimientos-tabla-rol-scroll .tabla-contenedor th:nth-child(6),
+.movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(6) { width: 11% !important; }
+
+.movimientos-tabla-rol-scroll .tabla-contenedor th:nth-child(7),
+.movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(7) { width: 10% !important; }
+
+.movimientos-tabla-rol-scroll .tabla-contenedor th:nth-child(8),
+.movimientos-tabla-rol-scroll .tabla-contenedor td:nth-child(8) {
+  width: 12% !important;
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+
+.movimientos-tabla-rol-scroll .acciones-movimientos-rol {
+  display: inline-flex !important;
+  width: max-content !important;
+  max-width: 100% !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  flex-wrap: nowrap !important;
+  gap: 7px !important;
+  margin: 0 !important;
+}
+/* === FIX MOVIMIENTOS ROLES - APROVECHAR ANCHO: FIN === */
+
