@@ -356,8 +356,8 @@ function SolicitudesAdmin() {
         ? "Aceptar solicitud"
         : "Aceptar parcialmente",
       mensaje: solicitudCompletaDisponible
-        ? "¿Seguro que deseas aceptar esta solicitud y entregar todos los bienes disponibles?"
-        : "¿Seguro que deseas atender parcialmente esta solicitud? Solo se entregará lo disponible y quedará pendiente lo faltante.",
+        ? "¿Seguro que deseas aceptar esta solicitud? Los bienes disponibles se enviarán al stock del Supervisor del área."
+        : "¿Seguro que deseas atender parcialmente esta solicitud? Se enviará al stock del Supervisor solo lo disponible en Inventario General y quedará pendiente lo faltante.",
     });
   };
   const solicitudEstaDentroDeTiempo = (solicitud: Solicitud) => {
@@ -627,7 +627,7 @@ function SolicitudesAdmin() {
               <div>
                 <h2>Solicitud</h2>
                 <p>
-                  Revisa el stock disponible y atiende automáticamente lo que sí puede cumplirse.
+                  El disponible corresponde al Inventario General. Al atender, los bienes se enviarán al stock del Supervisor del área correspondiente.
                 </p>
               </div>
               <div className="modal-solicitud-header-acciones">

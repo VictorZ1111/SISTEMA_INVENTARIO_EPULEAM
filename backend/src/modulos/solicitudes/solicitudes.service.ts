@@ -25,7 +25,7 @@ import { Movimiento } from "../movimientos/entities/movimiento.entity";
 import { TipoMovimiento } from "../movimientos/enums/tipo-movimiento.enum";
 import { Producto } from "../productos/entities/producto.entity";
 import { EstadoProducto } from "../productos/enums/estado-producto.enum";
-import { Usuario } from "../usuarios/entities/usuario.entity";
+import { EstadoUsuario } from "../usuarios/enums/estado-usuario.enum";
 import { RolUsuario } from "../usuarios/enums/rol-usuario.enum";
 import { AtenderSolicitudDto } from "./dto/atender-solicitud.dto";
 import { CrearSolicitudDto } from "./dto/crear-solicitud.dto";
@@ -214,7 +214,7 @@ export class SolicitudesService {
 
       this.validarSolicitudAbierta(solicitud);
 
-      const origen = await this.determinarBodegaOrigen(
+      const rutaAtencion = await this.resolverRutaAtencionSolicitud(
         administrador,
         solicitud.bodegaSolicitante,
       );
@@ -251,8 +251,8 @@ export class SolicitudesService {
             administrador,
             solicitud,
             detalle,
-            origen,
-            solicitud.bodegaSolicitante,
+            rutaAtencion.origen,
+            rutaAtencion.destinoStock,
             atencion.cantidadEntregada,
             usuario.id,
             dto.observacionAtencion,
@@ -376,26 +376,69 @@ export class SolicitudesService {
         solicitud.estado === EstadoSolicitud.RECHAZADA;
 
       if (!eraRechazada) {
-        const origenOriginal = await this.determinarBodegaOrigen(
-          administrador,
-          solicitud.bodegaSolicitante,
-        );
-
         for (const detalle of solicitud.detalles) {
           if (detalle.cantidadEntregada <= 0) {
             continue;
           }
 
-          await this.revertirTransferenciaSolicitud(
-            administrador,
-            solicitud,
-            detalle,
-            solicitud.bodegaSolicitante,
-            origenOriginal,
-            detalle.cantidadEntregada,
-            usuario.id,
-            dto.motivo,
+          const movimientosEntrega = await administrador
+            .getRepository(Movimiento)
+            .find({
+              where: {
+                solicitudId: solicitud.id,
+                solicitudDetalleId: detalle.id,
+                tipo: TipoMovimiento.TRANSFERENCIA,
+              },
+              order: {
+                createdAt: "ASC",
+              },
+            });
+
+          const cantidadRegistrada = movimientosEntrega.reduce(
+            (total, movimiento) => total + movimiento.cantidad,
+            0,
           );
+
+          if (cantidadRegistrada !== detalle.cantidadEntregada) {
+            throw new ConflictException(
+              `No se puede revertir "${detalle.producto.nombre}" porque el historial de entregas no coincide con la cantidad registrada.`,
+            );
+          }
+
+          for (const movimiento of movimientosEntrega) {
+            if (!movimiento.bodegaOrigenId || !movimiento.bodegaDestinoId) {
+              throw new ConflictException(
+                `No se puede revertir "${detalle.producto.nombre}" porque una entrega no tiene origen o destino válido.`,
+              );
+            }
+
+            const [origenReversa, destinoReversa] = await Promise.all([
+              administrador.getRepository(Bodega).findOne({
+                where: { id: movimiento.bodegaDestinoId },
+              }),
+              administrador.getRepository(Bodega).findOne({
+                where: { id: movimiento.bodegaOrigenId },
+              }),
+            ]);
+
+            if (!origenReversa || !destinoReversa) {
+              throw new NotFoundException(
+                "No se pudo reconstruir la ruta original de una entrega.",
+              );
+            }
+
+            await this.revertirTransferenciaSolicitud(
+              administrador,
+              solicitud,
+              detalle,
+              movimiento,
+              origenReversa,
+              destinoReversa,
+              movimiento.cantidad,
+              usuario.id,
+              dto.motivo,
+            );
+          }
         }
       }
 
@@ -620,31 +663,33 @@ export class SolicitudesService {
     }
   }
 
-  private async determinarBodegaOrigen(
+  private async resolverRutaAtencionSolicitud(
     administrador: EntityManager,
-    destino: Bodega,
-  ): Promise<Bodega> {
+    bodegaSolicitante: Bodega,
+  ): Promise<{
+    origen: Bodega;
+    destinoStock: Bodega;
+    area: Bodega;
+  }> {
     const repositorio = administrador.getRepository(Bodega);
 
-    if (destino.tipo === TipoBodega.PRINCIPAL) {
-      const inventarioGeneral = await repositorio.findOne({
-        where: {
-          nombre: "Inventario General",
-        },
-      });
+    const origen = await repositorio.findOne({
+      where: {
+        tipo: TipoBodega.INVENTARIO_GENERAL,
+        estado: EstadoBodega.ACTIVA,
+      },
+    });
 
-      if (!inventarioGeneral) {
-        throw new NotFoundException(
-          "No se encontró la bodega Inventario General.",
-        );
-      }
-
-      this.validarBodegaActiva(inventarioGeneral);
-      return inventarioGeneral;
+    if (!origen) {
+      throw new NotFoundException(
+        "No se encontró el Inventario General activo.",
+      );
     }
 
-    if (destino.tipo === TipoBodega.SUCURSAL) {
-      if (!destino.bodegaPadreId) {
+    let area = bodegaSolicitante;
+
+    if (bodegaSolicitante.tipo === TipoBodega.SUCURSAL) {
+      if (!bodegaSolicitante.bodegaPadreId) {
         throw new ConflictException(
           "La sucursal solicitante no tiene una bodega principal asociada.",
         );
@@ -652,7 +697,7 @@ export class SolicitudesService {
 
       const bodegaPadre = await repositorio.findOne({
         where: {
-          id: destino.bodegaPadreId,
+          id: bodegaSolicitante.bodegaPadreId,
         },
       });
 
@@ -662,13 +707,54 @@ export class SolicitudesService {
         );
       }
 
-      this.validarBodegaActiva(bodegaPadre);
-      return bodegaPadre;
+      area = bodegaPadre;
     }
 
-    throw new ConflictException(
-      "La bodega solicitante no admite atención de solicitudes.",
-    );
+    if (area.tipo !== TipoBodega.PRINCIPAL) {
+      throw new ConflictException(
+        "La solicitud debe pertenecer a una bodega principal o a una de sus sucursales.",
+      );
+    }
+
+    this.validarBodegaActiva(area);
+
+    const stocks = await repositorio
+      .createQueryBuilder("stock")
+      .innerJoinAndSelect("stock.supervisor", "supervisor")
+      .where("stock.tipo = :tipoStock", {
+        tipoStock: TipoBodega.STOCK_SUPERVISOR,
+      })
+      .andWhere("stock.estado = :estadoStock", {
+        estadoStock: EstadoBodega.ACTIVA,
+      })
+      .andWhere("stock.bodegaPadreId = :areaId", {
+        areaId: area.id,
+      })
+      .andWhere("supervisor.rol = :rolSupervisor", {
+        rolSupervisor: RolUsuario.SUPERVISOR,
+      })
+      .andWhere("supervisor.estado = :estadoSupervisor", {
+        estadoSupervisor: EstadoUsuario.ACTIVO,
+      })
+      .getMany();
+
+    if (stocks.length === 0) {
+      throw new ConflictException(
+        `No existe un Supervisor activo con stock asignado para "${area.nombre}".`,
+      );
+    }
+
+    if (stocks.length > 1) {
+      throw new ConflictException(
+        `La bodega "${area.nombre}" tiene más de un stock de Supervisor activo. Corrige las asignaciones antes de atender solicitudes.`,
+      );
+    }
+
+    return {
+      origen,
+      destinoStock: stocks[0],
+      area,
+    };
   }
 
   private async transferirPorSolicitud(
@@ -758,6 +844,7 @@ export class SolicitudesService {
     administrador: EntityManager,
     solicitud: Solicitud,
     detalle: SolicitudDetalle,
+    movimientoOriginal: Movimiento,
     origenReversa: Bodega,
     destinoReversa: Bodega,
     cantidad: number,
@@ -823,7 +910,7 @@ export class SolicitudesService {
         usuarioId,
         solicitudId: solicitud.id,
         solicitudDetalleId: detalle.id,
-        movimientoOriginalId: null,
+        movimientoOriginalId: movimientoOriginal.id,
         cantidad,
         cantidadAnterior: null,
         cantidadNueva: null,
