@@ -3,7 +3,6 @@ import {
   createContext,
   useContext,
   useEffect,
-  useMemo,
   useState,
   useCallback,
   type ReactNode,
@@ -14,12 +13,16 @@ import type { Movimiento } from "../tipos/movimiento";
 import type {
   Solicitud,
   EstadoSolicitud,
-  ItemSolicitud,
   EntregaSolicitud,
   ResultadoAtencionSolicitud,
 } from "../tipos/solicitud";
 
 import { normalizarNombreBodega } from "../utilidades/asignacionesUsuarios";
+import {
+  convertirMovimientoBackend,
+  convertirProductoBackend,
+  convertirSolicitudBackend,
+} from "../utilidades/mapeadoresInventario";
 import {
   ajustarCantidadProductoApi,
   cambiarEstadoProductoApi,
@@ -29,12 +32,10 @@ import {
   obtenerBodegasInventarioApi,
   obtenerInventarioFrontendApi,
   transferirProductoApi,
-  type InventarioFrontendBackend,
 } from "../api/inventarioApi";
 import {
   obtenerMovimientosApi,
   reversarMovimientoApi,
-  type MovimientoBackend,
 } from "../api/movimientosApi";
 import {
   atenderSolicitudApi,
@@ -42,7 +43,6 @@ import {
   obtenerSolicitudesApi,
   rechazarSolicitudApi,
   revertirSolicitudApi,
-  type SolicitudBackend,
 } from "../api/solicitudesApi";
 import { useAuth } from "./AuthContext";
 import { useConfiguracion } from "./ConfiguracionContext";
@@ -64,7 +64,6 @@ interface DatosDistribucion {
   productoId: string | number;
   cantidad: number;
   destino: string;
-  usuario: string;
   observacion: string;
 }
 
@@ -72,7 +71,6 @@ interface DatosDistribucionAutomatica {
   productoId: string | number;
   cantidadTotal: number;
   destinos: string[];
-  usuario: string;
   observacion: string;
 }
 
@@ -98,7 +96,7 @@ interface InventarioContexto {
     productoActualizado: Omit<Producto, "id" | "fechaRegistro">,
   ) => Promise<ResultadoOperacionInventario>;
   desactivarProducto: (id: string | number) => Promise<boolean>;
-  eliminarProducto: (datos: { id: string | number; usuario: string; observacion?: string }) => Promise<boolean>;
+  eliminarProducto: (datos: { id: string | number; observacion?: string }) => Promise<boolean>;
 
   distribuirProducto: (datos: DatosDistribucion) => Promise<boolean>;
   distribuirAutomaticamenteConsumible: (
@@ -111,7 +109,6 @@ interface InventarioContexto {
     estado: EstadoSolicitud,
     observacionAdmin?: string,
   ) => Promise<ResultadoAtencionSolicitud>;
-  marcarSolicitudAtendida: (id: string | number) => Promise<void>;
   atenderSolicitud: (
     id: string | number,
     entregas: EntregaSolicitud[],
@@ -132,7 +129,6 @@ interface InventarioContexto {
 
   obtenerProductoPorId: (id: string | number) => Producto | undefined;
   obtenerInventarioPorBodega: (nombreBodega: string) => InventarioBodega[];
-  obtenerStockBodega: (nombreBodega: string) => number;
 }
 
 const InventarioContext = createContext<InventarioContexto | undefined>(
@@ -141,142 +137,6 @@ const InventarioContext = createContext<InventarioContexto | undefined>(
 
 interface Props {
   children: ReactNode;
-}
-
-function convertirMovimientoBackend(movimiento: MovimientoBackend): Movimiento {
-  const tipo =
-    movimiento.tipo === "salida"
-      ? "transferencia"
-      : movimiento.tipo === "ajuste"
-        ? "modificacion"
-        : movimiento.tipo;
-
-  const origen = movimiento.bodegaOrigen?.nombre
-    ? normalizarNombreBodega(movimiento.bodegaOrigen.nombre)
-    : movimiento.tipo === "entrada"
-      ? "Entrada externa"
-      : "No especificado";
-
-  const destino = movimiento.bodegaDestino?.nombre
-    ? normalizarNombreBodega(movimiento.bodegaDestino.nombre)
-    : movimiento.tipo === "baja"
-      ? "Producto dado de baja"
-      : "No especificado";
-
-  return {
-    id: movimiento.id,
-    tipo,
-    producto: movimiento.producto?.nombre || "Registro del sistema",
-    productoId: movimiento.producto?.id,
-    codigoProducto: movimiento.producto?.codigo,
-    origen,
-    destino,
-    cantidad: movimiento.cantidad,
-    cantidadAnterior: movimiento.cantidadAnterior,
-    cantidadNueva: movimiento.cantidadNueva,
-    documento: movimiento.solicitudId
-      ? `SOL-${movimiento.solicitudId}`
-      : `MOV-${movimiento.id.slice(0, 8).toUpperCase()}`,
-    fecha: movimiento.createdAt.slice(0, 10),
-    createdAt: movimiento.createdAt,
-    usuario: movimiento.usuario.nombre,
-    observacion: movimiento.observacion || "",
-    solicitudId: movimiento.solicitudId,
-    solicitudDetalleId: movimiento.solicitudDetalleId,
-    movimientoOriginalId: movimiento.movimientoOriginalId,
-    modulo: movimiento.modulo,
-    accion: movimiento.accion,
-    registroId: movimiento.registroId,
-  };
-}
-
-function convertirSolicitudBackend(solicitud: SolicitudBackend): Solicitud {
-  const items: ItemSolicitud[] = solicitud.detalles.map((detalle) => ({
-    id: detalle.id,
-    productoId: detalle.producto.id,
-    productoSolicitado: detalle.producto.nombre,
-    cantidad: detalle.cantidadSolicitada,
-    cantidadEntregada: detalle.cantidadEntregada,
-    cantidadRechazada: detalle.cantidadRechazada,
-    cantidadPendiente: detalle.cantidadPendiente,
-  }));
-
-  const cantidad = items.reduce((total, item) => total + item.cantidad, 0);
-  const cantidadEntregada = items.reduce(
-    (total, item) => total + (item.cantidadEntregada || 0),
-    0,
-  );
-  const cantidadRechazada = items.reduce(
-    (total, item) => total + (item.cantidadRechazada || 0),
-    0,
-  );
-  const cantidadPendiente = items.reduce(
-    (total, item) => total + (item.cantidadPendiente || 0),
-    0,
-  );
-
-  return {
-    id: solicitud.id,
-    codigo: solicitud.codigo,
-    tipo: "producto",
-    solicitante: solicitud.usuarioSolicitante.nombre,
-    bodega: normalizarNombreBodega(solicitud.bodegaSolicitante.nombre),
-    productoId: items[0]?.productoId,
-    productoSolicitado:
-      items.length > 1
-        ? `${items.length} bienes solicitados`
-        : items[0]?.productoSolicitado || "No especificado",
-    cantidad,
-    cantidadEntregada,
-    cantidadRechazada,
-    unidad: "Unidad",
-    descripcion:
-      solicitud.observacionSolicitante ||
-      `Solicitud ${solicitud.codigo}`,
-    estado: solicitud.estado,
-    fecha: solicitud.createdAt.slice(0, 10),
-    createdAt: solicitud.createdAt,
-    updatedAt: solicitud.updatedAt,
-    atendidaAt: solicitud.atendidaAt,
-    reversada: Boolean(solicitud.reversa),
-    items,
-    pendientesRechazados:
-      cantidadPendiente === 0 && cantidadRechazada > 0,
-    observacionAdmin: solicitud.observacionAtencion || "",
-  };
-}
-
-function convertirProductoBackend(
-  producto: InventarioFrontendBackend["producto"],
-  cantidad: number,
-  ubicacion: string,
-): Producto {
-  return {
-    id: producto.id,
-    codigo: producto.codigo,
-    descripcion: producto.nombre || producto.descripcionBien,
-    cantidad,
-    tipoProducto: producto.tipoProducto,
-    empresa: producto.empresa || undefined,
-    serie: producto.serie,
-    modelo: producto.modelo,
-    marca: producto.marca,
-    material: producto.material,
-    color: producto.color,
-    dimensiones: producto.dimensiones,
-    estadoBien:
-      producto.estadoBien === "baja" ? "malo" : producto.estadoBien,
-    ubicacion: normalizarNombreBodega(ubicacion),
-    custodioActual: producto.custodioActual || "Sin asignar",
-    procedencia: producto.procedencia || "No especificada",
-    codigoUleam: producto.codigoUleam || producto.codigo,
-    categoria: producto.categoria.nombre,
-    categoriaId: producto.categoria.id,
-    unidad: producto.unidad || "Unidad",
-    observacion: producto.observacion || "",
-    estado: producto.estado,
-    fechaRegistro: producto.fechaRegistro,
-  };
 }
 
 function obtenerMensajeErrorInventario(error: unknown) {
@@ -435,14 +295,9 @@ export function InventarioProvider({ children }: Props) {
     [categoriasActivas],
   );
 
-  const obtenerBodegasBackend = useCallback(
-    async () => obtenerBodegasInventarioApi(),
-    [],
-  );
-
   const buscarBodegaPorNombre = useCallback(
     async (nombre: string) => {
-      const bodegas = await obtenerBodegasBackend();
+      const bodegas = await obtenerBodegasInventarioApi();
       const nombreNormalizado = normalizarNombreBodega(nombre);
       return bodegas.find(
         (bodega) =>
@@ -453,7 +308,7 @@ export function InventarioProvider({ children }: Props) {
           ) === 0,
       );
     },
-    [obtenerBodegasBackend],
+    [],
   );
 
   const agregarProducto = async (
@@ -606,7 +461,6 @@ export function InventarioProvider({ children }: Props) {
 
   const eliminarProducto = async (datos: {
     id: string | number;
-    usuario: string;
     observacion?: string;
   }): Promise<boolean> => {
     try {
@@ -687,7 +541,7 @@ export function InventarioProvider({ children }: Props) {
       const bodegaOrigen = await buscarBodegaPorNombre("Inventario General");
       if (!bodegaOrigen) return false;
 
-      const bodegas = await obtenerBodegasBackend();
+      const bodegas = await obtenerBodegasInventarioApi();
       const destinos = datos.destinos.map((nombre) => {
         const normalizado = normalizarNombreBodega(nombre);
 
@@ -820,11 +674,6 @@ export function InventarioProvider({ children }: Props) {
     }
   };
 
-  const marcarSolicitudAtendida = async (
-    _id: string | number,
-  ): Promise<void> => {
-    await recargarSolicitudesMovimientos();
-  };
 
   const atenderSolicitud = async (
     id: string | number,
@@ -969,44 +818,28 @@ export function InventarioProvider({ children }: Props) {
     return inventarioBodegas.filter((item) => item.bodega === nombreBodega);
   };
 
-  const obtenerStockBodega = (nombreBodega: string) => {
-    return inventarioBodegas
-      .filter((item) => item.bodega === nombreBodega)
-      .reduce((total, item) => total + item.cantidad, 0);
-  };
 
-  const valor = useMemo(
-    () => ({
-      productos,
-      movimientos,
-      inventarioBodegas,
-      solicitudes,
-      recargarDatosInventario,
-      agregarProducto,
-      editarProducto,
-      desactivarProducto,
-      eliminarProducto,
-      distribuirProducto,
-      distribuirAutomaticamenteConsumible,
-      agregarSolicitud,
-      cambiarEstadoSolicitud,
-      marcarSolicitudAtendida,
-      atenderSolicitud,
-      reversarAtencionSolicitud,
-      reversarMovimientoSolicitud,
-      reversarRechazoSolicitud,
-      obtenerProductoPorId,
-      obtenerInventarioPorBodega,
-      obtenerStockBodega,
-    }),
-    [
-      productos,
-      movimientos,
-      inventarioBodegas,
-      solicitudes,
-      recargarDatosInventario,
-    ]
-  );
+  const valor: InventarioContexto = {
+    productos,
+    movimientos,
+    inventarioBodegas,
+    solicitudes,
+    recargarDatosInventario,
+    agregarProducto,
+    editarProducto,
+    desactivarProducto,
+    eliminarProducto,
+    distribuirProducto,
+    distribuirAutomaticamenteConsumible,
+    agregarSolicitud,
+    cambiarEstadoSolicitud,
+    atenderSolicitud,
+    reversarAtencionSolicitud,
+    reversarMovimientoSolicitud,
+    reversarRechazoSolicitud,
+    obtenerProductoPorId,
+    obtenerInventarioPorBodega,
+  };
 
   return (
     <InventarioContext.Provider value={valor}>

@@ -356,8 +356,8 @@ function SolicitudesAdmin() {
         ? "Aceptar solicitud"
         : "Aceptar parcialmente",
       mensaje: solicitudCompletaDisponible
-        ? "¿Seguro que deseas aceptar esta solicitud? Los bienes disponibles se enviarán al stock del Supervisor del área."
-        : "¿Seguro que deseas atender parcialmente esta solicitud? Se enviará al stock del Supervisor solo lo disponible en Inventario General y quedará pendiente lo faltante.",
+        ? "¿Seguro que deseas aceptar esta solicitud? Los bienes se enviarán a la bodega operativa correspondiente; Gastronomía quedará pendiente de distribución hacia sus sucursales Tasty."
+        : "¿Seguro que deseas atender parcialmente esta solicitud? Se entregará solo lo disponible en Inventario General y quedará pendiente lo faltante.",
     });
   };
   const solicitudEstaDentroDeTiempo = (solicitud: Solicitud) => {
@@ -627,7 +627,7 @@ function SolicitudesAdmin() {
               <div>
                 <h2>Solicitud</h2>
                 <p>
-                  El disponible corresponde al Inventario General. Al atender, los bienes se enviarán al stock del Supervisor del área correspondiente.
+                  El disponible corresponde al Inventario General. Limpieza y Oficina reciben directamente; Gastronomía queda bajo control del Supervisor para distribuir a sus sucursales Tasty.
                 </p>
               </div>
               <div className="modal-solicitud-header-acciones">

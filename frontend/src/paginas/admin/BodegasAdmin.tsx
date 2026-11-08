@@ -177,10 +177,10 @@ function BodegasAdmin() {
     [bodegasSistema],
   );
 
-  const gastronomiaTasty = useMemo(
+  const gastronomia = useMemo(
     () =>
       bodegasListado.find(
-        (bodega) => bodega.nombre.toLowerCase() === "gastronomía tasty",
+        (bodega) => bodega.nombre.toLowerCase() === "gastronomía",
       ),
     [bodegasListado],
   );
@@ -190,11 +190,11 @@ function BodegasAdmin() {
       bodegasSistema.filter(
         (bodega) =>
           bodega.tipo === "sucursal" &&
-          Boolean(gastronomiaTasty) &&
-          (bodega.bodegaPadreId === String(gastronomiaTasty?.id) ||
-            bodega.bodegaPadre?.nombre.toLowerCase() === "gastronomía tasty"),
+          Boolean(gastronomia) &&
+          (bodega.bodegaPadreId === String(gastronomia?.id) ||
+            bodega.bodegaPadre?.nombre.toLowerCase() === "gastronomía"),
       ),
-    [bodegasSistema, gastronomiaTasty],
+    [bodegasSistema, gastronomia],
   );
 
   const bodegasDisponibles: Bodega[] = useMemo(
@@ -206,8 +206,8 @@ function BodegasAdmin() {
     ? bodegasDisponibles.find((bodega) => String(bodega.id) === id)
     : null;
 
-  const esGastronomiaTasty =
-    bodegaSeleccionada?.nombre.toLowerCase() === "gastronomía tasty";
+  const esGastronomia =
+    bodegaSeleccionada?.nombre.toLowerCase() === "gastronomía";
 
   const esBodegaSeleccionadaSucursalTasty = Boolean(
     bodegaSeleccionada &&
@@ -272,8 +272,8 @@ function BodegasAdmin() {
   };
 
   const volverDesdeDetalle = () => {
-    if (esBodegaSeleccionadaSucursalTasty && gastronomiaTasty) {
-      navigate(`/admin/bodegas/${gastronomiaTasty.id}`);
+    if (esBodegaSeleccionadaSucursalTasty && gastronomia) {
+      navigate(`/admin/bodegas/${gastronomia.id}`);
       return;
     }
 
@@ -414,7 +414,7 @@ function BodegasAdmin() {
   const inventarioSeleccionado = useMemo(() => {
     if (!bodegaSeleccionada) return [];
 
-    if (esGastronomiaTasty) {
+    if (esGastronomia) {
       const nombresBodegasTasty = [
         bodegaSeleccionada.nombre,
         ...sucursalesTastyEditadas.map((sucursal) => sucursal.nombre),
@@ -428,7 +428,7 @@ function BodegasAdmin() {
     return obtenerInventarioPorBodega(bodegaSeleccionada.nombre);
   }, [
     bodegaSeleccionada,
-    esGastronomiaTasty,
+    esGastronomia,
     obtenerInventarioPorBodega,
     sucursalesTastyEditadas,
   ]);
@@ -518,8 +518,8 @@ function BodegasAdmin() {
         <EncabezadoPagina
           titulo={bodegaSeleccionada.nombre}
           descripcion={
-            esGastronomiaTasty
-              ? "Bodega general de Gastronomía Tasty."
+            esGastronomia
+              ? "Bodega general de Gastronomía."
               : bodegaSeleccionada.descripcion
           }
         />
@@ -638,13 +638,13 @@ function BodegasAdmin() {
           <div className="seccion-dashboard-header">
             <div>
               <h2>
-                {esGastronomiaTasty
-                  ? "Inventario general de Gastronomía Tasty"
+                {esGastronomia
+                  ? "Inventario general de Gastronomía"
                   : "Inventario de bodega"}
               </h2>
               <p>
-                {esGastronomiaTasty
-                  ? "Bienes físicos asignados a Gastronomía Tasty y sus sucursales."
+                {esGastronomia
+                  ? "Bienes físicos asignados a Gastronomía y sus sucursales."
                   : "Bienes asignados a esta bodega."}
               </p>
             </div>
@@ -828,7 +828,7 @@ function BodegasAdmin() {
           </div>
         </section>
 
-        {esGastronomiaTasty && (
+        {esGastronomia && (
           <section className="seccion-dashboard">
             <div className="seccion-dashboard-header">
               <div>

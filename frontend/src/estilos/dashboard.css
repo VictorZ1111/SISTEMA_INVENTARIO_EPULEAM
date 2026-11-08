@@ -6438,6 +6438,16 @@ textarea,
   gap: 14px !important;
 }
 
+.stock-supervisor-bodega-selector {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.stock-supervisor-bodega-selector .campo-desplegable__boton {
+  height: 44px !important;
+  border-radius: 10px !important;
+}
+
 .stock-supervisor-destino-fijo {
   display: flex;
   min-height: 44px;

@@ -89,6 +89,7 @@ function StockSupervisor() {
   );
   const [tipoAccion, setTipoAccion] = useState<TipoAccionStock | null>(null);
   const [cantidadAccion, setCantidadAccion] = useState("1");
+  const [areaSeleccionadaId, setAreaSeleccionadaId] = useState("");
   const [destinosSeleccionados, setDestinosSeleccionados] = useState<string[]>(
     [],
   );
@@ -204,16 +205,16 @@ function StockSupervisor() {
     setItemAccion(item);
     setTipoAccion("asignar");
     setCantidadAccion("1");
+    setAreaSeleccionadaId("");
     setObservacionAccion("");
-    setDestinosSeleccionados(
-      item.destinos.length === 1 ? [item.destinos[0].id] : [],
-    );
+    setDestinosSeleccionados([]);
   };
 
   const abrirDevolucion = (item: StockSupervisorItemApi) => {
     setItemAccion(item);
     setTipoAccion("devolver");
     setCantidadAccion("1");
+    setAreaSeleccionadaId(item.area.id);
     setObservacionAccion("");
     setDestinosSeleccionados([]);
   };
@@ -223,8 +224,65 @@ function StockSupervisor() {
     setItemAccion(null);
     setTipoAccion(null);
     setCantidadAccion("1");
+    setAreaSeleccionadaId("");
     setDestinosSeleccionados([]);
     setObservacionAccion("");
+  };
+
+  const stocksProductoAccion = useMemo(() => {
+    if (!itemAccion) return [];
+
+    const porArea = new Map<string, StockSupervisorItemApi>();
+
+    stock
+      .filter(
+        (item) =>
+          item.productoId === itemAccion.productoId &&
+          item.cantidad > 0,
+      )
+      .forEach((item) => porArea.set(item.area.id, item));
+
+    return Array.from(porArea.values()).sort((a, b) =>
+      limpiarNombreBodega(a.area.nombre).localeCompare(
+        limpiarNombreBodega(b.area.nombre),
+        "es",
+        { sensitivity: "base" },
+      ),
+    );
+  }, [itemAccion, stock]);
+
+  const stockAreaSeleccionada =
+    tipoAccion === "asignar"
+      ? stocksProductoAccion.find(
+          (item) => item.area.id === areaSeleccionadaId,
+        ) || null
+      : itemAccion;
+
+  const destinosDisponibles = stockAreaSeleccionada?.destinos || [];
+  const destinoDirecto = Boolean(
+    stockAreaSeleccionada &&
+      destinosDisponibles.length === 1 &&
+      destinosDisponibles[0].id === stockAreaSeleccionada.area.id,
+  );
+
+  const seleccionarAreaAsignacion = (areaId: string) => {
+    setAreaSeleccionadaId(areaId);
+    setCantidadAccion("1");
+
+    const stockArea = stocksProductoAccion.find(
+      (item) => item.area.id === areaId,
+    );
+
+    if (
+      stockArea &&
+      stockArea.destinos.length === 1 &&
+      stockArea.destinos[0].id === stockArea.area.id
+    ) {
+      setDestinosSeleccionados([stockArea.area.id]);
+      return;
+    }
+
+    setDestinosSeleccionados([]);
   };
 
   const alternarDestino = (destinoId: string) => {
@@ -236,11 +294,12 @@ function StockSupervisor() {
   };
 
   const cantidadNumerica = Number(cantidadAccion);
+  const cantidadDisponibleAccion = stockAreaSeleccionada?.cantidad ?? 0;
   const cantidadValida =
-    itemAccion !== null &&
+    stockAreaSeleccionada !== null &&
     Number.isInteger(cantidadNumerica) &&
     cantidadNumerica > 0 &&
-    cantidadNumerica <= itemAccion.cantidad;
+    cantidadNumerica <= cantidadDisponibleAccion;
 
   const repartoExacto =
     tipoAccion !== "asignar" ||
@@ -264,12 +323,17 @@ function StockSupervisor() {
     if (!cantidadValida) {
       mostrarMensaje(
         "error",
-        `Ingresa una cantidad entre 1 y ${itemAccion.cantidad}.`,
+        `Ingresa una cantidad entre 1 y ${cantidadDisponibleAccion}.`,
       );
       return;
     }
 
     if (tipoAccion === "asignar") {
+      if (!stockAreaSeleccionada) {
+        mostrarMensaje("error", "Selecciona primero una bodega.");
+        return;
+      }
+
       if (destinosSeleccionados.length === 0) {
         mostrarMensaje("error", "Selecciona al menos una bodega destino.");
         return;
@@ -290,7 +354,7 @@ function StockSupervisor() {
       if (tipoAccion === "asignar") {
         await distribuirStockSupervisorApi({
           productoId: itemAccion.productoId,
-          bodegaStockId: itemAccion.bodegaStockId,
+          bodegaStockId: stockAreaSeleccionada!.bodegaStockId,
           bodegaDestinoIds: destinosSeleccionados,
           cantidadTotal: cantidadNumerica,
           observacion: observacionAccion.trim() || undefined,
@@ -309,6 +373,7 @@ function StockSupervisor() {
       setItemAccion(null);
       setTipoAccion(null);
       setCantidadAccion("1");
+      setAreaSeleccionadaId("");
       setDestinosSeleccionados([]);
       setObservacionAccion("");
 
@@ -646,7 +711,11 @@ function StockSupervisor() {
                 </div>
                 <div>
                   <span>Disponible</span>
-                  <strong>{itemAccion.cantidad}</strong>
+                  <strong>
+                    {tipoAccion === "asignar"
+                      ? stockAreaSeleccionada?.cantidad ?? "—"
+                      : itemAccion.cantidad}
+                  </strong>
                 </div>
               </div>
 
@@ -661,7 +730,7 @@ function StockSupervisor() {
                     required
                     type="number"
                     min="1"
-                    max={itemAccion.cantidad}
+                    max={cantidadDisponibleAccion || undefined}
                     step="1"
                     value={cantidadAccion}
                     onChange={(event) => setCantidadAccion(event.target.value)}
@@ -670,24 +739,39 @@ function StockSupervisor() {
                 </div>
 
                 <div className="campo-formulario">
-                  <label>Destino</label>
-                  <div className="stock-supervisor-destino-fijo">
-                    {tipoAccion === "devolver"
-                      ? "Inventario General"
-                      : destinosSeleccionados.length > 0
-                        ? `${destinosSeleccionados.length} seleccionada${
-                            destinosSeleccionados.length === 1 ? "" : "s"
-                          }`
-                        : "Selecciona una bodega"}
-                  </div>
+                  <label>
+                    {tipoAccion === "asignar" ? "Bodega *" : "Destino"}
+                  </label>
+                  {tipoAccion === "asignar" ? (
+                    <CampoDesplegable
+                      valor={areaSeleccionadaId}
+                      onChange={seleccionarAreaAsignacion}
+                      placeholder="Selecciona una bodega"
+                      ariaLabel="Seleccionar bodega de asignación"
+                      mostrarIconoFiltro={false}
+                      ancho="100%"
+                      anchoMinimo={0}
+                      deshabilitado={procesando}
+                      opciones={stocksProductoAccion.map((item) => ({
+                        valor: item.area.id,
+                        texto: limpiarNombreBodega(item.area.nombre),
+                      }))}
+                    />
+                  ) : (
+                    <div className="stock-supervisor-destino-fijo">
+                      Inventario General
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {tipoAccion === "asignar" ? (
+              {tipoAccion === "asignar" &&
+              stockAreaSeleccionada &&
+              !destinoDirecto ? (
                 <div className="campo-formulario campo-completo stock-supervisor-destinos-campo">
                   <label>Bodegas destino *</label>
                   <div className="stock-supervisor-destinos-lista">
-                    {itemAccion.destinos.map((destino) => {
+                    {destinosDisponibles.map((destino) => {
                       const seleccionado = destinosSeleccionados.includes(
                         destino.id,
                       );
@@ -725,12 +809,12 @@ function StockSupervisor() {
                     </div>
                   ) : null}
                 </div>
-              ) : (
+              ) : tipoAccion === "devolver" ? (
                 <div className="stock-supervisor-aviso-devolucion">
                   La devolución regresará el producto al Inventario General y
                   quedará registrada como movimiento de tipo Devolución.
                 </div>
-              )}
+              ) : null}
 
               <div className="campo-formulario campo-completo">
                 <label>Observación</label>
@@ -765,7 +849,9 @@ function StockSupervisor() {
                     procesando ||
                     !cantidadValida ||
                     (tipoAccion === "asignar" &&
-                      (destinosSeleccionados.length === 0 || !repartoExacto))
+                      (!stockAreaSeleccionada ||
+                        destinosSeleccionados.length === 0 ||
+                        !repartoExacto))
                   }
                 >
                   {procesando

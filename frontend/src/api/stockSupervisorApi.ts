@@ -35,6 +35,12 @@ export interface DestinoStockSupervisorApi {
   nombre: string;
 }
 
+export interface AreaStockSupervisorApi {
+  id: string;
+  nombre: string;
+  destinos: DestinoStockSupervisorApi[];
+}
+
 export interface StockSupervisorItemApi {
   existenciaId: string;
   productoId: string;
@@ -49,6 +55,7 @@ export interface StockSupervisorItemApi {
     nombre: string;
   };
   destinos: DestinoStockSupervisorApi[];
+  areasDisponibles: AreaStockSupervisorApi[];
   producto: StockSupervisorProducto;
 }
 

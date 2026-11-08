@@ -18,10 +18,7 @@ import { useConfiguracion } from "../../contexto/ConfiguracionContext";
 import { clienteApi } from "../../api/clienteApi";
 import { useUsuarios } from "../../contexto/UsuariosContext";
 import { obtenerCustodioAsignado } from "../../utilidades/asignacionesUsuarios";
-import {
-  useInventario,
-  type InventarioBodega,
-} from "../../contexto/InventarioContext";
+import { useInventario } from "../../contexto/InventarioContext";
 import type { Bodega } from "../../tipos/bodega";
 import type {
   EstadoBien,
@@ -184,40 +181,9 @@ function obtenerItemDesdeProducto(producto: Producto): ItemInventarioGeneral {
   };
 }
 
-function obtenerItemDesdeBodega(item: InventarioBodega): ItemInventarioGeneral {
-  const producto = item.producto;
-
-  return {
-    id: `bodega-${item.id}`,
-    productoId: item.productoId,
-    codigo: item.codigo,
-    descripcion: item.descripcion,
-    categoria: item.categoria,
-    cantidad: item.cantidad,
-    ubicacion: item.bodega,
-    custodioActual: producto?.custodioActual || item.bodega,
-    estadoBien: producto?.estadoBien || "bueno",
-    tipoProducto: producto?.tipoProducto || "no_consumible",
-    empresa: producto?.empresa || "",
-    serie: producto?.serie || "S/N",
-    modelo: producto?.modelo || "No especificado",
-    marca: producto?.marca || "No especificada",
-    material: producto?.material || "No especificado",
-    color: producto?.color || "No especificado",
-    dimensiones: producto?.dimensiones || "No especificadas",
-    procedencia: producto?.procedencia || "Asignación a bodega",
-    codigoUleam: producto?.codigoUleam || item.codigo,
-    observacion: producto?.observacion || "Bien físico asignado a bodega.",
-    fechaRegistro: producto?.fechaRegistro || item.fechaAsignacion,
-    editable: Boolean(producto),
-    productoOriginal: producto,
-  };
-}
-
 function InventarioAdmin() {
   const {
     productos,
-    inventarioBodegas,
     agregarProducto,
     editarProducto,
     eliminarProducto,
@@ -303,16 +269,13 @@ function InventarioAdmin() {
   }
 
   const itemsInventarioGeneral = useMemo(() => {
-    const itemsProductos = productos.map(obtenerItemDesdeProducto);
-    const itemsBodegas = inventarioBodegas.map(obtenerItemDesdeBodega);
-
-    return [...itemsProductos, ...itemsBodegas].map((item) => ({
+    return productos.map(obtenerItemDesdeProducto).map((item) => ({
       ...item,
       custodioActual:
         item.productoOriginal?.custodioActual ||
         obtenerCustodioAutomatico(item.ubicacion),
     }));
-  }, [productos, inventarioBodegas, usuarios]);
+  }, [productos, usuarios]);
 
   const filtrosActivos =
     busqueda.trim() !== "" ||
@@ -512,8 +475,11 @@ function InventarioAdmin() {
       estado: "activo",
     });
 
-    if (!agregado) {
-      mostrarMensaje("error", "No se pudo agregar el bien. Revisa los datos ingresados.");
+    if (!agregado.ok) {
+      mostrarMensaje(
+        "error",
+        agregado.mensaje || "No se pudo agregar el bien. Revisa los datos ingresados.",
+      );
       return;
     }
 
@@ -618,8 +584,11 @@ function InventarioAdmin() {
       estado: productoEditar.estado,
     });
 
-    if (!editado) {
-      mostrarMensaje("error", "No se pudo actualizar el bien. Revisa los datos ingresados.");
+    if (!editado.ok) {
+      mostrarMensaje(
+        "error",
+        editado.mensaje || "No se pudo actualizar el bien. Revisa los datos ingresados.",
+      );
       return;
     }
 
@@ -836,7 +805,6 @@ function InventarioAdmin() {
           productoId: productoDistribuir.id,
           cantidadTotal: cantidad,
           destinos: destinosAutomaticos,
-          usuario: "Administrador General",
           observacion: formularioDistribucion.observacion,
         });
 
@@ -861,7 +829,6 @@ function InventarioAdmin() {
       productoId: productoDistribuir.id,
       cantidad,
       destino: formularioDistribucion.destino,
-      usuario: "Administrador General",
       observacion: formularioDistribucion.observacion,
     });
 
@@ -898,7 +865,6 @@ function InventarioAdmin() {
 
     const productoEliminado = await eliminarProducto({
       id: productoBaja.id,
-      usuario: "Administrador General",
       observacion:
         observacionBaja.trim() ||
         "Producto dado de baja desde Inventario General.",

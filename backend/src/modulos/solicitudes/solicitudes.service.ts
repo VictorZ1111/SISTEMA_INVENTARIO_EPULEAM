@@ -989,7 +989,7 @@ export class SolicitudesService {
     }
 
     // Regla especial de Gastronomía: el Supervisor se asigna a la bodega
-    // principal "Gastronomía Tasty", pero opera solicitudes sobre sus
+    // principal "Gastronomía", pero opera solicitudes sobre sus
     // sucursales Tasty 1–5. No necesita una asignación duplicada por sucursal.
     if (
       usuario.rol === RolUsuario.SUPERVISOR &&
@@ -1009,7 +1009,7 @@ export class SolicitudesService {
       if (
         asignacionPadre?.bodega?.tipo === TipoBodega.PRINCIPAL &&
         asignacionPadre.bodega.nombre.trim().toLowerCase() ===
-          "gastronomía tasty".toLowerCase()
+          "gastronomía".toLowerCase()
       ) {
         return;
       }

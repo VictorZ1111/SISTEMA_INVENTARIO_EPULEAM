@@ -125,7 +125,7 @@ function esSucursalTasty(bodega: string) {
 }
 
 function esBodegaPrincipalSupervisor(bodega: string) {
-  return ["Bodega Limpieza", "Bodega Oficina", "Gastronomía Tasty"].includes(bodega);
+  return ["Bodega Limpieza", "Bodega Oficina", "Gastronomía"].includes(bodega);
 }
 
 function esAsignacionPermitidaPorRol(rol: RolUsuario, bodega: string) {
@@ -1298,7 +1298,7 @@ function UsuariosAdmin() {
 
                     {gastronomiaAsignada && (
                       <p className="mensaje-gastronomia-usuario">
-                        Al asignar Gastronomía Tasty al supervisor, tendrá acceso a sus 5 sucursales Tasty.
+                        Al asignar Gastronomía al supervisor, tendrá acceso a sus 5 sucursales Tasty.
                       </p>
                     )}
 

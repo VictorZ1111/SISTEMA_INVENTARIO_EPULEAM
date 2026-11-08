@@ -73,7 +73,7 @@ export class AsignacionesService {
   private readonly bodegasSupervisorPermitidas = new Set([
     "Bodega Limpieza",
     "Bodega Oficina",
-    "Gastronomía Tasty",
+    "Gastronomía",
   ]);
 
   private readonly sucursalesResponsablePermitidas = new Set([
@@ -398,7 +398,7 @@ export class AsignacionesService {
 
         if (!permitida) {
           throw new ConflictException(
-            "Un Supervisor solo puede recibir Bodega Limpieza, Bodega Oficina o Gastronomía Tasty.",
+            "Un Supervisor solo puede recibir Bodega Limpieza, Bodega Oficina o Gastronomía.",
           );
         }
       }

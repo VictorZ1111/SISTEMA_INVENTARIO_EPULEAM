@@ -1,7 +1,7 @@
 import type { UsuarioSesion } from "../tipos/usuario";
 
 export const BODEGA_INVENTARIO_GENERAL = "Inventario General";
-export const BODEGA_GASTRONOMIA_TASTY = "Gastronomía Tasty";
+export const BODEGA_GASTRONOMIA = "Gastronomía";
 export const SUCURSALES_TASTY = [
   "Tasty 1",
   "Tasty 2",
@@ -70,7 +70,7 @@ export function obtenerBodegasPrincipalesUsuario(usuario: UsuarioConBodegas) {
   return Array.from(
     new Set([
       ...bodegasPrincipales,
-      ...(tieneGastronomia ? [BODEGA_GASTRONOMIA_TASTY] : []),
+      ...(tieneGastronomia ? [BODEGA_GASTRONOMIA] : []),
     ]),
   );
 }

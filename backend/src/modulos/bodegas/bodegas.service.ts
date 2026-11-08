@@ -61,7 +61,7 @@ export class BodegasService implements OnApplicationBootstrap {
       tipo: TipoBodega.PRINCIPAL,
     },
     {
-      nombre: "Gastronomía Tasty",
+      nombre: "Gastronomía",
       descripcion: "Bodega principal del área de gastronomía.",
       tipo: TipoBodega.PRINCIPAL,
     },
@@ -69,7 +69,7 @@ export class BodegasService implements OnApplicationBootstrap {
       nombre: `Tasty ${indice + 1}`,
       descripcion: `Sucursal gastronómica Tasty ${indice + 1}.`,
       tipo: TipoBodega.SUCURSAL,
-      padre: "Gastronomía Tasty",
+      padre: "Gastronomía",
     })),
   ];
 

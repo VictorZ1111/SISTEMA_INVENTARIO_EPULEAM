@@ -166,8 +166,7 @@ function normalizarTexto(texto: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace("bodega ", "")
-    .replace("gastronomia tasty", "gastronomia")
-    .replace("inventario general", "general");
+        .replace("inventario general", "general");
 }
 
 function escaparHtml(valor: string | number) {
@@ -192,7 +191,7 @@ function obtenerNombreMovimiento(tipo: TipoMovimientoBackend) {
 }
 
 function obtenerNombreReporteBodega(nombreBodega: string) {
-  if (nombreBodega === "Gastronomía Tasty") return nombreBodega;
+  if (nombreBodega === "Gastronomía") return nombreBodega;
   if (nombreBodega.toLowerCase().startsWith("bodega ")) return nombreBodega;
   return `Bodega ${nombreBodega}`;
 }

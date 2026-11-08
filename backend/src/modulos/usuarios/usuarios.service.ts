@@ -201,13 +201,6 @@ export class UsuariosService implements OnApplicationBootstrap {
     const usuario = await this.obtenerPorId(id);
     this.validarNoAdministradorGeneral(usuario);
 
-    if (
-      usuario.rol === RolUsuario.SUPERVISOR &&
-      estado === EstadoUsuario.INACTIVO
-    ) {
-      await this.validarSupervisorSinStock(usuario.id);
-    }
-
     usuario.estado = estado;
 
     const guardado = await this.usuariosRepository.save(usuario);
@@ -319,7 +312,7 @@ export class UsuariosService implements OnApplicationBootstrap {
 
     if (existenciasPendientes > 0) {
       throw new ConflictException(
-        "No se puede inactivar, eliminar ni cambiar el rol de este Supervisor mientras tenga productos en stock. Debe distribuirlos o devolverlos al Inventario General.",
+        "No se puede eliminar ni cambiar el rol de este Supervisor mientras tenga productos en stock. Debe distribuirlos o devolverlos al Inventario General.",
       );
     }
   }

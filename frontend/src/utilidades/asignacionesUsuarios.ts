@@ -1,6 +1,6 @@
 import type { Usuario } from "../tipos/usuario";
 import {
-  BODEGA_GASTRONOMIA_TASTY,
+  BODEGA_GASTRONOMIA,
   BODEGA_INVENTARIO_GENERAL,
   SUCURSALES_TASTY,
 } from "../dominio/bodegas";
@@ -25,7 +25,9 @@ function normalizar(texto: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim()
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/^bodega\s+/i, "")
+    .replace(/^gastronomia tasty$/i, "gastronomia");
 }
 
 export function obtenerAsignacionesUsuario(usuario: Usuario) {
@@ -47,7 +49,7 @@ export function obtenerSupervisoresBodega(
   nombreBodega: string
 ) {
   const asignacionBuscada = esSucursalTasty(nombreBodega)
-    ? BODEGA_GASTRONOMIA_TASTY
+    ? BODEGA_GASTRONOMIA
     : nombreBodega;
 
   return usuarios.filter(

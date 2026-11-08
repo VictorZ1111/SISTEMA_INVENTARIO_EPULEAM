@@ -101,6 +101,14 @@ export interface StockSupervisorItem {
     id: string;
     nombre: string;
   }>;
+  areasDisponibles: Array<{
+    id: string;
+    nombre: string;
+    destinos: Array<{
+      id: string;
+      nombre: string;
+    }>;
+  }>;
   producto: ProductoInventarioPublico;
 }
 
@@ -239,13 +247,37 @@ export class InventarioService {
     const stocksPorId = new Map(
       stocks.map((stock) => [stock.id, stock]),
     );
-    const areaIds = Array.from(
-      new Set(
-        stocks
-          .map((stock) => stock.bodegaPadreId)
-          .filter((id): id is string => Boolean(id)),
-      ),
+
+    const asignaciones = await this.asignacionesRepository.find({
+      where: { usuarioId: usuario.id },
+      relations: { bodega: true },
+      order: { createdAt: "ASC" },
+    });
+
+    const areasAsignadas = Array.from(
+      new Map(
+        asignaciones
+          .map((asignacion) => asignacion.bodega)
+          .filter(
+            (bodega) =>
+              bodega &&
+              bodega.tipo === TipoBodega.PRINCIPAL &&
+              bodega.estado === EstadoBodega.ACTIVA,
+          )
+          .map((bodega) => [bodega.id, bodega]),
+      ).values(),
+    ).sort((a, b) =>
+      a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }),
     );
+
+    const areasBase =
+      areasAsignadas.length > 0
+        ? areasAsignadas
+        : stocks
+            .map((stock) => stock.bodegaPadre)
+            .filter((area): area is Bodega => Boolean(area));
+
+    const areaIds = Array.from(new Set(areasBase.map((area) => area.id)));
 
     const sucursales =
       areaIds.length > 0
@@ -269,6 +301,15 @@ export class InventarioService {
       actuales.push(sucursal);
       sucursalesPorArea.set(sucursal.bodegaPadreId, actuales);
     });
+
+    const areasDisponibles = areasBase.map((area) => ({
+      id: area.id,
+      nombre: area.nombre,
+      destinos: (sucursalesPorArea.get(area.id) || [area]).map((destino) => ({
+        id: destino.id,
+        nombre: destino.nombre,
+      })),
+    }));
 
     const existencias = await this.crearConsultaBase()
       .where("existencia.bodegaId IN (:...stockIds)", { stockIds })
@@ -311,6 +352,7 @@ export class InventarioService {
             nombre: destino.nombre,
           }),
         ),
+        areasDisponibles,
         producto: this.convertirProductoInventario(existencia),
       };
     });
