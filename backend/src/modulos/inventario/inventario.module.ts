@@ -7,11 +7,13 @@ import { RolesGuard } from "../auth/guards/roles.guard";
 import { Bodega } from "../bodegas/entities/bodega.entity";
 import { Producto } from "../productos/entities/producto.entity";
 import { Existencia } from "./entities/existencia.entity";
+import { MovimientosModule } from "../movimientos/movimientos.module";
 import { InventarioController } from "./inventario.controller";
 import { InventarioService } from "./inventario.service";
 
 @Module({
   imports: [
+    MovimientosModule,
     TypeOrmModule.forFeature([
       Existencia,
       Producto,

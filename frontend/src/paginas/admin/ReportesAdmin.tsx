@@ -11,6 +11,8 @@ import { useEffect, useMemo, useState } from "react";
 import { clienteApi } from "../../api/clienteApi";
 import CampoDesplegable from "../../componentes/CampoDesplegable";
 import EncabezadoPagina from "../../componentes/EncabezadoPagina";
+import SelectorFechaFiltro from "../../componentes/SelectorFechaFiltro";
+import SelectorPeriodoFiltro from "../../componentes/SelectorPeriodoFiltro";
 import { useUsuarios } from "../../contexto/UsuariosContext";
 
 
@@ -166,7 +168,8 @@ function normalizarTexto(texto: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace("bodega ", "")
-        .replace("inventario general", "general");
+    .replace("gastronomia tasty", "gastronomia")
+    .replace("inventario general", "general");
 }
 
 function escaparHtml(valor: string | number) {
@@ -191,7 +194,7 @@ function obtenerNombreMovimiento(tipo: TipoMovimientoBackend) {
 }
 
 function obtenerNombreReporteBodega(nombreBodega: string) {
-  if (nombreBodega === "Gastronomía") return nombreBodega;
+  if (nombreBodega === "Gastronomía Tasty" || nombreBodega === "Gastronomía") return "Gastronomía";
   if (nombreBodega.toLowerCase().startsWith("bodega ")) return nombreBodega;
   return `Bodega ${nombreBodega}`;
 }
@@ -725,10 +728,11 @@ function ReportesAdmin() {
             {tipoPeriodo === "dia" ? (
               <label>
                 <span>Fecha</span>
-                <input
-                  type="date"
-                  value={fechaDia}
-                  onChange={(event) => setFechaDia(event.target.value)}
+                <SelectorFechaFiltro
+                  valor={fechaDia}
+                  alCambiar={setFechaDia}
+                  ariaLabel="Seleccionar fecha del reporte"
+                  className="reportes-selector-fecha"
                 />
               </label>
             ) : null}
@@ -736,10 +740,11 @@ function ReportesAdmin() {
             {tipoPeriodo === "mes" ? (
               <label>
                 <span>Mes</span>
-                <input
-                  type="month"
-                  value={fechaMes}
-                  onChange={(event) => setFechaMes(event.target.value)}
+                <SelectorPeriodoFiltro
+                  modo="mes"
+                  valor={fechaMes}
+                  alCambiar={setFechaMes}
+                  ariaLabel="Seleccionar mes del reporte"
                 />
               </label>
             ) : null}
@@ -747,12 +752,11 @@ function ReportesAdmin() {
             {tipoPeriodo === "anio" ? (
               <label>
                 <span>Año</span>
-                <input
-                  type="number"
-                  min="2000"
-                  max="2100"
-                  value={fechaAnio}
-                  onChange={(event) => setFechaAnio(event.target.value)}
+                <SelectorPeriodoFiltro
+                  modo="anio"
+                  valor={fechaAnio}
+                  alCambiar={setFechaAnio}
+                  ariaLabel="Seleccionar año del reporte"
                 />
               </label>
             ) : null}
@@ -761,18 +765,20 @@ function ReportesAdmin() {
               <>
                 <label>
                   <span>Desde</span>
-                  <input
-                    type="date"
-                    value={fechaInicio}
-                    onChange={(event) => setFechaInicio(event.target.value)}
+                  <SelectorFechaFiltro
+                    valor={fechaInicio}
+                    alCambiar={setFechaInicio}
+                    ariaLabel="Seleccionar fecha inicial del reporte"
+                    className="reportes-selector-fecha"
                   />
                 </label>
                 <label>
                   <span>Hasta</span>
-                  <input
-                    type="date"
-                    value={fechaFin}
-                    onChange={(event) => setFechaFin(event.target.value)}
+                  <SelectorFechaFiltro
+                    valor={fechaFin}
+                    alCambiar={setFechaFin}
+                    ariaLabel="Seleccionar fecha final del reporte"
+                    className="reportes-selector-fecha"
                   />
                 </label>
               </>

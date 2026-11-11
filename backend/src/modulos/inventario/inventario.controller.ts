@@ -106,8 +106,9 @@ export class InventarioController {
   @Roles(RolUsuario.ADMINISTRADOR)
   registrarInicial(
     @Body() dto: RegistrarInventarioInicialDto,
+    @UsuarioActual() usuario: UsuarioAutenticado,
   ): Promise<ExistenciaPublica> {
-    return this.inventarioService.registrarInicial(dto);
+    return this.inventarioService.registrarInicial(dto, usuario);
   }
 
   @Patch(":id/ajuste")
@@ -115,7 +116,8 @@ export class InventarioController {
   ajustar(
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() dto: AjustarExistenciaDto,
+    @UsuarioActual() usuario: UsuarioAutenticado,
   ): Promise<ExistenciaPublica> {
-    return this.inventarioService.ajustar(id, dto);
+    return this.inventarioService.ajustar(id, dto, usuario);
   }
 }

@@ -279,118 +279,179 @@ export class ProductosService {
     dto: ActualizarProductoDto,
     actor: UsuarioAutenticado,
   ): Promise<ProductoPublico> {
-    const producto = await this.obtenerPorId(id);
+    const productoId = await this.dataSource.transaction(async (administrador) => {
+      const productos = administrador.getRepository(Producto);
+      const existencias = administrador.getRepository(Existencia);
+      const movimientos = administrador.getRepository(Movimiento);
+      const producto = await productos.createQueryBuilder("producto")
+        .setLock("pessimistic_write")
+        .where("producto.id = :id", { id })
+        .getOne();
+      if (!producto) {
+        throw new NotFoundException("El producto solicitado no existe.");
+      }
 
-    this.validarProductoEditable(producto);
+      this.validarProductoEditable(producto);
 
-    if (dto.estadoBien === EstadoBienProducto.BAJA) {
-      throw new ConflictException(
-        "Para dar de baja un producto use la opción de baja. No se permite marcarlo como baja desde edición.",
-      );
-    }
-
-    if (dto.codigo !== undefined) {
-      await this.validarCodigoDisponible(dto.codigo, id);
-      producto.codigo = this.normalizarCodigo(dto.codigo);
-    }
-
-    if (
-      dto.nombre !== undefined ||
-      dto.descripcion !== undefined
-    ) {
-      producto.nombre = this.obtenerNombrePrincipal(
-        dto.nombre,
-        dto.descripcion,
-        producto.nombre,
-      );
-
-      if (dto.nombre !== undefined) {
-        producto.descripcion = this.normalizarTextoOpcional(
-          dto.descripcion,
+      if (dto.estadoBien === EstadoBienProducto.BAJA) {
+        throw new ConflictException(
+          "Para dar de baja un producto use la opción de baja. No se permite marcarlo como baja desde edición.",
         );
       }
+
+      if (dto.codigo !== undefined) {
+        await this.validarCodigoDisponible(dto.codigo, id);
+        producto.codigo = this.normalizarCodigo(dto.codigo);
+      }
+
+      if (
+        dto.nombre !== undefined ||
+        dto.descripcion !== undefined
+      ) {
+        producto.nombre = this.obtenerNombrePrincipal(
+          dto.nombre,
+          dto.descripcion,
+          producto.nombre,
+        );
+
+        if (dto.nombre !== undefined) {
+          producto.descripcion = this.normalizarTextoOpcional(
+            dto.descripcion,
+          );
+        }
+      }
+
+      if (dto.categoriaId !== undefined) {
+        const categoria = await this.validarCategoriaActiva(dto.categoriaId);
+        producto.categoriaId = categoria.id;
+        producto.categoria = categoria;
+      }
+
+      const tipoFinal = dto.tipoProducto ?? producto.tipoProducto;
+      const atributoFinal =
+        dto.empresa !== undefined
+          ? dto.empresa
+          : dto.atributo !== undefined
+            ? dto.atributo
+            : producto.atributo;
+
+      producto.tipoProducto = tipoFinal;
+      producto.atributo = this.validarYNormalizarAtributo(
+        tipoFinal,
+        atributoFinal,
+      );
+
+      this.actualizarCampoTexto(producto, "serie", dto.serie);
+      this.actualizarCampoTexto(producto, "modelo", dto.modelo);
+      this.actualizarCampoTexto(producto, "marca", dto.marca);
+      this.actualizarCampoTexto(producto, "material", dto.material);
+      this.actualizarCampoTexto(producto, "color", dto.color);
+      this.actualizarCampoTexto(
+        producto,
+        "dimensiones",
+        dto.dimensiones,
+      );
+
+      if (dto.estadoBien !== undefined) {
+        producto.estadoBien = dto.estadoBien;
+      }
+
+      this.actualizarCampoOpcional(
+        producto,
+        "ubicacion",
+        dto.ubicacion,
+      );
+      this.actualizarCampoOpcional(
+        producto,
+        "custodioActual",
+        dto.custodioActual,
+      );
+      this.actualizarCampoOpcional(
+        producto,
+        "procedencia",
+        dto.procedencia,
+      );
+      this.actualizarCampoOpcional(
+        producto,
+        "codigoUleam",
+        dto.codigoUleam,
+      );
+      this.actualizarCampoTexto(producto, "unidad", dto.unidad);
+      this.actualizarCampoOpcional(
+        producto,
+        "observacion",
+        dto.observacion,
+      );
+
+      if (dto.fechaRegistro !== undefined) {
+        producto.fechaRegistro = dto.fechaRegistro;
+      }
+
+      if (dto.estado !== undefined) {
+        producto.estado = dto.estado;
+      }
+
+    await productos.save(producto);
+
+    if (dto.cantidad !== undefined) {
+      if (!dto.bodegaAjusteId) {
+        throw new ConflictException("Debes indicar la bodega cuyo stock deseas modificar.");
+      }
+      const bodega = await administrador.getRepository(Bodega).findOne({
+        where: { id: dto.bodegaAjusteId },
+      });
+      if (!bodega || bodega.estado !== EstadoBodega.ACTIVA) {
+        throw new ConflictException("La bodega seleccionada no está disponible para ajustar stock.");
+      }
+      // La edición de datos y el cambio de stock deben ser atómicos.
+      // Se bloquea la existencia que corresponde a la bodega elegida.
+      await existencias.createQueryBuilder().insert().values({
+        productoId: producto.id,
+        bodegaId: bodega.id,
+        cantidad: 0,
+      }).orIgnore().execute();
+      const existencia = await existencias.createQueryBuilder("existencia")
+        .setLock("pessimistic_write")
+        .where("existencia.productoId = :productoId", { productoId: producto.id })
+        .andWhere("existencia.bodegaId = :bodegaId", { bodegaId: bodega.id })
+        .getOneOrFail();
+      const cantidadAnterior = existencia.cantidad;
+      existencia.cantidad = dto.cantidad;
+      await existencias.save(existencia);
+      await movimientos.save(movimientos.create({
+        tipo: TipoMovimiento.MODIFICACION,
+        productoId: producto.id,
+        bodegaOrigenId: bodega.id,
+        bodegaDestinoId: bodega.id,
+        usuarioId: actor.id,
+        cantidad: Math.abs(dto.cantidad - cantidadAnterior),
+        cantidadAnterior,
+        cantidadNueva: dto.cantidad,
+        observacion: `Edición del producto ${producto.codigo} - ${producto.nombre}. Stock: ${cantidadAnterior} → ${dto.cantidad}.`,
+        modulo: "productos",
+        accion: "editar",
+        registroId: producto.id,
+      }));
+    } else {
+      await movimientos.save(movimientos.create({
+        tipo: TipoMovimiento.MODIFICACION,
+        productoId: producto.id,
+        bodegaOrigenId: null,
+        bodegaDestinoId: null,
+        usuarioId: actor.id,
+        cantidad: 0,
+        cantidadAnterior: null,
+        cantidadNueva: null,
+        observacion: `Edición del producto ${producto.codigo} - ${producto.nombre}.`,
+        modulo: "productos",
+        accion: "editar",
+        registroId: producto.id,
+      }));
     }
-
-    if (dto.categoriaId !== undefined) {
-      const categoria = await this.validarCategoriaActiva(dto.categoriaId);
-      producto.categoriaId = categoria.id;
-      producto.categoria = categoria;
-    }
-
-    const tipoFinal = dto.tipoProducto ?? producto.tipoProducto;
-    const atributoFinal =
-      dto.empresa !== undefined
-        ? dto.empresa
-        : dto.atributo !== undefined
-          ? dto.atributo
-          : producto.atributo;
-
-    producto.tipoProducto = tipoFinal;
-    producto.atributo = this.validarYNormalizarAtributo(
-      tipoFinal,
-      atributoFinal,
-    );
-
-    this.actualizarCampoTexto(producto, "serie", dto.serie);
-    this.actualizarCampoTexto(producto, "modelo", dto.modelo);
-    this.actualizarCampoTexto(producto, "marca", dto.marca);
-    this.actualizarCampoTexto(producto, "material", dto.material);
-    this.actualizarCampoTexto(producto, "color", dto.color);
-    this.actualizarCampoTexto(
-      producto,
-      "dimensiones",
-      dto.dimensiones,
-    );
-
-    if (dto.estadoBien !== undefined) {
-      producto.estadoBien = dto.estadoBien;
-    }
-
-    this.actualizarCampoOpcional(
-      producto,
-      "ubicacion",
-      dto.ubicacion,
-    );
-    this.actualizarCampoOpcional(
-      producto,
-      "custodioActual",
-      dto.custodioActual,
-    );
-    this.actualizarCampoOpcional(
-      producto,
-      "procedencia",
-      dto.procedencia,
-    );
-    this.actualizarCampoOpcional(
-      producto,
-      "codigoUleam",
-      dto.codigoUleam,
-    );
-    this.actualizarCampoTexto(producto, "unidad", dto.unidad);
-    this.actualizarCampoOpcional(
-      producto,
-      "observacion",
-      dto.observacion,
-    );
-
-    if (dto.fechaRegistro !== undefined) {
-      producto.fechaRegistro = dto.fechaRegistro;
-    }
-
-    if (dto.estado !== undefined) {
-      producto.estado = dto.estado;
-    }
-
-    await this.productosRepository.save(producto);
-    await this.registrarModificacionProducto({
-      usuarioId: actor.id,
-      modulo: "productos",
-      accion: "editar",
-      registroId: producto.id,
-      descripcion: `Edición del producto ${producto.codigo} - ${producto.nombre}.`,
+    return producto.id;
     });
 
-    return this.buscarPorId(id);
+    return this.buscarPorId(productoId);
   }
 
   async cambiarEstado(

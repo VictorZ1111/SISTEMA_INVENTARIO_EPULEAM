@@ -155,6 +155,10 @@ export class ActualizarProductoDto {
   cantidad?: number;
 
   @IsOptional()
+  @IsUUID("4", { message: "La bodega del ajuste no es válida." })
+  bodegaAjusteId?: string;
+
+  @IsOptional()
   @IsEnum(EstadoProducto, {
     message: "El estado debe ser activo o inactivo.",
   })

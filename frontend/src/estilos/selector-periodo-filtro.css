@@ -1,0 +1,200 @@
+.selector-periodo-filtro {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+button.selector-periodo-filtro__boton {
+  width: 100%;
+  min-width: 0;
+  height: 48px;
+  min-height: 48px;
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #0f172a;
+  cursor: pointer;
+
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 20px;
+  align-items: center;
+  column-gap: 12px;
+
+  font: inherit;
+  text-align: left;
+  line-height: 1;
+  box-shadow: none;
+}
+
+button.selector-periodo-filtro__boton:hover:not(:disabled) {
+  border-color: #cbd5e1;
+  background: #ffffff;
+}
+
+button.selector-periodo-filtro__boton:focus-visible,
+.selector-periodo-filtro--abierto button.selector-periodo-filtro__boton {
+  border-color: #94a3b8;
+  outline: 3px solid rgba(148, 163, 184, 0.16);
+  outline-offset: 0;
+}
+
+button.selector-periodo-filtro__boton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.selector-periodo-filtro__icono,
+.selector-periodo-filtro__flecha {
+  display: block;
+  flex: none;
+  color: #64748b;
+  stroke: currentColor;
+}
+
+.selector-periodo-filtro__icono {
+  justify-self: start;
+}
+
+.selector-periodo-filtro__flecha {
+  justify-self: end;
+  transition: transform 160ms ease;
+}
+
+.selector-periodo-filtro--abierto .selector-periodo-filtro__flecha {
+  transform: rotate(180deg);
+}
+
+.selector-periodo-filtro__valor {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selector-periodo-filtro__valor--vacio {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.selector-periodo-filtro__panel {
+  position: absolute;
+  z-index: 90;
+  top: calc(100% + 8px);
+  left: 0;
+  width: min(330px, calc(100vw - 32px));
+  padding: 14px;
+  border: 1px solid #dbe3ef;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.14);
+}
+
+.selector-periodo-filtro__cabecera {
+  display: grid;
+  grid-template-columns: 36px 1fr 36px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.selector-periodo-filtro__cabecera strong {
+  color: #0f172a;
+  font-size: 0.94rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+button.selector-periodo-filtro__navegacion {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #475569;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+button.selector-periodo-filtro__navegacion:hover {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+}
+
+.selector-periodo-filtro__grid {
+  display: grid;
+  gap: 7px;
+}
+
+.selector-periodo-filtro__grid--meses,
+.selector-periodo-filtro__grid--anios {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+button.selector-periodo-filtro__opcion {
+  min-width: 0;
+  height: 38px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #0f172a;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+button.selector-periodo-filtro__opcion:hover {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+}
+
+button.selector-periodo-filtro__opcion--seleccionada,
+button.selector-periodo-filtro__opcion--seleccionada:hover {
+  border-color: #111827;
+  background: #111827;
+  color: #ffffff;
+}
+
+.selector-periodo-filtro__pie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid #eef2f7;
+}
+
+.selector-periodo-filtro__pie button {
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.selector-periodo-filtro__pie button:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+@media (max-width: 620px) {
+  .selector-periodo-filtro__panel {
+    width: 100%;
+  }
+}

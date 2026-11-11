@@ -17,7 +17,10 @@ import CampoDesplegable from "../../componentes/CampoDesplegable";
 import { useConfiguracion } from "../../contexto/ConfiguracionContext";
 import { clienteApi } from "../../api/clienteApi";
 import { useUsuarios } from "../../contexto/UsuariosContext";
-import { obtenerCustodioAsignado } from "../../utilidades/asignacionesUsuarios";
+import {
+  obtenerCustodioAsignado,
+  obtenerSupervisoresBodega,
+} from "../../utilidades/asignacionesUsuarios";
 import { useInventario } from "../../contexto/InventarioContext";
 import type { Bodega } from "../../tipos/bodega";
 import type {
@@ -478,7 +481,7 @@ function InventarioAdmin() {
     if (!agregado.ok) {
       mostrarMensaje(
         "error",
-        agregado.mensaje || "No se pudo agregar el bien. Revisa los datos ingresados.",
+        agregado.mensaje || "No se pudo agregar el bien. Revisa los datos ingresados."
       );
       return;
     }
@@ -587,7 +590,7 @@ function InventarioAdmin() {
     if (!editado.ok) {
       mostrarMensaje(
         "error",
-        editado.mensaje || "No se pudo actualizar el bien. Revisa los datos ingresados.",
+        editado.mensaje || "No se pudo actualizar el bien. Revisa los datos ingresados."
       );
       return;
     }
@@ -755,6 +758,21 @@ function InventarioAdmin() {
     }));
   };
 
+  const validarSupervisorDestino = (nombreBodega: string) => {
+    const supervisores = obtenerSupervisoresBodega(usuarios, nombreBodega);
+
+    if (supervisores.length > 0) {
+      return true;
+    }
+
+    mostrarMensaje(
+      "error",
+      `No hay un Supervisor activo asignado a ${limpiarNombreBodega(nombreBodega)}. Asigna o activa un Supervisor antes de enviar productos a esta bodega.`
+    );
+
+    return false;
+  };
+
   const guardarDistribucion = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -768,9 +786,14 @@ function InventarioAdmin() {
     }
 
     if (cantidad > productoDistribuir.cantidad) {
+      const textoDisponible =
+        productoDistribuir.cantidad === 1
+          ? "1 unidad disponible"
+          : `${productoDistribuir.cantidad} unidades disponibles`;
+
       mostrarMensaje(
         "error",
-        `Solo hay ${productoDistribuir.cantidad} disponibles para asignar.`
+        `La cantidad ingresada supera el stock disponible. Solo hay ${textoDisponible}.`
       );
       return;
     }
@@ -781,6 +804,15 @@ function InventarioAdmin() {
 
       if (!formularioDistribucion.destino) {
         mostrarMensaje("error", "Selecciona una bodega destino.");
+        return;
+      }
+
+      const destinoSinSupervisor = destinosAutomaticos.find(
+        (destino) => obtenerSupervisoresBodega(usuarios, destino).length === 0
+      );
+
+      if (destinoSinSupervisor) {
+        validarSupervisorDestino(destinoSinSupervisor);
         return;
       }
 
@@ -801,12 +833,17 @@ function InventarioAdmin() {
           return;
         }
 
-        const resultado = await distribuirAutomaticamenteConsumible({
+        const datosDistribucionAutomatica = {
           productoId: productoDistribuir.id,
           cantidadTotal: cantidad,
           destinos: destinosAutomaticos,
+          usuario: "Administrador General",
           observacion: formularioDistribucion.observacion,
-        });
+        };
+
+        const resultado = await distribuirAutomaticamenteConsumible(
+          datosDistribucionAutomatica
+        );
 
         if (!resultado) {
           mostrarMensaje(
@@ -825,12 +862,19 @@ function InventarioAdmin() {
       }
     }
 
-    const resultado = await distribuirProducto({
+    if (!validarSupervisorDestino(formularioDistribucion.destino)) {
+      return;
+    }
+
+    const datosDistribucion = {
       productoId: productoDistribuir.id,
       cantidad,
       destino: formularioDistribucion.destino,
+      usuario: "Administrador General",
       observacion: formularioDistribucion.observacion,
-    });
+    };
+
+    const resultado = await distribuirProducto(datosDistribucion);
 
     if (!resultado) {
       mostrarMensaje(
@@ -863,12 +907,15 @@ function InventarioAdmin() {
   const confirmarBajaProducto = async () => {
     if (!productoBaja) return;
 
-    const productoEliminado = await eliminarProducto({
+    const datosBaja = {
       id: productoBaja.id,
+      usuario: "Administrador General",
       observacion:
         observacionBaja.trim() ||
         "Producto dado de baja desde Inventario General.",
-    });
+    };
+
+    const productoEliminado = await eliminarProducto(datosBaja);
 
     if (!productoEliminado) {
       mostrarMensaje("error", "No se pudo dar de baja el bien.");
@@ -2268,7 +2315,11 @@ function InventarioAdmin() {
               </button>
             </div>
 
-            <form className="formulario-modal" onSubmit={guardarDistribucion}>
+            <form
+              className="formulario-modal"
+              onSubmit={guardarDistribucion}
+              noValidate
+            >
               <div className="grid-formulario grid-formulario-asignacion">
                 <div className="campo-formulario">
                   <label>Cantidad *</label>
@@ -2276,7 +2327,6 @@ function InventarioAdmin() {
                     required
                     type="number"
                     min="1"
-                    max={productoDistribuir.cantidad}
                     value={formularioDistribucion.cantidad}
                     onChange={(e) =>
                       actualizarCampoDistribucion("cantidad", e.target.value)

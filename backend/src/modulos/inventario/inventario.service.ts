@@ -22,6 +22,7 @@ import { EstadoProducto } from "../productos/enums/estado-producto.enum";
 import { TipoProducto } from "../productos/enums/tipo-producto.enum";
 import { RolUsuario } from "../usuarios/enums/rol-usuario.enum";
 import { AjustarExistenciaDto } from "./dto/ajustar-existencia.dto";
+import { MovimientosService } from "../movimientos/movimientos.service";
 import { FiltrarInventarioDto } from "./dto/filtrar-inventario.dto";
 import { RegistrarInventarioInicialDto } from "./dto/registrar-inventario-inicial.dto";
 import { Existencia } from "./entities/existencia.entity";
@@ -101,14 +102,6 @@ export interface StockSupervisorItem {
     id: string;
     nombre: string;
   }>;
-  areasDisponibles: Array<{
-    id: string;
-    nombre: string;
-    destinos: Array<{
-      id: string;
-      nombre: string;
-    }>;
-  }>;
   producto: ProductoInventarioPublico;
 }
 
@@ -123,6 +116,7 @@ export class InventarioService {
     private readonly bodegasRepository: Repository<Bodega>,
     @InjectRepository(UsuarioBodega)
     private readonly asignacionesRepository: Repository<UsuarioBodega>,
+    private readonly movimientosService: MovimientosService,
   ) {}
 
   async listar(
@@ -152,9 +146,14 @@ export class InventarioService {
       this.crearConsultaBase(),
       filtros,
     )
-      .andWhere("bodega.tipo <> :tipoStockSupervisor", {
-        tipoStockSupervisor: TipoBodega.STOCK_SUPERVISOR,
-      })
+      .andWhere(
+        `(bodega.tipo <> :tipoStockSupervisor
+          OR producto.tipoProducto = :tipoNoConsumible)`,
+        {
+          tipoStockSupervisor: TipoBodega.STOCK_SUPERVISOR,
+          tipoNoConsumible: TipoProducto.NO_CONSUMIBLE,
+        },
+      )
       .andWhere("producto.estado = :estadoProducto", {
         estadoProducto: EstadoProducto.ACTIVO,
       })
@@ -247,37 +246,13 @@ export class InventarioService {
     const stocksPorId = new Map(
       stocks.map((stock) => [stock.id, stock]),
     );
-
-    const asignaciones = await this.asignacionesRepository.find({
-      where: { usuarioId: usuario.id },
-      relations: { bodega: true },
-      order: { createdAt: "ASC" },
-    });
-
-    const areasAsignadas = Array.from(
-      new Map(
-        asignaciones
-          .map((asignacion) => asignacion.bodega)
-          .filter(
-            (bodega) =>
-              bodega &&
-              bodega.tipo === TipoBodega.PRINCIPAL &&
-              bodega.estado === EstadoBodega.ACTIVA,
-          )
-          .map((bodega) => [bodega.id, bodega]),
-      ).values(),
-    ).sort((a, b) =>
-      a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }),
+    const areaIds = Array.from(
+      new Set(
+        stocks
+          .map((stock) => stock.bodegaPadreId)
+          .filter((id): id is string => Boolean(id)),
+      ),
     );
-
-    const areasBase =
-      areasAsignadas.length > 0
-        ? areasAsignadas
-        : stocks
-            .map((stock) => stock.bodegaPadre)
-            .filter((area): area is Bodega => Boolean(area));
-
-    const areaIds = Array.from(new Set(areasBase.map((area) => area.id)));
 
     const sucursales =
       areaIds.length > 0
@@ -301,15 +276,6 @@ export class InventarioService {
       actuales.push(sucursal);
       sucursalesPorArea.set(sucursal.bodegaPadreId, actuales);
     });
-
-    const areasDisponibles = areasBase.map((area) => ({
-      id: area.id,
-      nombre: area.nombre,
-      destinos: (sucursalesPorArea.get(area.id) || [area]).map((destino) => ({
-        id: destino.id,
-        nombre: destino.nombre,
-      })),
-    }));
 
     const existencias = await this.crearConsultaBase()
       .where("existencia.bodegaId IN (:...stockIds)", { stockIds })
@@ -352,7 +318,6 @@ export class InventarioService {
             nombre: destino.nombre,
           }),
         ),
-        areasDisponibles,
         producto: this.convertirProductoInventario(existencia),
       };
     });
@@ -360,51 +325,71 @@ export class InventarioService {
 
   async registrarInicial(
     dto: RegistrarInventarioInicialDto,
+    usuario: UsuarioAutenticado,
   ): Promise<ExistenciaPublica> {
-    const producto = await this.obtenerProducto(dto.productoId);
+    // Compatibilidad: la ruta histórica conserva su respuesta, pero ya no
+    // modifica existencias sin generar un movimiento de auditoría.
     const bodega = await this.obtenerBodega(dto.bodegaId);
-
-    this.validarProductoActivo(producto);
-    this.validarBodegaActiva(bodega);
-
+    if (bodega.tipo !== TipoBodega.INVENTARIO_GENERAL) {
+      throw new ConflictException(
+        "El registro inicial solo puede realizarse en Inventario General.",
+      );
+    }
     const existente = await this.existenciasRepository.findOne({
-      where: {
-        productoId: dto.productoId,
-        bodegaId: dto.bodegaId,
-      },
+      where: { productoId: dto.productoId, bodegaId: dto.bodegaId },
     });
-
     if (existente) {
       throw new ConflictException(
         "Ya existe un registro de inventario para ese producto en la bodega seleccionada.",
       );
     }
 
-    const existencia = this.existenciasRepository.create({
-      productoId: dto.productoId,
-      bodegaId: dto.bodegaId,
-      cantidad: dto.cantidad,
+    if (dto.cantidad > 0) {
+      await this.movimientosService.registrarEntrada(
+        {
+          productoId: dto.productoId,
+          bodegaDestinoId: dto.bodegaId,
+          cantidad: dto.cantidad,
+          observacion: "Registro inicial de inventario",
+        },
+        usuario,
+      );
+    } else {
+      await this.movimientosService.registrarAjuste(
+        {
+          productoId: dto.productoId,
+          bodegaId: dto.bodegaId,
+          cantidadNueva: 0,
+          observacion: "Registro inicial de inventario sin existencias",
+        },
+        usuario,
+      );
+    }
+
+    const guardada = await this.existenciasRepository.findOne({
+      where: { productoId: dto.productoId, bodegaId: dto.bodegaId },
     });
-
-    const guardada =
-      await this.existenciasRepository.save(existencia);
-
+    if (!guardada) {
+      throw new NotFoundException("No se pudo consultar el inventario registrado.");
+    }
     return this.buscarPorId(guardada.id);
   }
 
   async ajustar(
     id: string,
     dto: AjustarExistenciaDto,
+    usuario: UsuarioAutenticado,
   ): Promise<ExistenciaPublica> {
     const existencia = await this.obtenerPorId(id);
-
-    this.validarProductoActivo(existencia.producto);
-    this.validarBodegaActiva(existencia.bodega);
-
-    existencia.cantidad = dto.cantidad;
-
-    await this.existenciasRepository.save(existencia);
-
+    await this.movimientosService.registrarAjuste(
+      {
+        productoId: existencia.productoId,
+        bodegaId: existencia.bodegaId,
+        cantidadNueva: dto.cantidad,
+        observacion: dto.observacion?.trim() || "Ajuste de inventario",
+      },
+      usuario,
+    );
     return this.buscarPorId(id);
   }
 
@@ -663,6 +648,14 @@ export class InventarioService {
     );
   }
 
+  private obtenerNombreBodegaVisible(existencia: Existencia): string {
+    if (existencia.bodega.tipo !== TipoBodega.STOCK_SUPERVISOR) {
+      return existencia.bodega.nombre;
+    }
+
+    return existencia.bodega.bodegaPadre?.nombre ?? "Bodega asignada";
+  }
+
   private convertirProductoInventario(
     existencia: Existencia,
   ): ProductoInventarioPublico {
@@ -685,7 +678,7 @@ export class InventarioService {
       color: producto.color,
       dimensiones: producto.dimensiones,
       estadoBien: producto.estadoBien,
-      ubicacion: existencia.bodega.nombre,
+      ubicacion: this.obtenerNombreBodegaVisible(existencia),
       custodioActual,
       procedencia: producto.procedencia,
       codigoUleam: producto.codigoUleam,
@@ -731,7 +724,7 @@ export class InventarioService {
       categoria: producto.categoria.nombre,
       unidad: producto.unidad,
       cantidad: existencia.cantidad,
-      bodega: existencia.bodega.nombre,
+      bodega: this.obtenerNombreBodegaVisible(existencia),
       fechaAsignacion: existencia.createdAt.toISOString().slice(0, 10),
       producto,
     };

@@ -10,6 +10,7 @@ import {
   In,
   Repository,
   SelectQueryBuilder,
+  EntityManager,
 } from "typeorm";
 
 import type { UsuarioAutenticado } from "../auth/interfaces/usuario-autenticado.interface";
@@ -84,6 +85,32 @@ export class MovimientosService {
     private readonly dataSource: DataSource,
   ) {}
 
+  // Asegura una fila única antes del bloqueo. Si otra transacción la creó,
+  // ON CONFLICT DO NOTHING espera su resultado sin lanzar un error de unicidad.
+  private async bloquearOInicializarExistencia(
+    administrador: EntityManager,
+    productoId: string,
+    bodegaId: string,
+  ): Promise<Existencia> {
+    const existencias = administrador.getRepository(Existencia);
+    await existencias
+      .createQueryBuilder()
+      .insert()
+      .into(Existencia)
+      .values({ productoId, bodegaId, cantidad: 0 })
+      .orIgnore()
+      .execute();
+
+    const existencia = await existencias.findOne({
+      where: { productoId, bodegaId },
+      lock: { mode: "pessimistic_write" },
+    });
+    if (!existencia) {
+      throw new ConflictException("No se pudo asegurar el registro de existencias.");
+    }
+    return existencia;
+  }
+
   async listar(
     filtros: FiltrarMovimientosDto,
   ): Promise<MovimientoPublico[]> {
@@ -145,25 +172,13 @@ export class MovimientosService {
         const existencias = administrador.getRepository(Existencia);
         const movimientos = administrador.getRepository(Movimiento);
 
-        let existencia = await existencias.findOne({
-          where: {
-            productoId: dto.productoId,
-            bodegaId: destino.id,
-          },
-          lock: {
-            mode: "pessimistic_write",
-          },
-        });
+        const existencia = await this.bloquearOInicializarExistencia(
+          administrador,
+          dto.productoId,
+          destino.id,
+        );
 
-        const anterior = existencia?.cantidad ?? 0;
-
-        if (!existencia) {
-          existencia = existencias.create({
-            productoId: dto.productoId,
-            bodegaId: destino.id,
-            cantidad: 0,
-          });
-        }
+        const anterior = existencia.cantidad;
 
         existencia.cantidad += dto.cantidad;
         await existencias.save(existencia);
@@ -244,23 +259,11 @@ export class MovimientosService {
           );
         }
 
-        let existenciaDestino = await existencias.findOne({
-          where: {
-            productoId: dto.productoId,
-            bodegaId: destino.id,
-          },
-          lock: {
-            mode: "pessimistic_write",
-          },
-        });
-
-        if (!existenciaDestino) {
-          existenciaDestino = existencias.create({
-            productoId: dto.productoId,
-            bodegaId: destino.id,
-            cantidad: 0,
-          });
-        }
+        const existenciaDestino = await this.bloquearOInicializarExistencia(
+          administrador,
+          dto.productoId,
+          destino.id,
+        );
 
         existenciaOrigen.cantidad -= dto.cantidad;
         existenciaDestino.cantidad += dto.cantidad;
@@ -365,23 +368,11 @@ export class MovimientosService {
         const movimientos = administrador.getRepository(Movimiento);
 
         for (const destino of destinos) {
-          let existenciaDestino = await existencias.findOne({
-            where: {
-              productoId: dto.productoId,
-              bodegaId: destino.id,
-            },
-            lock: {
-              mode: "pessimistic_write",
-            },
-          });
-
-          if (!existenciaDestino) {
-            existenciaDestino = existencias.create({
-              productoId: dto.productoId,
-              bodegaId: destino.id,
-              cantidad: 0,
-            });
-          }
+          const existenciaDestino = await this.bloquearOInicializarExistencia(
+            administrador,
+            dto.productoId,
+            destino.id,
+          );
 
           existenciaDestino.cantidad += cantidadPorDestino;
           await existencias.save(existenciaDestino);
@@ -456,23 +447,11 @@ export class MovimientosService {
           );
         }
 
-        let existenciaDestino = await existencias.findOne({
-          where: {
-            productoId: dto.productoId,
-            bodegaId: inventarioGeneral.id,
-          },
-          lock: {
-            mode: "pessimistic_write",
-          },
-        });
-
-        if (!existenciaDestino) {
-          existenciaDestino = existencias.create({
-            productoId: dto.productoId,
-            bodegaId: inventarioGeneral.id,
-            cantidad: 0,
-          });
-        }
+        const existenciaDestino = await this.bloquearOInicializarExistencia(
+          administrador,
+          dto.productoId,
+          inventarioGeneral.id,
+        );
 
         existenciaOrigen.cantidad -= dto.cantidad;
         existenciaDestino.cantidad += dto.cantidad;
@@ -580,25 +559,13 @@ export class MovimientosService {
         const existencias = administrador.getRepository(Existencia);
         const movimientos = administrador.getRepository(Movimiento);
 
-        let existencia = await existencias.findOne({
-          where: {
-            productoId: dto.productoId,
-            bodegaId: dto.bodegaId,
-          },
-          lock: {
-            mode: "pessimistic_write",
-          },
-        });
+        const existencia = await this.bloquearOInicializarExistencia(
+          administrador,
+          dto.productoId,
+          dto.bodegaId,
+        );
 
-        const anterior = existencia?.cantidad ?? 0;
-
-        if (!existencia) {
-          existencia = existencias.create({
-            productoId: dto.productoId,
-            bodegaId: dto.bodegaId,
-            cantidad: 0,
-          });
-        }
+        const anterior = existencia.cantidad;
 
         existencia.cantidad = dto.cantidadNueva;
         await existencias.save(existencia);

@@ -24,7 +24,6 @@ import {
   convertirSolicitudBackend,
 } from "../utilidades/mapeadoresInventario";
 import {
-  ajustarCantidadProductoApi,
   cambiarEstadoProductoApi,
   crearProductoApi,
   editarProductoApi,
@@ -388,6 +387,17 @@ export function InventarioProvider({ children }: Props) {
     }
 
     try {
+      const cambiaCantidad = productoActualizado.cantidad !== productoOriginal.cantidad;
+      const bodegaAjuste = cambiaCantidad
+        ? await buscarBodegaPorNombre(productoOriginal.ubicacion)
+        : null;
+      if (cambiaCantidad && !bodegaAjuste) {
+        return {
+          ok: false,
+          mensaje: "No se encontró la bodega actual del producto para ajustar la cantidad.",
+        };
+      }
+
       await editarProductoApi(String(id), {
         codigo: productoActualizado.codigo,
         nombre: productoActualizado.descripcion,
@@ -409,27 +419,10 @@ export function InventarioProvider({ children }: Props) {
         unidad: productoActualizado.unidad,
         observacion: productoActualizado.observacion,
         estado: productoActualizado.estado,
+        ...(cambiaCantidad
+          ? { cantidad: productoActualizado.cantidad, bodegaAjusteId: bodegaAjuste!.id }
+          : {}),
       });
-
-      if (productoActualizado.cantidad !== productoOriginal.cantidad) {
-        const bodega = await buscarBodegaPorNombre(productoOriginal.ubicacion);
-
-        if (!bodega) {
-          return {
-            ok: false,
-            mensaje: "No se encontró la bodega actual del producto para ajustar la cantidad.",
-          };
-        }
-
-        await ajustarCantidadProductoApi({
-          productoId: String(id),
-          bodegaId: bodega.id,
-          cantidadNueva: productoActualizado.cantidad,
-          observacion:
-            productoActualizado.observacion?.trim() ||
-            `Ajuste de cantidad desde edición del producto ${productoActualizado.codigo}.`,
-        });
-      }
 
       try {
         await recargarProductosInventario();

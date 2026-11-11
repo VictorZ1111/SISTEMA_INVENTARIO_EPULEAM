@@ -100,7 +100,10 @@ export async function crearProductoApi(payload: ProductoApiPayload) {
 
 export async function editarProductoApi(
   id: string,
-  payload: Omit<ProductoApiPayload, "cantidad">,
+  payload: Omit<ProductoApiPayload, "cantidad"> & {
+    cantidad?: number;
+    bodegaAjusteId?: string;
+  },
 ) {
   await clienteApi.patch(`/productos/${id}`, payload);
 }
