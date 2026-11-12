@@ -383,10 +383,7 @@ function BodegasSupervisor() {
               <div className="responsable-bodegas-accesos responsable-bodegas-admin-estilo responsable-sucursales-grid">
                 {sucursalesTasty.map((bodega) => {
                   const IconoBodega = obtenerIconoBodega(bodega);
-                  const responsables = formatearNombresUsuarios(
-                    obtenerResponsablesSucursal(usuarios, bodega),
-                    "Sin responsable asignado"
-                  );
+
 
                   return (
                     <button
@@ -406,30 +403,7 @@ function BodegasSupervisor() {
                         style={{ flex: 1, alignSelf: "stretch", justifyContent: "center" }}
                       >
                         <strong>{limpiarNombreBodega(bodega)}</strong>
-                        <span
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            gap: "12px",
-                            marginTop: "9px",
-                            paddingTop: "9px",
-                            borderTop: "1px solid #e2e8f0",
-                            color: "#64748b",
-                            fontSize: "0.86rem",
-                            lineHeight: 1.35,
-                          }}
-                        >
-                          <span>Responsable:</span>
-                          <strong
-                            style={{
-                              color: "#111827",
-                              fontSize: "0.86rem",
-                              textAlign: "right",
-                            }}
-                          >
-                            {responsables}
-                          </strong>
-                        </span>
+                        <span className="tarjeta-sucursal-etiqueta">Sucursal gastronómica de {limpiarNombreBodega(bodega)}.</span>
                       </span>
                     </button>
                   );
@@ -458,6 +432,13 @@ function BodegasSupervisor() {
               <FileText size={17} />
               Reporte de inventario
             </button>
+          </div>
+
+          <div className="bodega-responsables-resumen">
+            <span>{bodegaSeleccionada.startsWith("Tasty ") ? "Responsable de la sucursal:" : "Supervisor encargado:"}</span>
+            <strong>{bodegaSeleccionada.startsWith("Tasty ")
+              ? formatearNombresUsuarios(obtenerResponsablesSucursal(usuarios, bodegaSeleccionada), "Sin responsable asignado")
+              : usuarioActual?.nombre || "Supervisor asignado"}</strong>
           </div>
 
           <div className="responsable-filtros-bodega-completos">

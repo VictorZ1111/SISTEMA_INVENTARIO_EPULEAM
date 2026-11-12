@@ -723,19 +723,20 @@ function InventarioAdmin() {
       return;
     }
 
-    const siguienteDestinoDisponible = obtenerBodegasDisponiblesParaAgregar()[0];
+    if (formularioDistribucion.destinosMultiples.includes("")) {
+      mostrarMensaje("error", "Selecciona primero la bodega adicional que acabas de agregar.");
+      return;
+    }
 
-    if (!siguienteDestinoDisponible) {
+    if (obtenerBodegasDisponiblesParaAgregar().length === 0) {
       mostrarMensaje("error", "No hay más bodegas disponibles para agregar.");
       return;
     }
 
-    setFormularioDistribucion((formularioActual) => ({
-      ...formularioActual,
-      destinosMultiples: [
-        ...formularioActual.destinosMultiples,
-        siguienteDestinoDisponible.nombre,
-      ],
+    // No seleccionar automáticamente otra bodega: debe escogerla el Administrador.
+    setFormularioDistribucion((actual) => ({
+      ...actual,
+      destinosMultiples: [...actual.destinosMultiples, ""],
     }));
   };
 
@@ -799,6 +800,10 @@ function InventarioAdmin() {
     }
 
     if (productoDistribuir.tipoProducto === "consumible") {
+      if (formularioDistribucion.destinosMultiples.some((destino) => !destino)) {
+        mostrarMensaje("error", "Selecciona una bodega para cada destino adicional o quita el que no usarás.");
+        return;
+      }
       const destinosSeleccionados = obtenerDestinosSeleccionados();
       const destinosAutomaticos = obtenerDestinosReales(destinosSeleccionados);
 
@@ -1821,16 +1826,31 @@ function InventarioAdmin() {
                       />
                     </div>
 
-                    <div className="campo-formulario">
-                      <label>Cantidad *</label>
+                    <div className="campo-formulario campo-producto-descripcion">
+                      <label>Bien / descripción *</label>
                       <input
                         required
-                        min="0"
-                        type="number"
-                        value={formularioProducto.cantidad}
+                        value={formularioProducto.descripcion}
                         onChange={(e) =>
-                          actualizarCampoProducto("cantidad", e.target.value)
+                          actualizarCampoProducto("descripcion", e.target.value)
                         }
+                        placeholder="Ej: Silla ergonómica color negro"
+                      />
+                    </div>
+
+                    <div className="campo-formulario">
+                      <label>Categoría *</label>
+                      <CampoDesplegable mostrarIconoFiltro={false}
+                        valor={formularioProducto.categoria}
+                        ariaLabel="Seleccionar categoría"
+                        onChange={(valor) => actualizarCampoProducto("categoria", valor)}
+                        opciones={[
+                          { valor: "", texto: "Selecciona una categoría" },
+                          ...categoriasActivas.map((categoria) => ({
+                            valor: categoria.nombre,
+                            texto: categoria.nombre,
+                          })),
+                        ]}
                       />
                     </div>
 
@@ -1878,34 +1898,6 @@ function InventarioAdmin() {
                       />
                     </div>
 
-                    <div className="campo-formulario campo-producto-descripcion">
-                      <label>Descripción / Bien *</label>
-                      <input
-                        required
-                        value={formularioProducto.descripcion}
-                        onChange={(e) =>
-                          actualizarCampoProducto("descripcion", e.target.value)
-                        }
-                        placeholder="Ej: Silla ergonómica color negro"
-                      />
-                    </div>
-
-                    <div className="campo-formulario">
-                      <label>Categoría *</label>
-                      <CampoDesplegable mostrarIconoFiltro={false}
-                        valor={formularioProducto.categoria}
-                        ariaLabel="Seleccionar categoría"
-                        onChange={(valor) => actualizarCampoProducto("categoria", valor)}
-                        opciones={[
-                          { valor: "", texto: "Selecciona una categoría" },
-                          ...categoriasActivas.map((categoria) => ({
-                            valor: categoria.nombre,
-                            texto: categoria.nombre,
-                          })),
-                        ]}
-                      />
-                    </div>
-
                     <div className="campo-formulario">
                       <label>Estado *</label>
                       <CampoDesplegable mostrarIconoFiltro={false}
@@ -1919,6 +1911,19 @@ function InventarioAdmin() {
                           { valor: "regular", texto: "Medio" },
                           { valor: "malo", texto: "Malo" },
                         ]}
+                      />
+                    </div>
+
+                    <div className="campo-formulario">
+                      <label>Cantidad *</label>
+                      <input
+                        required
+                        min="0"
+                        type="number"
+                        value={formularioProducto.cantidad}
+                        onChange={(e) =>
+                          actualizarCampoProducto("cantidad", e.target.value)
+                        }
                       />
                     </div>
 
@@ -2304,6 +2309,7 @@ function InventarioAdmin() {
             <div className="modal-header">
               <div>
                 <h2>Asignar producto</h2>
+                <p>Elige un destino. Si deseas distribuir entre varias bodegas, agrega las demás al final.</p>
               </div>
 
               <button
@@ -2320,6 +2326,10 @@ function InventarioAdmin() {
               onSubmit={guardarDistribucion}
               noValidate
             >
+              <div className="resumen-bien-distribucion-admin">
+                <div><span>Bien</span><strong>{productoDistribuir.descripcion}</strong></div>
+                <div><span>Código</span><strong>{productoDistribuir.codigo}</strong></div>
+              </div>
               <div className="grid-formulario grid-formulario-asignacion">
                 <div className="campo-formulario">
                   <label>Cantidad *</label>
@@ -2339,9 +2349,9 @@ function InventarioAdmin() {
                   <strong>{productoDistribuir.cantidad}</strong>
                 </div>
 
-                <div className="campo-formulario campo-completo">
-                  <label>Bodega destino *</label>
-
+                <div className="campo-formulario campo-completo campo-destino-principal-admin">
+                  <label>Bodega destino principal *</label>
+                  <p className="destino-ayuda">El primer destino se incluye automáticamente.</p>
                   <div className="selector-destino-multiple">
                     <CampoDesplegable mostrarIconoFiltro={false}
                       valor={formularioDistribucion.destino}
@@ -2356,20 +2366,7 @@ function InventarioAdmin() {
                       }))}
                     />
 
-                    <button
-                      className="boton-agregar-destino"
-                      type="button"
-                      onClick={agregarDestinoMultiple}
-                      disabled={
-                        Number(formularioDistribucion.cantidad) <= 1 ||
-                        obtenerBodegasDisponiblesParaAgregar().length === 0
-                      }
-                      title="Agregar otra bodega"
-                    >
-                      <Plus size={18} />
-                    </button>
                   </div>
-
                   {formularioDistribucion.destinosMultiples.length > 0 && (
                     <div className="selectores-destino-adicionales">
                       {formularioDistribucion.destinosMultiples.map(
@@ -2381,6 +2378,7 @@ function InventarioAdmin() {
                             <CampoDesplegable mostrarIconoFiltro={false}
                               valor={destino}
                               ariaLabel="Seleccionar bodega destino adicional"
+                              placeholder="Selecciona otra bodega"
                               onChange={(valor) => actualizarDestinoMultiple(indice, valor)}
                               opciones={obtenerBodegasDisponiblesParaAgregar(
                                 formularioDistribucion,
@@ -2404,6 +2402,20 @@ function InventarioAdmin() {
                       )}
                     </div>
                   )}
+                  <button
+                    className="boton-agregar-destino-bien boton-secundario"
+                    type="button"
+                    onClick={agregarDestinoMultiple}
+                    disabled={
+                      Number(formularioDistribucion.cantidad) <= 1 ||
+                      obtenerBodegasDisponiblesParaAgregar().length === 0 ||
+                      formularioDistribucion.destinosMultiples.includes("")
+                    }
+                    title="Añadir una segunda bodega a esta asignación"
+                  >
+                    <Plus size={17} /> Agregar otra bodega
+                  </button>
+
                 </div>
               </div>
 

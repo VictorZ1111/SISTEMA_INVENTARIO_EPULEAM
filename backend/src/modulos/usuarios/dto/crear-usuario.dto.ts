@@ -1,3 +1,6 @@
+import { Type } from "class-transformer";
+import { ArrayMaxSize, ArrayMinSize, IsArray, ValidateNested, ValidateIf } from "class-validator";
+import { HorarioDiaDto } from "./horario-dia.dto";
 import {
   IsEnum,
   IsNotEmpty,
@@ -30,4 +33,13 @@ export class CrearUsuarioDto {
       "El código debe contener 2 letras, 5 números y 1 carácter especial.",
   })
   codigoAcceso!: string;
+  /** null = acceso sin restricciones. */
+  @ValidateIf((_obj, value: unknown) => value !== undefined && value !== null)
+  @IsArray()
+  @ArrayMinSize(7)
+  @ArrayMaxSize(7)
+  @ValidateNested({ each: true })
+  @Type(() => HorarioDiaDto)
+  horarioAcceso?: HorarioDiaDto[] | null;
+
 }

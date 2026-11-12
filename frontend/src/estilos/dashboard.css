@@ -8492,3 +8492,324 @@ textarea,
   min-height: 74px;
   box-sizing: border-box;
 }
+
+
+/* 5B.1 - Administración: cantidades editables y aviso contextual único. */
+.modal-solicitud-atencion-admin .tabla-solicitud-atencion { margin-bottom: 0 !important; }
+.modal-solicitud-atencion-admin .input-cantidad-tabla { width: 78px; max-width: 100%; }
+.modal-solicitud-atencion-admin .solicitud-stock-aviso {
+  margin: 12px 28px 0; padding: 0; max-width: calc(100% - 56px);
+  font-size: 13px; font-weight: 800; line-height: 1.45;
+}
+.modal-solicitud-atencion-admin .solicitud-stock-aviso-suficiente { color: #15803d; }
+.modal-solicitud-atencion-admin .solicitud-stock-aviso-insuficiente { color: #111827; }
+.modal-solicitud-atencion-admin .solicitud-stock-aviso-sin { color: #b91c1c; }
+.modal-solicitud-atencion-admin .bloque-observacion-admin-solicitud { margin-top: 20px !important; }
+.modal-solicitud-atencion-admin .estado-entrega-item.sin-stock {
+  color: #b91c1c; background: #fef2f2; border-color: #fecaca;
+}
+.boton-editar-solicitud { display: inline-flex; align-items: center; gap: 6px; }
+
+
+/* Etapa 5B.2: navegación por área real de stock y datos de custodios */
+.stock-areas-pestanas { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin:0 0 18px; }
+.stock-area-pestana { display:flex; align-items:center; gap:12px; padding:11px 17px; border:1px solid #dbe3ef; background:#fff; border-radius:12px; color:#334155; font:inherit; font-weight:700; cursor:pointer; transition:background .18s,border .18s,color .18s; }
+.stock-area-pestana:hover { border-color:#94a3b8; }
+.stock-area-pestana-activa { background:#121821; border-color:#121821; color:#fff; }
+.stock-area-contador { display:inline-flex; min-width:25px; padding:2px 7px; justify-content:center; border-radius:50px; background:#f1f5f9; color:#334155; font-size:12px; }
+.stock-area-pestana-activa .stock-area-contador { background:#334155; color:#fff; }
+.stock-areas-vacio { margin:4px 0 12px; color:#64748b; }
+.tarjeta-sucursal-etiqueta { display:block; margin-top:9px; padding-top:9px; border-top:1px solid #e2e8f0; color:#64748b; font-size:13px; }
+.bodega-responsables-resumen { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px; margin:3px 0 17px; padding:13px 16px; border:1px solid #e2e8f0; border-radius:13px; background:#f8fafc; font-size:14px; }
+.bodega-responsables-resumen span { color:#64748b; }
+.bodega-responsables-resumen strong { color:#0f172a; }
+@media (max-width:800px) { .stock-areas-pestanas { flex-wrap:nowrap; overflow-x:auto; padding-bottom:6px; } .stock-area-pestana { flex:0 0 auto; } }
+
+/* Gestión segura de bodegas */
+.acciones-bodega-tarjeta { display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding-top:12px; margin-top:12px; border-top:1px solid #e2e8f0; }
+.acciones-bodega-tarjeta .boton-secundario { padding:8px 11px; min-height:34px; font-size:12px; display:inline-flex; gap:6px; align-items:center; }
+.texto-bodega-protegida { font-size:12px; color:#64748b; }
+.codigo-bodega-contenedor { display:flex; align-items:stretch; border:1px solid #dbe3ed; border-radius:10px; overflow:hidden; }
+.codigo-bodega-contenedor input { border:0!important; flex:1; min-width:0; padding:12px; }
+.codigo-bodega-contenedor button { padding:0 14px; background:#f8fafc; border:0; cursor:pointer; }
+.codigo-bodega-aclaracion { margin:5px 0; color:#64748b; font-size:12px; }
+
+/* 5B.2 - Pestañas de solicitudes con el estilo de Productos en stock. */
+.pagina-responsable .solicitudes-bandeja-tabs .boton-filtro[aria-pressed="true"] {
+  background: #121821;
+  border-color: #121821;
+  color: #fff;
+  font-weight: 700;
+}
+.pagina-responsable .solicitudes-bandeja-tabs .boton-filtro[aria-pressed="false"] {
+  background: #fff;
+  border-color: #dbe3ef;
+  color: #334155;
+}
+.pagina-responsable .solicitudes-bandeja-tabs .boton-filtro[aria-pressed="false"]:hover {
+  border-color: #94a3b8;
+}
+.tarjeta-bodega-contenido { display:flex; flex-direction:column; gap:6px; min-width:0; }
+.tarjeta-bodega-descripcion { color:#64748b; font-size:13px; line-height:1.4; font-weight:400; }
+
+
+/* Etapa 5B.3 — Botones de gestión de bodegas: icono y texto centrados. */
+.boton-gestion-bodega {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 9px !important;
+  min-width: 116px;
+  min-height: 44px;
+  padding: 10px 17px !important;
+  border: 1px solid #dbe3eb !important;
+  background: #fff !important;
+  color: #1f2937 !important;
+  border-radius: 11px !important;
+  font-weight: 650 !important;
+  line-height: 1.2 !important;
+  transition: background-color .15s ease, color .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.boton-gestion-bodega:hover, .boton-gestion-bodega:focus-visible { box-shadow: 0 4px 12px rgba(15,23,42,.08); }
+.boton-gestion-bodega--editar:hover, .boton-gestion-bodega--editar:focus-visible {
+  background: #f0fdf4 !important;
+  border-color: #86efac !important;
+  color: #15803d !important;
+}
+.boton-gestion-bodega--eliminar:hover, .boton-gestion-bodega--eliminar:focus-visible {
+  background: #fef2f2 !important;
+  border-color: #fca5a5 !important;
+  color: #b91c1c !important;
+}
+
+/* Alineación uniforme de filtros sin modificar las dimensiones de modales. */
+:is(.barra-filtros-inventario, .usuarios-filtros, .solicitudes-filtros,
+    .solicitudes-rol-filtros, .movimientos-filtros, .responsable-filtros-inventario,
+    .responsable-filtros-bodega-completos, .stock-supervisor-filtros,
+    .solicitudes-recibidas-filtros, .reportes-toolbar, .configuracion-categorias-filtros)
+  :is(.campo-desplegable__boton, .buscador-input-contenedor, .responsable-buscador,
+      .movimientos-fecha-filtro, .boton-filtro-icono) {
+  height: 48px !important;
+  min-height: 48px !important;
+  max-height: 48px !important;
+  box-sizing: border-box !important;
+}
+:is(.barra-filtros-inventario, .usuarios-filtros, .solicitudes-filtros,
+    .solicitudes-rol-filtros, .movimientos-filtros, .responsable-filtros-inventario,
+    .responsable-filtros-bodega-completos, .stock-supervisor-filtros,
+    .solicitudes-recibidas-filtros, .reportes-toolbar)
+  :is(input:not([type="checkbox"]), select) {
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+/* Inventario general + formulario de solicitud en dos columnas, mismo componente
+   para Supervisor y Responsable, sin mostrar cantidades del stock general. */
+.modal-responsable-solicitud.modal-solicitud-catalogo {
+  width: min(1640px, calc(100vw - 48px)) !important;
+  max-width: 1640px !important;
+  max-height: calc(100vh - 42px) !important;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modal-solicitud-catalogo > .modal-header { flex: 0 0 auto; }
+.modal-solicitud-catalogo .formulario-solicitud-catalogo {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 !important;
+}
+.solicitud-distribucion-dos-paneles {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  gap: 0;
+}
+.solicitud-catalogo-panel, .solicitud-formulario-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+  padding: 22px 24px;
+}
+.solicitud-catalogo-panel { border-right: 1px solid #e2e8f0; background: #fafbfd; }
+.solicitud-formulario-panel { overflow-y: auto; }
+.solicitud-panel-cabecera {
+  display:flex; align-items: flex-start; justify-content:space-between;
+  gap:12px;
+}
+.solicitud-panel-cabecera h3 { margin:0 0 4px; color:#111827; font-size:18px; font-weight:750; }
+.solicitud-panel-cabecera p { margin:0; color:#64748b; font-size:13px; line-height:1.45; }
+.solicitud-items-contador {
+  flex:0 0 auto; border-radius:999px; background:#eef2f7;
+  color:#334155; padding:6px 10px; font-size:12px; font-weight:650;
+}
+.solicitud-catalogo-filtros { display:grid; gap:10px; }
+.solicitud-catalogo-busqueda {
+  display:flex; align-items:center; gap:10px; width:100%; height:48px;
+  padding:0 14px; border:1px solid #dbe3ed; border-radius:11px;
+  background:#fff; box-sizing:border-box; color:#64748b;
+}
+.solicitud-catalogo-busqueda input {
+  width:100%; min-width:0; border:0 !important; outline:0;
+  box-shadow:none !important; height:100%; padding:0;
+  color:#0f172a; background:transparent; font:inherit; font-size:14px;
+}
+.solicitud-catalogo-selectores { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+.solicitud-catalogo-selectores .campo-desplegable { min-width:0 !important; width:100%; }
+.solicitud-catalogo-selectores .campo-desplegable__boton { height:46px !important; min-height:46px !important; width:100%; }
+.solicitud-catalogo-selectores .campo-desplegable__texto { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.solicitud-catalogo-tabla-contenedor {
+  flex: 1 1 auto; min-height: 210px; min-width:0;
+  border:1px solid #e2e8f0; border-radius:14px;
+  background:#fff; overflow:auto;
+}
+.solicitud-catalogo-tabla { width:100%; border-collapse:collapse; font-size:13px; }
+.solicitud-catalogo-tabla th {
+  position:sticky; top:0; z-index:1; background:#fff;
+  padding:13px 12px; text-align:left; color:#0f172a;
+  border-bottom:1px solid #e2e8f0; white-space:nowrap;
+}
+.solicitud-catalogo-tabla td { padding:11px 12px; border-bottom:1px solid #f1f5f9; color:#334155; }
+.solicitud-catalogo-tabla th:last-child, .solicitud-catalogo-tabla td:last-child { text-align:center; }
+.solicitud-catalogo-tabla td:nth-child(2) { min-width:120px; overflow-wrap:anywhere; }
+.solicitud-catalogo-vacio { padding:28px !important; text-align:center !important; color:#64748b !important; }
+.solicitud-catalogo-agregar {
+  width:36px; height:36px; border-radius:10px; border:1px solid #d5dee8;
+  display:inline-flex; align-items:center; justify-content:center;
+  background:#101820; color:#fff; cursor:pointer;
+}
+.solicitud-catalogo-agregar:hover:not(:disabled) { background:#334155; }
+.solicitud-catalogo-agregar:disabled { cursor:default; background:#f1f5f9; color:#64748b; border-color:#e2e8f0; }
+.solicitud-catalogo-tabla .estado-bien { display:inline-flex; border-radius:99px; padding:5px 9px; background:#dcfce7; color:#15803d; font-size:12px; font-weight:700; white-space:nowrap; }
+.solicitud-catalogo-tabla .estado-bien-regular { background:#fef3c7; color:#92400e; }
+.solicitud-catalogo-tabla .estado-bien-malo { background:#fee2e2; color:#b91c1c; }
+.solicitud-bodega-formulario .campo-desplegable { width:100%; min-width:0 !important; }
+.solicitud-formulario-tabla-contenedor { min-height:190px; margin:0 !important; }
+.solicitud-formulario-tabla-contenedor .tabla-contenedor { max-height:300px; overflow:auto; }
+.solicitud-formulario-tabla-contenedor table { min-width:0; width:100%; }
+.solicitud-formulario-tabla-contenedor th, .solicitud-formulario-tabla-contenedor td { padding:12px 9px; font-size:13px; }
+.solicitud-formulario-panel .solicitud-observacion-final { margin:0 !important; }
+.solicitud-formulario-panel .solicitud-observacion-final textarea { min-height:80px; }
+.solicitud-bienes-bloqueados { margin:0; color:#64748b; font-size:13px; }
+.modal-solicitud-catalogo .solicitud-catalogo-acciones {
+  flex:0 0 auto; display:flex; justify-content:flex-end; gap:12px;
+  margin:0 !important; padding:15px 25px !important;
+  border-top:1px solid #e2e8f0; background:#fff;
+}
+/* El selector de la primera bodega ya cuenta: + es exclusivamente para otra. */
+.modal-distribucion-compacto .destino-ayuda {
+  margin:4px 0 10px; font-size:13px; color:#64748b; line-height:1.4;
+}
+.modal-distribucion-compacto .selector-destino-multiple { width:100%; display:block; }
+.modal-distribucion-compacto .selector-destino-multiple .campo-desplegable { width:100%; }
+.modal-distribucion-compacto .boton-agregar-destino-bien {
+  margin-top:12px; display:inline-flex; align-items:center; justify-content:center;
+  gap:8px; min-height:42px; border-radius:10px;
+}
+.modal-distribucion-compacto .boton-agregar-destino-bien:disabled { opacity:.55; cursor:not-allowed; }
+@media (max-width:1100px) {
+  .modal-responsable-solicitud.modal-solicitud-catalogo { width:min(960px,calc(100vw - 30px)) !important; }
+  .solicitud-distribucion-dos-paneles { grid-template-columns:1fr; overflow-y:auto; }
+  .solicitud-catalogo-panel { border-right:0; border-bottom:1px solid #e2e8f0; }
+  .solicitud-catalogo-tabla-contenedor { max-height:300px; flex-basis:auto; }
+  .solicitud-formulario-panel { overflow:visible; }
+}
+@media (max-width:650px) {
+  .solicitud-catalogo-panel, .solicitud-formulario-panel { padding:15px; }
+  .solicitud-catalogo-selectores { grid-template-columns:1fr; }
+  .solicitud-catalogo-tabla-contenedor, .solicitud-formulario-tabla-contenedor .tabla-contenedor { overflow-x:auto; }
+  .modal-solicitud-catalogo .solicitud-catalogo-acciones { padding:12px 15px !important; }
+  .solicitud-catalogo-tabla { min-width:510px; }
+}
+
+.modal-distribucion-compacto .resumen-bien-distribucion-admin { display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); gap:12px; margin-bottom:16px; }
+.modal-distribucion-compacto .resumen-bien-distribucion-admin > div { display:flex; flex-direction:column; gap:6px; padding:12px 14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; }
+.modal-distribucion-compacto .resumen-bien-distribucion-admin span { color:#64748b; font-size:12px; font-weight:650; }
+.modal-distribucion-compacto .resumen-bien-distribucion-admin strong { font-size:14px; color:#0f172a; overflow-wrap:anywhere; }
+@media (max-width:620px) { .modal-distribucion-compacto .resumen-bien-distribucion-admin { grid-template-columns:1fr; } }
+
+
+/* Etapa 5B.4: formulario de asignación compacto y selector adicional ordenado. */
+.modal-distribucion-compacto { max-width: 940px !important; max-height: min(760px, calc(100vh - 28px)) !important; overflow: hidden !important; display:flex; flex-direction:column; }
+.modal-distribucion-compacto .modal-header { padding: 17px 26px 13px !important; flex-shrink:0; }
+.modal-distribucion-compacto .formulario-modal { padding: 14px 26px 16px !important; overflow-y:auto; min-height:0; }
+.modal-distribucion-compacto .resumen-bien-distribucion-admin { margin-bottom: 10px !important; gap:10px; }
+.modal-distribucion-compacto .resumen-bien-distribucion-admin > div { padding: 8px 12px !important; }
+.modal-distribucion-compacto .grid-formulario { row-gap: 10px !important; }
+.modal-distribucion-compacto .campo-formulario label { margin-bottom: 4px !important; }
+.modal-distribucion-compacto .destino-ayuda { margin: 3px 0 7px !important; line-height: 1.4; }
+.modal-distribucion-compacto .selector-destino-multiple { margin-bottom: 5px; }
+.modal-distribucion-compacto .selectores-destino-adicionales { margin-top: 7px; margin-bottom: 8px; gap: 7px; }
+.modal-distribucion-compacto .boton-agregar-destino-bien { margin-top: 8px; min-height: 40px; }
+.modal-distribucion-compacto > .formulario-modal > .campo-formulario.campo-completo { margin-top: 10px !important; }
+.modal-distribucion-compacto .campo-formulario textarea { min-height: 62px !important; }
+.modal-distribucion-compacto .modal-acciones { margin-top: 10px !important; padding-top: 12px !important; }
+
+/* Formularios de confirmación: separar el texto de la autorización y el campo. */
+.modal-contenedor .campo-formulario > label { display:block; margin-bottom: 7px; line-height:1.4; }
+.modal-contenedor .modal-header p { margin-top:9px; line-height:1.5; }
+.modal-contenedor .formulario-modal > p { line-height:1.55; margin: 12px 0; }
+
+/* Alinear búsqueda, filtros, selector de día y botones de limpieza sin afectar modales. */
+:is(.barra-filtros-inventario, .usuarios-filtros, .solicitudes-filtros,
+    .solicitudes-rol-filtros, .movimientos-filtros, .responsable-filtros-inventario,
+    .responsable-filtros-bodega-completos, .stock-supervisor-filtros,
+    .solicitudes-recibidas-filtros, .reportes-toolbar, .configuracion-categorias-filtros)
+  :is(.campo-desplegable, .campo-desplegable__boton, .boton-filtro-icono,
+      .movimientos-fecha-filtro, .movimientos-fecha-filtro input,
+      .buscador-input-contenedor, .responsable-buscador, .responsable-buscador input,
+      input[type="search"], input[type="text"]) {
+  box-sizing: border-box !important;
+  height: 48px !important;
+  min-height: 48px !important;
+  max-height: 48px !important;
+}
+
+/* El desplazamiento de tablas largas se realiza dentro de la tabla, no en todo el panel. */
+.tabla-card .tabla-contenedor { max-height: min(560px, 65vh); overflow-y: auto; overflow-x: auto; overscroll-behavior: contain; }
+.tabla-card .tabla-contenedor thead th { position: sticky; top: 0; z-index: 2; background: #fff; box-shadow: 0 1px 0 #e5e7eb; }
+.modal-fondo .tabla-card .tabla-contenedor { max-height: 300px; }
+
+/* Horario semanal de Usuarios: compacto, accesible, con ancho adaptable. */
+.horario-usuario-panel { border: 1px solid #e2e8f0; border-radius: 13px; padding: 13px 15px; background:#f8fafc; }
+.horario-usuario-encabezado { display:flex; gap:14px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
+.horario-usuario-encabezado > div { display:grid; gap:4px; flex:1; min-width:210px; }
+.horario-usuario-encabezado strong { color:#0f172a; font-size:14px; }
+.horario-usuario-encabezado small, .horario-usuario-libre { font-size:12px; line-height:1.45; color:#64748b; margin:0; }
+.horario-usuario-alternar { display:flex !important; gap:8px; align-items:center; margin:0 !important; white-space:nowrap; font-size:12px; font-weight:650; cursor:pointer; }
+.horario-usuario-alternar input { width:17px !important; height:17px !important; min-height:0 !important; accent-color:#111827; }
+.horario-usuario-lista { display:grid; gap:6px; margin-top:12px; }
+.horario-usuario-dia { display:grid; grid-template-columns: minmax(90px, 1fr) minmax(95px, 120px) 12px minmax(95px, 120px); align-items:center; gap:8px; }
+.horario-usuario-dia-nombre { display:flex !important; gap:8px; align-items:center; margin:0 !important; font-size:12px; font-weight:650; }
+.horario-usuario-dia-nombre input { width:16px !important; height:16px !important; min-height:0 !important; accent-color:#111827; }
+.horario-usuario-dia input[type="time"] { width:100%; padding:6px 8px; height:36px !important; min-height:36px !important; font-size:12px; }
+.horario-usuario-dia input:disabled { opacity:.55; }
+.horario-usuario-separador { color:#64748b; text-align:center; font-size:12px; }
+.horario-usuario-libre { margin-top:7px; }
+@media (max-width:560px) {
+ .horario-usuario-dia { grid-template-columns: 1fr 1fr 12px 1fr; gap:5px; }
+ .horario-usuario-dia-nombre { min-width:75px; }
+ .horario-usuario-dia input[type="time"] { padding:5px 4px; }
+}
+
+/* Controles de filtros de Bodegas, Usuarios y otras barras horizontales. */
+.buscador-tabla > :is(.buscador-input-contenedor, .campo-desplegable, .boton-filtro-icono),
+.buscador-tabla > button:not(.boton-principal),
+.usuarios-filtros > button,
+.usuarios-filtros .buscador-input-contenedor,
+.usuarios-filtros .campo-desplegable,
+.buscador-tabla > .campo-desplegable .campo-desplegable__boton {
+  box-sizing: border-box !important;
+  min-height: 48px !important;
+  height: 48px !important;
+  max-height: 48px !important;
+}
+/* Topes de tablas largos: su cabecera y sus registros se desplazan en el contenedor propio. */
+.tabla-card .tabla-contenedor { max-height: max(270px, min(520px, calc(100vh - 365px))); }
+.modal-fondo .tabla-card .tabla-contenedor { max-height: 300px; }

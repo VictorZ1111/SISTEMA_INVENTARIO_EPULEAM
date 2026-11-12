@@ -4,6 +4,7 @@ import { PassportStrategy } from "@nestjs/passport";
 import { ExtractJwt, Strategy } from "passport-jwt";
 
 import { UsuariosService } from "../../usuarios/usuarios.service";
+import { verificarAccesoPorHorario } from "../../usuarios/horarios-acceso";
 import { JwtPayload } from "../interfaces/jwt-payload.interface";
 import { UsuarioAutenticado } from "../interfaces/usuario-autenticado.interface";
 
@@ -28,6 +29,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         "La sesión no corresponde a un usuario activo.",
       );
     }
+
+    verificarAccesoPorHorario(usuario.horarioAcceso, new Date(), {
+      permitido: usuario.accesoTemporalPermitido,
+      hasta: usuario.accesoTemporalHasta,
+    });
 
     return {
       id: usuario.id,

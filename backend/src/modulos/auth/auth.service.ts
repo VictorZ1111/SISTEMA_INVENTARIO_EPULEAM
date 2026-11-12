@@ -7,6 +7,7 @@ import {
   type UsuarioPublico,
 } from "../usuarios/usuarios.service";
 import { LoginDto } from "./dto/login.dto";
+import { verificarAccesoPorHorario } from "../usuarios/horarios-acceso";
 import type { JwtPayload } from "./interfaces/jwt-payload.interface";
 
 export interface RespuestaInicioSesion {
@@ -48,6 +49,11 @@ export class AuthService {
         "El correo o el código de acceso son incorrectos.",
       );
     }
+
+    verificarAccesoPorHorario(usuario.horarioAcceso, new Date(), {
+      permitido: usuario.accesoTemporalPermitido,
+      hasta: usuario.accesoTemporalHasta,
+    });
 
     const payload: JwtPayload = {
       sub: usuario.id,

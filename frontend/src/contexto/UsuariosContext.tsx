@@ -11,6 +11,8 @@ import {
 
 import {
   cambiarEstadoUsuarioApi,
+  configurarAccesoTemporalApi,
+  cancelarAccesoTemporalApi,
   crearUsuarioApi,
   editarUsuarioApi,
   eliminarAsignacionesUsuarioApi,
@@ -29,6 +31,7 @@ import {
 import { useAuth } from "./AuthContext";
 import type { Bodega } from "../tipos/bodega";
 import type { EstadoUsuario, RolUsuario, Usuario } from "../tipos/usuario";
+import type { HorarioSemanal } from "../tipos/horarioAcceso";
 
 interface UsuarioFormulario {
   nombre: string;
@@ -40,6 +43,7 @@ interface UsuarioFormulario {
   bodegaAsignada?: string;
   bodegasAsignadas?: string[];
   codigoAcceso?: string;
+  horarioAcceso?: HorarioSemanal;
 }
 
 interface UsuariosContexto {
@@ -56,6 +60,8 @@ interface UsuariosContexto {
     id: string | number,
     estado: EstadoUsuario,
   ) => Promise<Usuario>;
+  configurarAccesoTemporalUsuario: (id: string | number, permitido: boolean) => Promise<void>;
+  cancelarAccesoTemporalUsuario: (id: string | number) => Promise<void>;
   eliminarUsuario: (id: string | number) => Promise<void>;
   obtenerUsuarioPorId: (id: string | number) => Usuario | undefined;
   restablecerCodigoAcceso: (
@@ -164,6 +170,9 @@ export function UsuariosProvider({ children }: Props) {
               bodegasAsignadas,
               bodegaAsignada: bodegasAsignadas[0] || "",
               esAdministradorGeneral: usuario.esAdministradorGeneral,
+              horarioAcceso: usuario.horarioAcceso,
+              accesoTemporalPermitido: usuario.accesoTemporalPermitido,
+              accesoTemporalHasta: usuario.accesoTemporalHasta,
             };
           },
         );
@@ -253,6 +262,7 @@ export function UsuariosProvider({ children }: Props) {
           telefono: nuevoUsuario.telefono?.trim() || undefined,
           rol: convertirRolFrontend(nuevoUsuario.rol),
           codigoAcceso: nuevoUsuario.codigoAcceso?.trim(),
+          horarioAcceso: nuevoUsuario.horarioAcceso ?? null,
         });
 
         if (nuevoUsuario.rol !== "admin") {
@@ -317,6 +327,7 @@ export function UsuariosProvider({ children }: Props) {
         }
 
         const data = await editarUsuarioApi(idTexto, {
+          horarioAcceso: usuarioActualizado.horarioAcceso ?? null,
           nombre: usuarioActualizado.nombre.trim(),
           telefono: usuarioActualizado.telefono?.trim() || "",
           rol: convertirRolFrontend(usuarioActualizado.rol),
@@ -373,6 +384,24 @@ export function UsuariosProvider({ children }: Props) {
     [recargarUsuarios],
   );
 
+  const configurarAccesoTemporalUsuario = useCallback(async (id: string | number, permitido: boolean) => {
+    try {
+      await configurarAccesoTemporalApi(String(id), permitido);
+      await recargarUsuarios();
+    } catch (error) {
+      throw new Error(obtenerMensajeError(error));
+    }
+  }, [recargarUsuarios]);
+
+  const cancelarAccesoTemporalUsuario = useCallback(async (id: string | number) => {
+    try {
+      await cancelarAccesoTemporalApi(String(id));
+      await recargarUsuarios();
+    } catch (error) {
+      throw new Error(obtenerMensajeError(error));
+    }
+  }, [recargarUsuarios]);
+
   const eliminarUsuario = useCallback(
     async (id: string | number) => {
       try {
@@ -419,6 +448,8 @@ export function UsuariosProvider({ children }: Props) {
       agregarUsuario,
       editarUsuario,
       cambiarEstadoUsuario,
+      configurarAccesoTemporalUsuario,
+      cancelarAccesoTemporalUsuario,
       eliminarUsuario,
       obtenerUsuarioPorId,
       restablecerCodigoAcceso,
@@ -431,6 +462,8 @@ export function UsuariosProvider({ children }: Props) {
       agregarUsuario,
       editarUsuario,
       cambiarEstadoUsuario,
+      configurarAccesoTemporalUsuario,
+      cancelarAccesoTemporalUsuario,
       eliminarUsuario,
       obtenerUsuarioPorId,
       restablecerCodigoAcceso,

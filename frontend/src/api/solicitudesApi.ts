@@ -68,6 +68,11 @@ export async function crearSolicitudApi(payload: CrearSolicitudPayload) {
   await clienteApi.post("/solicitudes", payload);
 }
 
+export async function editarSolicitudApi(id: string, payload: CrearSolicitudPayload) {
+  const { data } = await clienteApi.patch<SolicitudBackend>(`/solicitudes/${id}`, payload);
+  return data;
+}
+
 export async function rechazarSolicitudApi(
   id: string,
   observacionAtencion: string,

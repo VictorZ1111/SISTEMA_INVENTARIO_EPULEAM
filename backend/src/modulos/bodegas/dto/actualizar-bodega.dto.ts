@@ -1,6 +1,7 @@
 import {
   IsEnum,
   IsOptional,
+  IsNotEmpty,
   IsString,
   IsUUID,
   MaxLength,
@@ -10,6 +11,11 @@ import {
 import { TipoBodega } from "../enums/tipo-bodega.enum";
 
 export class ActualizarBodegaDto {
+  @IsString()
+  @IsNotEmpty({ message: "Ingresa el código del Administrador General para editar la bodega." })
+  @MaxLength(100)
+  codigoAdministradorGeneral!: string;
+
   @IsOptional()
   @IsString()
   @MinLength(3, {

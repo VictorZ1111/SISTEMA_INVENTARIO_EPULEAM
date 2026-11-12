@@ -10,6 +10,7 @@ import {
 
 import { UsuarioBodega } from "../../asignaciones/entities/usuario-bodega.entity";
 import { EstadoUsuario } from "../enums/estado-usuario.enum";
+import type { HorarioSemanal } from "../horarios-acceso";
 import { RolUsuario } from "../enums/rol-usuario.enum";
 
 @Entity({ name: "usuarios" })
@@ -74,6 +75,15 @@ export class Usuario {
     default: false,
   })
   esAdministradorGeneral!: boolean;
+
+  @Column({ name: "horario_acceso", type: "jsonb", nullable: true, default: null })
+  horarioAcceso!: HorarioSemanal;
+
+  @Column({ name: "acceso_temporal_permitido", type: "boolean", nullable: true, default: null })
+  accesoTemporalPermitido!: boolean | null;
+
+  @Column({ name: "acceso_temporal_hasta", type: "timestamptz", nullable: true, default: null })
+  accesoTemporalHasta!: Date | null;
 
   @OneToMany(
     () => UsuarioBodega,

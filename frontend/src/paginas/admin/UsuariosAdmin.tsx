@@ -4,6 +4,7 @@ import {
   Edit,
   Eye,
   EyeOff,
+  Clock3,
   Plus,
   Power,
   PowerOff,
@@ -22,6 +23,8 @@ import { useAuth } from "../../contexto/AuthContext";
 import type { Bodega } from "../../tipos/bodega";
 import type { RolUsuario, Usuario } from "../../tipos/usuario";
 import CampoDesplegable from "../../componentes/CampoDesplegable";
+import SelectorHoraAcceso from "../../componentes/SelectorHoraAcceso";
+import { DIAS_HORARIO, horarioPorDefecto, estaDentroDeHorario, type HorarioDia } from "../../tipos/horarioAcceso";
 
 interface FormularioUsuario {
   nombre: string;
@@ -34,6 +37,8 @@ interface FormularioUsuario {
   cambiarCodigoAcceso: boolean;
   nuevoCodigoAcceso: string;
   codigoAdministradorGeneral: string;
+  horarioAcceso: HorarioDia[];
+  horarioConfigurado: boolean;
 }
 
 interface MensajeSistema {
@@ -66,6 +71,8 @@ const formularioInicial: FormularioUsuario = {
   cambiarCodigoAcceso: false,
   nuevoCodigoAcceso: "",
   codigoAdministradorGeneral: "",
+  horarioAcceso: horarioPorDefecto(),
+  horarioConfigurado: true,
 };
 
 function obtenerNombreRol(rol: RolUsuario) {
@@ -154,6 +161,8 @@ function UsuariosAdmin() {
     agregarUsuario,
     editarUsuario,
     cambiarEstadoUsuario,
+    configurarAccesoTemporalUsuario,
+    cancelarAccesoTemporalUsuario,
     eliminarUsuario,
     restablecerCodigoAcceso,
   } = useUsuarios();
@@ -205,6 +214,7 @@ function UsuariosAdmin() {
     setFormulario((formularioActual) => ({
       ...formularioActual,
       [campo]: valor,
+      ...(campo === "horarioAcceso" ? { horarioConfigurado: true } : {}),
     }));
   };
 
@@ -272,7 +282,7 @@ function UsuariosAdmin() {
 
   const abrirModalCrear = () => {
     setUsuarioEditando(null);
-    setFormulario(formularioInicial);
+    setFormulario({ ...formularioInicial, horarioAcceso: horarioPorDefecto() });
     setMostrarNuevoCodigo(false);
     setMostrarCodigoAdministrador(false);
     setModalAbierto(true);
@@ -302,6 +312,8 @@ function UsuariosAdmin() {
       cambiarCodigoAcceso: false,
       nuevoCodigoAcceso: "",
       codigoAdministradorGeneral: "",
+      horarioAcceso: usuario.horarioAcceso?.map((dia) => ({ ...dia })) ?? horarioPorDefecto(),
+      horarioConfigurado: usuario.horarioAcceso !== null && usuario.horarioAcceso !== undefined,
     });
 
     setMostrarNuevoCodigo(false);
@@ -461,7 +473,19 @@ function UsuariosAdmin() {
       bodegasAsignadas:
         formulario.rol === "admin" ? [] : formulario.bodegasAsignadas,
       codigoAcceso: datosValidados.codigoAcceso,
+      horarioAcceso: formulario.horarioConfigurado ? formulario.horarioAcceso : null,
     };
+
+    if (formulario.horarioConfigurado) {
+      if (!formulario.horarioAcceso.some((dia) => dia.activo)) {
+        mostrarMensaje("error", "Selecciona al menos un día de acceso.");
+        return;
+      }
+      if (formulario.horarioAcceso.some((dia) => dia.activo && (!dia.desde || !dia.hasta || dia.desde >= dia.hasta))) {
+        mostrarMensaje("error", "La hora final debe ser posterior a la inicial en cada día habilitado.");
+        return;
+      }
+    }
 
     try {
       if (usuarioEditando) {
@@ -488,28 +512,38 @@ function UsuariosAdmin() {
 
   const cambiarEstado = async (usuario: Usuario) => {
     if (esAdministradorGeneral(usuario)) {
-      mostrarMensaje(
-        "error",
-        "El Administrador General debe permanecer activo."
-      );
+      mostrarMensaje("error", "El Administrador General debe permanecer activo.");
       return;
     }
-
     const nuevoEstado = usuario.estado === "activo" ? "inactivo" : "activo";
-
     try {
       await cambiarEstadoUsuario(usuario.id, nuevoEstado);
-      mostrarMensaje(
-        "exito",
-        nuevoEstado === "activo"
-          ? "Usuario activado correctamente."
-          : "Usuario inactivado correctamente."
-      );
+      mostrarMensaje("exito", nuevoEstado === "activo"
+        ? "Usuario activado correctamente."
+        : "Usuario inactivado correctamente.");
     } catch (error) {
-      mostrarMensaje(
-        "error",
-        error instanceof Error ? error.message : "No se pudo cambiar el estado del usuario."
-      );
+      mostrarMensaje("error", error instanceof Error ? error.message : "No se pudo cambiar el estado del usuario.");
+    }
+  };
+
+  /** Excepción horaria temporal: no modifica la activación permanente de la cuenta. */
+  const gestionarExcepcionHorario = async (usuario: Usuario) => {
+    if (esAdministradorGeneral(usuario) || usuario.estado !== "activo" || !usuario.horarioAcceso) return;
+    try {
+      const excepcionVigente = Boolean(usuario.accesoTemporalHasta &&
+        new Date(usuario.accesoTemporalHasta).getTime() > Date.now());
+      if (excepcionVigente) {
+        await cancelarAccesoTemporalUsuario(usuario.id);
+        mostrarMensaje("exito", "Se restableció el horario habitual del usuario.");
+      } else {
+        const permitido = !estaDentroDeHorario(usuario.horarioAcceso);
+        await configurarAccesoTemporalUsuario(usuario.id, permitido);
+        mostrarMensaje("exito", permitido
+          ? "Acceso permitido durante una hora. Después se aplicará su horario habitual."
+          : "Acceso suspendido durante una hora. Después se aplicará su horario habitual.");
+      }
+    } catch (error) {
+      mostrarMensaje("error", error instanceof Error ? error.message : "No se pudo gestionar la excepción de horario.");
     }
   };
 
@@ -766,6 +800,13 @@ function UsuariosAdmin() {
                     >
                       {usuario.estado === "activo" ? "Activo" : "Inactivo"}
                     </span>
+                    {usuario.estado === "activo" && usuario.horarioAcceso && (
+                      <small className="usuario-acceso-temporal-estado">
+                        {usuario.accesoTemporalHasta && new Date(usuario.accesoTemporalHasta).getTime() > Date.now()
+                          ? `${usuario.accesoTemporalPermitido ? "Acceso excepcional" : "Bloqueo temporal"} hasta ${new Date(usuario.accesoTemporalHasta).toLocaleTimeString("es-EC", { timeZone: "America/Guayaquil", hour: "2-digit", minute: "2-digit" })}`
+                          : estaDentroDeHorario(usuario.horarioAcceso) ? "Dentro de horario" : "Fuera de horario"}
+                      </small>
+                    )}
                   </td>
 
                   <td>
@@ -801,27 +842,30 @@ function UsuariosAdmin() {
                       <button
                         className="boton-icono-tabla"
                         type="button"
-                        title={
-                          esAdministradorGeneral(usuario)
-                            ? "El Administrador General debe permanecer activo"
-                            : usuario.estado === "activo"
-                              ? "Inactivar usuario"
-                              : "Activar usuario"
-                        }
+                        title={esAdministradorGeneral(usuario)
+                          ? "El Administrador General debe permanecer activo"
+                          : usuario.estado === "activo" ? "Inactivar cuenta permanentemente" : "Activar cuenta permanentemente"}
                         onClick={() => cambiarEstado(usuario)}
                         disabled={esAdministradorGeneral(usuario)}
-                        style={
-                          esAdministradorGeneral(usuario)
-                            ? { opacity: 0.45, cursor: "not-allowed" }
-                            : undefined
-                        }
+                        style={esAdministradorGeneral(usuario) ? { opacity: 0.45, cursor: "not-allowed" } : undefined}
                       >
-                        {usuario.estado === "activo" ? (
-                          <PowerOff size={17} />
-                        ) : (
-                          <Power size={17} />
-                        )}
+                        {usuario.estado === "activo" ? <PowerOff size={17} /> : <Power size={17} />}
                       </button>
+
+                      {usuario.estado === "activo" && Boolean(usuario.horarioAcceso) && !esAdministradorGeneral(usuario) && (
+                        <button
+                          className="boton-icono-tabla"
+                          type="button"
+                          title={usuario.accesoTemporalHasta && new Date(usuario.accesoTemporalHasta).getTime() > Date.now()
+                            ? "Cancelar excepción de una hora"
+                            : estaDentroDeHorario(usuario.horarioAcceso ?? null)
+                              ? "Suspender acceso por una hora, sin inactivar la cuenta"
+                              : "Permitir acceso por una hora fuera del horario habitual"}
+                          onClick={() => gestionarExcepcionHorario(usuario)}
+                        >
+                          <Clock3 size={17} />
+                        </button>
+                      )}
 
                       <button
                         className="boton-icono-tabla boton-icono-peligro"
@@ -1237,6 +1281,62 @@ function UsuariosAdmin() {
                       </div>
                     </div>
                   )}
+
+                <section className="horario-usuario-panel usuario-campo-ancho" aria-label="Horario semanal de acceso">
+                  <div className="horario-usuario-encabezado">
+                    <div>
+                      <strong>Horario de acceso</strong>
+                      <small>Marca los días autorizados y establece su hora de entrada y salida, incluso si seleccionas todos (hora de Ecuador).</small>
+                    </div>
+                    <button
+                      type="button"
+                      className="horario-usuario-seleccionar-todos"
+                      onClick={() => actualizarCampo("horarioAcceso", formulario.horarioAcceso.map((dia) => ({ ...dia, activo: true })))}
+                    >
+                      Todos los días
+                    </button>
+                  </div>
+                  <div className="horario-usuario-lista">
+                    {DIAS_HORARIO.map((nombre, indice) => {
+                      const franja = formulario.horarioAcceso[indice];
+                      return (
+                        <div className="horario-usuario-dia" key={nombre}>
+                          <label className="horario-usuario-dia-nombre">
+                            <input
+                              type="checkbox"
+                              checked={franja.activo}
+                              onChange={(evento) => actualizarCampo("horarioAcceso", formulario.horarioAcceso.map((dia, i) =>
+                                i === indice ? { ...dia, activo: evento.target.checked } : dia))}
+                            />
+                            <span>{nombre}</span>
+                          </label>
+                          <div className="horario-usuario-rango">
+                              <SelectorHoraAcceso
+                                ariaLabel={`Hora de entrada del ${nombre}`}
+                                valor={franja.desde}
+                                deshabilitado={!franja.activo}
+                                alCambiar={(hora) => actualizarCampo("horarioAcceso", formulario.horarioAcceso.map((dia, i) =>
+                                  i === indice ? { ...dia, desde: hora } : dia))}
+                              />
+                              <span className="horario-usuario-separador">a</span>
+                              <SelectorHoraAcceso
+                                ariaLabel={`Hora de salida del ${nombre}`}
+                                valor={franja.hasta}
+                                deshabilitado={!franja.activo}
+                                alCambiar={(hora) => actualizarCampo("horarioAcceso", formulario.horarioAcceso.map((dia, i) =>
+                                  i === indice ? { ...dia, hasta: hora } : dia))}
+                              />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="horario-usuario-libre">
+                    {formulario.horarioConfigurado
+                      ? "Los días marcados permiten acceso únicamente dentro de sus horas. Los días desmarcados quedan sin acceso."
+                      : "Este usuario conserva acceso sin restricciones hasta que modifiques su horario."}
+                  </p>
+                </section>
 
                 {formulario.rol !== "admin" && (
                   <div className="campo-formulario usuario-campo-ancho campo-bodegas-usuario">

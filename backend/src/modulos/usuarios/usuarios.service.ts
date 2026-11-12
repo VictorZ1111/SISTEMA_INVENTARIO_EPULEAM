@@ -24,6 +24,7 @@ import { CrearUsuarioDto } from "./dto/crear-usuario.dto";
 import { EstadoUsuario } from "./enums/estado-usuario.enum";
 import { RolUsuario } from "./enums/rol-usuario.enum";
 import { Usuario } from "./entities/usuario.entity";
+import { estaDentroDeHorarioSemanal, validarHorarioSemanal, type HorarioSemanal } from "./horarios-acceso";
 
 export interface UsuarioPublico {
   id: string;
@@ -35,6 +36,9 @@ export interface UsuarioPublico {
   esAdministradorGeneral: boolean;
   createdAt: Date;
   updatedAt: Date;
+  horarioAcceso: HorarioSemanal;
+  accesoTemporalPermitido: boolean | null;
+  accesoTemporalHasta: Date | null;
 }
 
 @Injectable()
@@ -140,6 +144,7 @@ export class UsuariosService implements OnApplicationBootstrap {
       rol: dto.rol,
       estado: EstadoUsuario.ACTIVO,
       esAdministradorGeneral: false,
+      horarioAcceso: validarHorarioSemanal(dto.horarioAcceso ?? null),
     });
 
     const guardado = await this.usuariosRepository.save(usuario);
@@ -182,6 +187,12 @@ export class UsuariosService implements OnApplicationBootstrap {
       usuario.correo = this.obtenerCorreoPorRol(dto.rol);
     }
 
+    if (dto.horarioAcceso !== undefined) {
+      usuario.horarioAcceso = validarHorarioSemanal(dto.horarioAcceso);
+      usuario.accesoTemporalPermitido = null;
+      usuario.accesoTemporalHasta = null;
+    }
+
     const guardado = await this.usuariosRepository.save(usuario);
     await this.auditoriaService.registrar({
       usuarioId: actor.id,
@@ -202,6 +213,8 @@ export class UsuariosService implements OnApplicationBootstrap {
     this.validarNoAdministradorGeneral(usuario);
 
     usuario.estado = estado;
+    usuario.accesoTemporalPermitido = null;
+    usuario.accesoTemporalHasta = null;
 
     const guardado = await this.usuariosRepository.save(usuario);
     await this.auditoriaService.registrar({
@@ -210,6 +223,51 @@ export class UsuariosService implements OnApplicationBootstrap {
       accion: estado === EstadoUsuario.ACTIVO ? "activar" : "inactivar",
       registroId: guardado.id,
       descripcion: `${estado === EstadoUsuario.ACTIVO ? "Activación" : "Inactivación"} del usuario ${guardado.nombre}.`,
+    });
+    return this.convertirAPublico(guardado);
+  }
+
+  /** Permite o bloquea el acceso por 60 minutos; la excepción caduca sin tareas programadas. */
+  async configurarAccesoTemporal(
+    id: string,
+    permitido: boolean,
+    actor: UsuarioAutenticado,
+  ): Promise<UsuarioPublico> {
+    const usuario = await this.obtenerPorId(id);
+    this.validarNoAdministradorGeneral(usuario);
+    if (usuario.estado !== EstadoUsuario.ACTIVO) {
+      throw new BadRequestException("Primero debes activar la cuenta del usuario.");
+    }
+    if (!usuario.horarioAcceso) {
+      throw new BadRequestException("Configura un horario semanal para utilizar excepciones de una hora.");
+    }
+    const dentro = estaDentroDeHorarioSemanal(usuario.horarioAcceso);
+    if (permitido === dentro) {
+      throw new BadRequestException(permitido
+        ? "El usuario ya está dentro de su horario autorizado."
+        : "El usuario ya está fuera de su horario autorizado.");
+    }
+    usuario.accesoTemporalPermitido = permitido;
+    usuario.accesoTemporalHasta = new Date(Date.now() + 60 * 60 * 1000);
+    const guardado = await this.usuariosRepository.save(usuario);
+    await this.auditoriaService.registrar({
+      usuarioId: actor.id, modulo: "usuarios",
+      accion: permitido ? "acceso_temporal_permitido" : "acceso_temporal_bloqueado",
+      registroId: usuario.id,
+      descripcion: `${permitido ? "Acceso extraordinario" : "Bloqueo temporal"} de ${usuario.nombre} durante una hora.`,
+    });
+    return this.convertirAPublico(guardado);
+  }
+
+  async cancelarAccesoTemporal(id: string, actor: UsuarioAutenticado): Promise<UsuarioPublico> {
+    const usuario = await this.obtenerPorId(id);
+    this.validarNoAdministradorGeneral(usuario);
+    usuario.accesoTemporalPermitido = null;
+    usuario.accesoTemporalHasta = null;
+    const guardado = await this.usuariosRepository.save(usuario);
+    await this.auditoriaService.registrar({
+      usuarioId: actor.id, modulo: "usuarios", accion: "cancelar_acceso_temporal",
+      registroId: usuario.id, descripcion: `Restablecimiento del horario habitual de ${usuario.nombre}.`,
     });
     return this.convertirAPublico(guardado);
   }
@@ -271,6 +329,9 @@ export class UsuariosService implements OnApplicationBootstrap {
       esAdministradorGeneral: usuario.esAdministradorGeneral,
       createdAt: usuario.createdAt,
       updatedAt: usuario.updatedAt,
+      horarioAcceso: usuario.horarioAcceso ?? null,
+      accesoTemporalPermitido: usuario.accesoTemporalPermitido ?? null,
+      accesoTemporalHasta: usuario.accesoTemporalHasta ?? null,
     };
   }
 
@@ -363,6 +424,11 @@ export class UsuariosService implements OnApplicationBootstrap {
         "Ya existe un usuario con ese código de acceso.",
       );
     }
+  }
+
+  // Autorización reutilizable por operaciones administrativas sensibles.
+  async autorizarCodigoAdministradorGeneral(codigo: string): Promise<void> {
+    await this.validarAutorizacionAdministradorGeneral(codigo);
   }
 
   private async validarAutorizacionAdministradorGeneral(

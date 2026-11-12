@@ -17,6 +17,7 @@ import type { UsuarioAutenticado } from "../auth/interfaces/usuario-autenticado.
 import { RolesGuard } from "../auth/guards/roles.guard";
 import { ActualizarUsuarioDto } from "./dto/actualizar-usuario.dto";
 import { CambiarEstadoUsuarioDto } from "./dto/cambiar-estado-usuario.dto";
+import { AccesoTemporalDto } from "./dto/acceso-temporal.dto";
 import { CrearUsuarioDto } from "./dto/crear-usuario.dto";
 import { RestablecerCodigoDto } from "./dto/restablecer-codigo.dto";
 import { RolUsuario } from "./enums/rol-usuario.enum";
@@ -67,6 +68,23 @@ export class UsuariosController {
     @UsuarioActual() usuario: UsuarioAutenticado,
   ): Promise<UsuarioPublico> {
     return this.usuariosService.cambiarEstado(id, dto.estado, usuario);
+  }
+
+  @Patch(":id/acceso-temporal")
+  configurarAccesoTemporal(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: AccesoTemporalDto,
+    @UsuarioActual() usuario: UsuarioAutenticado,
+  ): Promise<UsuarioPublico> {
+    return this.usuariosService.configurarAccesoTemporal(id, dto.permitido, usuario);
+  }
+
+  @Delete(":id/acceso-temporal")
+  cancelarAccesoTemporal(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @UsuarioActual() usuario: UsuarioAutenticado,
+  ): Promise<UsuarioPublico> {
+    return this.usuariosService.cancelarAccesoTemporal(id, usuario);
   }
 
   @Patch(":id/codigo")

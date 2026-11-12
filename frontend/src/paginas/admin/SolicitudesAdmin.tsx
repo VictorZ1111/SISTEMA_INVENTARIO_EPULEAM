@@ -55,6 +55,7 @@ interface ItemRevisionSolicitud extends ItemSolicitud {
   disponible: number;
   pendiente: number;
   cantidadAEntregar: number;
+  cantidadARechazar: number;
   productoIdDisponible?: string | number;
 }
 
@@ -153,6 +154,7 @@ function SolicitudesAdmin() {
     null
   );
   const [itemsRevision, setItemsRevision] = useState<ItemRevisionSolicitud[]>([]);
+  const [borradoresCantidades, setBorradoresCantidades] = useState<Record<string, string>>({});
   const [mensajeSistema, setMensajeSistema] =
     useState<MensajeSistema | null>(null);
   const [confirmacionSolicitud, setConfirmacionSolicitud] =
@@ -268,9 +270,11 @@ function SolicitudesAdmin() {
         disponible: disponibilidad.disponible,
         productoIdDisponible: disponibilidad.productoIdDisponible,
         cantidadAEntregar,
+        cantidadARechazar: 0,
       };
     });
     setItemsRevision(items);
+    setBorradoresCantidades({});
     setSolicitudDetalle(solicitud);
     const observacionGuardada = (solicitud as Solicitud & { observacionAdmin?: string }).observacionAdmin || "";
     setObservacionAdmin(observacionGuardada);
@@ -280,6 +284,7 @@ function SolicitudesAdmin() {
   const cerrarDetalle = () => {
     setSolicitudDetalle(null);
     setItemsRevision([]);
+    setBorradoresCantidades({});
     setObservacionAdmin("");
     setMostrarObservacionAdmin(false);
   };
@@ -325,15 +330,39 @@ function SolicitudesAdmin() {
           : "¿Seguro que deseas rechazar esta solicitud? Esta acción dejará constancia del rechazo.",
     });
   };
+  const cambiarCantidad = (id: string | undefined, campo: "cantidadAEntregar" | "cantidadARechazar", valor: string) => {
+    if (!id || (valor !== "" && !/^\d+$/.test(valor))) return;
+    const numero = valor === "" ? 0 : Number(valor);
+    if (!Number.isSafeInteger(numero)) return;
+    const item = itemsRevision.find((dato) => dato.id === id);
+    if (!item) return;
+    const maximo = campo === "cantidadAEntregar"
+      ? Math.min(item.disponible, Math.max(0, item.pendiente - item.cantidadARechazar))
+      : Math.max(0, item.pendiente - item.cantidadAEntregar);
+    const cantidad = Math.min(numero, maximo);
+    setBorradoresCantidades((anterior) => ({ ...anterior, [`${id}:${campo}`]: valor === "" ? "" : String(cantidad) }));
+    setItemsRevision((anterior) => anterior.map((dato) => dato.id === id ? { ...dato, [campo]: cantidad } : dato));
+  };
+
+  const finalizarEdicion = (id: string | undefined, campo: string) => {
+    if (!id) return;
+    setBorradoresCantidades((anterior) => {
+      const copia = { ...anterior };
+      delete copia[`${id}:${campo}`];
+      return copia;
+    });
+  };
+
   const atenderDisponible = async () => {
     if (!solicitudDetalle) return;
     const entregas = itemsRevision
-      .filter((item) => item.cantidadAEntregar > 0)
+      .filter((item) => item.cantidadAEntregar + item.cantidadARechazar > 0)
       .map((item) => ({
         itemId: item.id,
         productoId: item.productoId || item.productoIdDisponible,
         productoSolicitado: item.productoSolicitado,
         cantidad: item.cantidadAEntregar,
+        cantidadRechazada: item.cantidadARechazar,
       }));
     const resultado = await atenderSolicitud(
       solicitudDetalle.id,
@@ -353,11 +382,11 @@ function SolicitudesAdmin() {
     setConfirmacionSolicitud({
       tipo: "atender",
       titulo: solicitudCompletaDisponible
-        ? "Aceptar solicitud"
+        ? "Atender solicitud"
         : "Aceptar parcialmente",
       mensaje: solicitudCompletaDisponible
-        ? "¿Seguro que deseas aceptar esta solicitud? Los bienes se enviarán a la bodega operativa correspondiente; Gastronomía quedará pendiente de distribución hacia sus sucursales Tasty."
-        : "¿Seguro que deseas atender parcialmente esta solicitud? Se entregará solo lo disponible en Inventario General y quedará pendiente lo faltante.",
+        ? "¿Confirmas las cantidades a entregar y rechazar? Solo las unidades entregadas se transferirán a su destino."
+        : "¿Confirmas esta atención parcial? Las cantidades no entregadas ni rechazadas seguirán pendientes.",
     });
   };
   const solicitudEstaDentroDeTiempo = (solicitud: Solicitud) => {
@@ -441,16 +470,16 @@ function SolicitudesAdmin() {
     ordenSolicitudes !== "asc";
   const itemsPendientes = itemsRevision.filter((item) => item.pendiente > 0);
   const puedeAtenderDisponible = itemsPendientes.some(
-    (item) => item.cantidadAEntregar > 0
+    (item) => item.cantidadAEntregar + item.cantidadARechazar > 0
   );
   const solicitudCompletaDisponible =
     itemsPendientes.length > 0 &&
-    itemsPendientes.every((item) => item.cantidadAEntregar >= item.pendiente);
+    itemsPendientes.every((item) => item.cantidadAEntregar + item.cantidadARechazar >= item.pendiente);
   const textoBotonAtencion = solicitudCompletaDisponible
-    ? "Aceptar solicitud"
+    ? "Atender solicitud"
     : puedeAtenderDisponible
       ? "Aceptar parcialmente"
-      : "Sin stock disponible";
+      : "Indica cantidades";
   const solicitudConfirmacion =
     confirmacionSolicitud?.tipo === "reversar"
       ? solicitudReversion
@@ -622,13 +651,10 @@ function SolicitudesAdmin() {
       </section>
       {solicitudDetalle && (
         <div className="modal-fondo">
-          <div className="modal-contenedor modal-solicitud-detalle modal-solicitud-atencion">
+          <div className="modal-contenedor modal-solicitud-detalle modal-solicitud-atencion modal-solicitud-atencion-admin">
             <div className="modal-header">
               <div>
                 <h2>Solicitud</h2>
-                <p>
-                  El disponible corresponde al Inventario General. Limpieza y Oficina reciben directamente; Gastronomía queda bajo control del Supervisor para distribuir a sus sucursales Tasty.
-                </p>
               </div>
               <div className="modal-solicitud-header-acciones">
                 <span
@@ -674,6 +700,8 @@ function SolicitudesAdmin() {
                       <th>Entregado</th>
                       <th>Rechazado</th>
                       <th>Disponible</th>
+                      <th>A entregar</th>
+                      <th>A rechazar</th>
                       <th>Revisión</th>
                     </tr>
                   </thead>
@@ -721,8 +749,26 @@ function SolicitudesAdmin() {
                           <td>{item.cantidadRechazada || 0}</td>
                           <td>{item.disponible}</td>
                           <td>
+                            <input className="input-cantidad-tabla" type="number" min="0" step="1"
+                              max={Math.min(item.disponible, item.pendiente)} disabled={itemCerrado}
+                              value={borradoresCantidades[`${item.id}:cantidadAEntregar`] ?? item.cantidadAEntregar}
+                              aria-label={`Cantidad a entregar de ${item.productoSolicitado}`}
+                              onFocus={(e) => e.currentTarget.select()}
+                              onChange={(e) => cambiarCantidad(item.id, "cantidadAEntregar", e.target.value)}
+                              onBlur={() => finalizarEdicion(item.id, "cantidadAEntregar")} />
+                          </td>
+                          <td>
+                            <input className="input-cantidad-tabla" type="number" min="0" step="1"
+                              max={item.pendiente} disabled={itemCerrado}
+                              value={borradoresCantidades[`${item.id}:cantidadARechazar`] ?? item.cantidadARechazar}
+                              aria-label={`Cantidad a rechazar de ${item.productoSolicitado}`}
+                              onFocus={(e) => e.currentTarget.select()}
+                              onChange={(e) => cambiarCantidad(item.id, "cantidadARechazar", e.target.value)}
+                              onBlur={() => finalizarEdicion(item.id, "cantidadARechazar")} />
+                          </td>
+                          <td>
                             <span
-                              className={`estado-entrega-item ${revisionCumplida ? "cumple" : "no-cumple"}`}
+                              className={`estado-entrega-item ${revisionCumplida ? "cumple" : "sin-stock"}`}
                             >
                               {revisionCumplida ? (
                                 <Check size={16} />
@@ -739,6 +785,21 @@ function SolicitudesAdmin() {
                 </table>
               </div>
             </div>
+            {itemsPendientes.length > 0 && (
+              <p className={`solicitud-stock-aviso ${
+                itemsPendientes.some((item) => item.disponible === 0)
+                  ? "solicitud-stock-aviso-sin"
+                  : itemsPendientes.some((item) => item.disponible < item.pendiente)
+                    ? "solicitud-stock-aviso-insuficiente"
+                    : "solicitud-stock-aviso-suficiente"
+              }`} role="status">
+                {itemsPendientes.some((item) => item.disponible === 0)
+                  ? "No hay existencias de uno o más bienes solicitados. Puedes rechazar cantidades o dejarlas pendientes."
+                  : itemsPendientes.some((item) => item.disponible < item.pendiente)
+                    ? "El stock del Inventario general es insuficiente. Puedes atender parcialmente o rechazar cantidades."
+                    : "Hay existencias suficientes en el Inventario general para atender esta solicitud."}
+              </p>
+            )}
             {solicitudDetalle.estado !== "rechazada" &&
               solicitudDetalle.estado !== "atendida" &&
               !solicitudDetalle.pendientesRechazados && (

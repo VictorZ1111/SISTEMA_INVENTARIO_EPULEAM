@@ -123,6 +123,12 @@ export function AuthProvider({ children }: Props) {
   }, []);
 
   useEffect(() => {
+    const expirar = () => cerrarSesion();
+    window.addEventListener("epuleam:horario-expirado", expirar);
+    return () => window.removeEventListener("epuleam:horario-expirado", expirar);
+  }, [cerrarSesion]);
+
+  useEffect(() => {
     let activo = true;
 
     async function restaurarSesion() {

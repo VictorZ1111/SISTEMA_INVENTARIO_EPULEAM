@@ -18,6 +18,7 @@ export interface ItemSolicitud {
 }
 
 export interface EntregaSolicitud {
+  cantidadRechazada?: number;
   itemId?: string;
   productoId?: string | number;
   productoSolicitado: string;
@@ -34,6 +35,8 @@ export interface ResultadoAtencionSolicitud {
 export interface Solicitud {
   id: string | number;
   codigo?: string;
+  /** Si existe, esta solicitud de Supervisor abastece un pedido de Responsable. */
+  solicitudOrigenId?: string | null;
 
   tipo: TipoSolicitud;
   solicitante: string;

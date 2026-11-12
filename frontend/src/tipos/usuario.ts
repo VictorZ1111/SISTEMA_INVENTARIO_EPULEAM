@@ -1,3 +1,5 @@
+import type { HorarioSemanal } from "./horarioAcceso";
+
 export type RolUsuario = "admin" | "responsable" | "supervisor";
 
 export type EstadoUsuario = "activo" | "inactivo";
@@ -16,6 +18,9 @@ export interface Usuario {
   codigoAcceso?: string;
   contrasena?: string;
   esAdministradorGeneral?: boolean;
+  horarioAcceso?: HorarioSemanal;
+  accesoTemporalPermitido?: boolean | null;
+  accesoTemporalHasta?: string | null;
 }
 
 export interface UsuarioSesion {
@@ -29,4 +34,5 @@ export interface UsuarioSesion {
   bodegaAsignada?: string;
   bodegasAsignadas?: string[];
   esAdministradorGeneral?: boolean;
+  horarioAcceso?: HorarioSemanal;
 }

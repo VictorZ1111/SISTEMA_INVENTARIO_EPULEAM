@@ -32,6 +32,15 @@ import type { Producto } from "../../tipos/producto";
 
 type OrdenInventario = "asc" | "desc";
 
+function obtenerDescripcionTarjeta(nombre: string): string {
+  const normalizado = nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (normalizado.includes("limpieza")) return "Bodega de productos e insumos de limpieza.";
+  if (normalizado.includes("oficina")) return "Bodega de materiales y suministros de oficina.";
+  if (normalizado.includes("gastronom")) return "Bodega de insumos del área de gastronomía.";
+  if (normalizado.includes("tasty")) return `Sucursal gastronómica ${nombre.replace(/^Bodega\s+/i, "")}.`;
+  return "Bienes y suministros asignados a esta bodega.";
+}
+
 function normalizarTexto(texto: string) {
   return texto
     .toLowerCase()
@@ -280,7 +289,7 @@ function PanelSupervisor() {
 
         <div className={`responsable-tabla-scroll responsable-tabla-panel responsable-inventario-tabla tabla-scroll-adaptable ${productosInventarioGeneral.length === 0 ? "tabla-scroll-sin-registros" : ""}`}>
           <TablaBase
-            columnas={["Código", "Bien", "Categoría", "Atributo", "Bodega", "Cantidad", "Estado", "Acciones"]}
+            columnas={["Código", "Bien", "Categoría", "Atributo", "Bodega", "Estado", "Acciones"]}
             mensajeVacio="No existen bienes disponibles en Inventario General"
           >
             {productosInventarioGeneral.length > 0
@@ -300,7 +309,6 @@ function PanelSupervisor() {
                         : "No aplica"}
                     </td>
                     <td>{obtenerBodegaProducto(producto)}</td>
-                    <td>{producto.cantidad}</td>
                     <td>
                       <span
                         className={`badge-bien badge-bien-${obtenerClaseEstadoBien(
@@ -353,7 +361,7 @@ function PanelSupervisor() {
                     <IconoBodega size={23} />
                   </span>
 
-                  <strong>{obtenerTituloBodega(bodega)}</strong>
+                  <span className="tarjeta-bodega-contenido"><strong>{obtenerTituloBodega(bodega)}</strong><span className="tarjeta-bodega-descripcion">{obtenerDescripcionTarjeta(bodega)}</span></span>
                 </button>
               );
             })
@@ -391,7 +399,7 @@ function PanelSupervisor() {
                     <IconoBodega size={23} />
                   </span>
 
-                  <strong>{limpiarNombreBodega(bodega)}</strong>
+                  <span className="tarjeta-bodega-contenido"><strong>{limpiarNombreBodega(bodega)}</strong><span className="tarjeta-bodega-descripcion">{obtenerDescripcionTarjeta(bodega)}</span></span>
                 </button>
               );
             })}
@@ -452,10 +460,6 @@ function PanelSupervisor() {
               <div>
                 <span>Bodega</span>
                 <strong>{obtenerBodegaProducto(productoDetalle)}</strong>
-              </div>
-              <div>
-                <span>Cantidad</span>
-                <strong>{productoDetalle.cantidad}</strong>
               </div>
               <div>
                 <span>Tipo</span>

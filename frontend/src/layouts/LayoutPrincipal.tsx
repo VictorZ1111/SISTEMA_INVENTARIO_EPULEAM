@@ -3,6 +3,7 @@ import BarraLateral from "../componentes/BarraLateral";
 import "../estilos/layout.css";
 import "../estilos/sidebar.css";
 import "../estilos/dashboard.css";
+import "../estilos/mejorasInterfaz5B5.css";
 
 interface Props {
   children: ReactNode;

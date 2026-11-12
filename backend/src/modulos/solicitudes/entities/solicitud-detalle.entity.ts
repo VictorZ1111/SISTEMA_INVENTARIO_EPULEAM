@@ -64,6 +64,15 @@ export class SolicitudDetalle {
   @JoinColumn({ name: "producto_id" })
   producto!: Producto;
 
+  // El bien ya no pertenece a la solicitud activa, pero su registro se
+  // conserva para respetar referencias históricas de Movimientos.
+  @Column({
+    name: "retirado",
+    type: "boolean",
+    default: false,
+  })
+  retirado!: boolean;
+
   @Column({
     name: "cantidad_solicitada",
     type: "integer",

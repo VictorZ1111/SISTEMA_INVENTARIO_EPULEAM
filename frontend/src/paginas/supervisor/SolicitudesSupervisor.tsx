@@ -4,6 +4,7 @@ import {
   ArrowUpAZ,
   Check,
   Paintbrush,
+  Pencil,
   Plus,
   Search,
   Trash2,
@@ -16,8 +17,6 @@ import SelectorFechaFiltro from "../../componentes/SelectorFechaFiltro";
 import {
   atenderSolicitudApi,
   obtenerSolicitudesRecibidasApi,
-  obtenerAbastecimientosApi,
-  solicitarAbastecimientoApi,
   type SolicitudBackend,
 } from "../../api/solicitudesApi";
 import {
@@ -174,7 +173,7 @@ function obtenerDisponibilidadSupervisor(
 
 function SolicitudesSupervisor({ modo = "supervisor" }: { modo?: "supervisor" | "responsable" }) {
   const { usuarioActual } = useAuth();
-  const { solicitudes, productos, agregarSolicitud, recargarDatosInventario } = useInventario();
+  const { solicitudes, productos, agregarSolicitud, editarSolicitud, recargarDatosInventario } = useInventario();
 
   const bodegasUsuario = useMemo(
     () => obtenerBodegasOperativasUsuario(usuarioActual),
@@ -200,6 +199,9 @@ function SolicitudesSupervisor({ modo = "supervisor" }: { modo?: "supervisor" | 
   const [ordenRecibidas, setOrdenRecibidas] = useState<OrdenSolicitudes>("asc");
 
   const [modalNuevaSolicitud, setModalNuevaSolicitud] = useState(false);
+  const [solicitudEditando, setSolicitudEditando] = useState<Solicitud | null>(null);
+  const editandoAbastecimientoVinculado = Boolean(solicitudEditando?.solicitudOrigenId);
+  const [borradoresItem, setBorradoresItem] = useState<Record<string, string>>({});
   const [modalDetalle, setModalDetalle] = useState<Solicitud | null>(null);
   const [detalleRecibida, setDetalleRecibida] = useState<SolicitudBackend | null>(null);
   const [solicitudGestion, setSolicitudGestion] = useState<SolicitudBackend | null>(null);
@@ -210,18 +212,14 @@ function SolicitudesSupervisor({ modo = "supervisor" }: { modo?: "supervisor" | 
   const [guardandoAtencion, setGuardandoAtencion] = useState(false);
   const [mostrarObservacionRespuesta, setMostrarObservacionRespuesta] = useState(false);
   const [confirmacionAtencion, setConfirmacionAtencion] = useState<"atender" | "rechazar" | null>(null);
-  const [modalAbastecimiento, setModalAbastecimiento] = useState(false);
-  const [cantidadesAbastecimiento, setCantidadesAbastecimiento] = useState<Record<string, string>>({});
-  const [observacionAbastecimiento, setObservacionAbastecimiento] = useState("");
-  const [abastecimientosVinculados, setAbastecimientosVinculados] = useState<SolicitudBackend[]>([]);
-  const [consultandoAbastecimientos, setConsultandoAbastecimientos] = useState(false);
-  const [guardandoAbastecimiento, setGuardandoAbastecimiento] = useState(false);
+  // Referencia solo informativa: una solicitud basada en otra es independiente.
+  const [solicitudBaseReferencia, setSolicitudBaseReferencia] = useState<string | null>(null);
 
   const [bodegaSolicitud, setBodegaSolicitud] = useState("");
-  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState("");
-  const [tipoBienFiltro, setTipoBienFiltro] = useState<"todos" | "consumible" | "no_consumible">("todos");
-  const [productoSeleccionado, setProductoSeleccionado] = useState("");
-  const [cantidadSeleccionada, setCantidadSeleccionada] = useState("1");
+  const [busquedaCatalogo, setBusquedaCatalogo] = useState("");
+  const [categoriaCatalogo, setCategoriaCatalogo] = useState("todas");
+  const [tipoCatalogo, setTipoCatalogo] = useState<"todos" | "consumible" | "no_consumible">("todos");
+  const [estadoCatalogo, setEstadoCatalogo] = useState("todos");
   const [observacion, setObservacion] = useState("");
   const [itemsFormulario, setItemsFormulario] = useState<ItemFormularioSolicitud[]>([]);
   const [mensajeSistema, setMensajeSistema] = useState<MensajeSistema | null>(null);
@@ -355,28 +353,66 @@ function SolicitudesSupervisor({ modo = "supervisor" }: { modo?: "supervisor" | 
     );
   }, [productos]);
 
-  const productosDisponibles = useMemo(() => {
-    const idsSeleccionados = new Set(itemsFormulario.map((item) => item.productoId));
+  const productosCatalogo = useMemo(() => {
+    const texto = normalizarTexto(busquedaCatalogo);
+    return obtenerProductoDisponible(productos)
+      .filter((producto) => {
+        const textoProducto = normalizarTexto(
+          `${producto.codigo} ${producto.descripcion} ${producto.categoria || "Sin categoría"} ${producto.empresa || ""}`,
+        );
+        const coincideBusqueda = !texto || textoProducto.includes(texto);
+        const coincideCategoria = categoriaCatalogo === "todas" ||
+          (producto.categoria || "Sin categoría") === categoriaCatalogo;
+        const coincideTipo = tipoCatalogo === "todos" || producto.tipoProducto === tipoCatalogo;
+        const coincideEstado = estadoCatalogo === "todos" || producto.estadoBien === estadoCatalogo;
+        return coincideBusqueda && coincideCategoria && coincideTipo && coincideEstado;
+      })
+      .sort((a, b) => a.descripcion.localeCompare(b.descripcion, "es", { sensitivity: "base" }));
+  }, [productos, busquedaCatalogo, categoriaCatalogo, tipoCatalogo, estadoCatalogo]);
 
-    return obtenerProductoDisponible(productos).filter((producto) => {
-      const coincideCategoria = categoriaSeleccionada ? producto.categoria === categoriaSeleccionada : false;
-      const coincideTipo = tipoBienFiltro === "todos" || producto.tipoProducto === tipoBienFiltro;
-
-      return coincideCategoria && coincideTipo && !idsSeleccionados.has(producto.id);
-    });
-  }, [productos, itemsFormulario, categoriaSeleccionada, tipoBienFiltro]);
+  const limpiarFiltrosCatalogo = () => {
+    setBusquedaCatalogo("");
+    setCategoriaCatalogo("todas");
+    setTipoCatalogo("todos");
+    setEstadoCatalogo("todos");
+  };
 
   const mostrarMensaje = (tipo: MensajeSistema["tipo"], texto: string) => {
     setMensajeSistema({ tipo, texto });
     window.setTimeout(() => setMensajeSistema(null), 3200);
   };
 
+  const esEditable = (s: Solicitud) => s.estado === "pendiente" &&
+    !s.atendidaAt && !s.reversada && obtenerItemsSolicitud(s).every((item) =>
+      (item.cantidadEntregada || 0) === 0 && (item.cantidadRechazada || 0) === 0);
+
+  const abrirEdicion = (s: Solicitud) => {
+    if (!esEditable(s)) {
+      mostrarMensaje("error", "Solo puedes editar solicitudes pendientes sin atenciones previas.");
+      return;
+    }
+    setSolicitudBaseReferencia(null);
+    setSolicitudEditando(s);
+    setBodegaSolicitud(s.bodega);
+    limpiarFiltrosCatalogo();
+    setObservacion(s.descripcion.startsWith("Solicitud SOL-") ? "" : s.descripcion);
+    setItemsFormulario(obtenerItemsSolicitud(s).map((item, i) => ({
+      id: item.id || `${s.id}-${i}`,
+      productoId: item.productoId || "",
+      productoSolicitado: item.productoSolicitado,
+      cantidad: item.cantidad,
+    })));
+    setBorradoresItem({});
+    setModalDetalle(null);
+    setModalNuevaSolicitud(true);
+  };
+
   const abrirNuevaSolicitud = () => {
+    setSolicitudBaseReferencia(null);
+    setSolicitudEditando(null);
+    setBorradoresItem({});
     setBodegaSolicitud(bodegasUsuario[0] || "");
-    setCategoriaSeleccionada("");
-    setTipoBienFiltro("todos");
-    setProductoSeleccionado("");
-    setCantidadSeleccionada("1");
+    limpiarFiltrosCatalogo();
     setObservacion("");
     setItemsFormulario([]);
     setModalNuevaSolicitud(true);
@@ -384,64 +420,40 @@ function SolicitudesSupervisor({ modo = "supervisor" }: { modo?: "supervisor" | 
 
   const cerrarNuevaSolicitud = () => {
     setModalNuevaSolicitud(false);
-    setCategoriaSeleccionada("");
-    setTipoBienFiltro("todos");
-    setProductoSeleccionado("");
-    setCantidadSeleccionada("1");
+    setSolicitudBaseReferencia(null);
+    setSolicitudEditando(null);
+    setBorradoresItem({});
+    limpiarFiltrosCatalogo();
     setObservacion("");
     setItemsFormulario([]);
   };
 
-  const agregarItemSolicitud = () => {
-    const producto = productos.find((item) => String(item.id) === productoSeleccionado);
-    const cantidad = Number(cantidadSeleccionada);
-
-    if (!categoriaSeleccionada) {
-      mostrarMensaje("error", "Selecciona primero una categoría.");
+  const agregarItemSolicitud = (producto: Producto) => {
+    if (editandoAbastecimientoVinculado) {
+      mostrarMensaje("error", "Los bienes de este abastecimiento vinculado no pueden modificarse.");
       return;
     }
-
-    if (!producto) {
-      mostrarMensaje("error", "Selecciona un bien para agregarlo a la solicitud.");
+    if (itemsFormulario.some((item) => String(item.productoId) === String(producto.id))) {
+      mostrarMensaje("error", "Este bien ya está agregado. Puedes ajustar su cantidad a la derecha.");
       return;
     }
-
-    if (!Number.isSafeInteger(cantidad) || cantidad <= 0) {
-      mostrarMensaje("error", "La cantidad solicitada debe ser un número entero mayor a cero.");
-      return;
-    }
-
-    if (itemsFormulario.some((item) => item.productoId === producto.id)) {
-      mostrarMensaje("error", "Este bien ya está agregado. Edita la cantidad en la tabla.");
-      return;
-    }
-
-    setItemsFormulario((itemsActuales) => [
-      ...itemsActuales,
+    setItemsFormulario((actuales) => [
+      ...actuales,
       {
-        id: `${Date.now()}-${producto.id}`,
+        id: `catalogo-${Date.now()}-${producto.id}`,
         productoId: producto.id,
         productoSolicitado: producto.descripcion,
-        cantidad,
+        cantidad: 1,
       },
     ]);
-    setProductoSeleccionado("");
-    setCantidadSeleccionada("1");
   };
 
   const actualizarCantidadItem = (id: string, valor: string) => {
-    const cantidad = Number(valor);
-
-    setItemsFormulario((itemsActuales) =>
-      itemsActuales.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              cantidad: Number.isFinite(cantidad) && cantidad > 0 ? cantidad : 1,
-            }
-          : item,
-      ),
-    );
+    if (valor !== "" && !/^\d+$/.test(valor)) return;
+    const cantidad = valor === "" ? 0 : Number(valor);
+    if (!Number.isSafeInteger(cantidad)) return;
+    setBorradoresItem((actual) => ({ ...actual, [id]: valor }));
+    setItemsFormulario((actual) => actual.map((item) => item.id === id ? { ...item, cantidad } : item));
   };
 
   const quitarItemSolicitud = (id: string) => {
@@ -463,9 +475,13 @@ function SolicitudesSupervisor({ modo = "supervisor" }: { modo?: "supervisor" | 
       return;
     }
 
+    if (itemsFormulario.some((item) => !item.productoId || !Number.isSafeInteger(item.cantidad) || item.cantidad <= 0)) {
+      mostrarMensaje("error", "Cada cantidad debe ser un número entero mayor que cero.");
+      return;
+    }
     const cantidadTotal = itemsFormulario.reduce((total, item) => total + item.cantidad, 0);
 
-    const resultado = await agregarSolicitud({
+    const payload: Omit<Solicitud, "id" | "fecha"> = {
       tipo: "producto",
       solicitante: usuarioActual.nombre,
       bodega: bodegaSolicitud,
@@ -484,15 +500,21 @@ function SolicitudesSupervisor({ modo = "supervisor" }: { modo?: "supervisor" | 
         cantidad: item.cantidad,
         cantidadEntregada: 0,
       })),
-    });
+    };
+    const resultado = solicitudEditando
+      ? await editarSolicitud(solicitudEditando.id, payload)
+      : await agregarSolicitud(payload);
 
     if (!resultado.exito) {
       mostrarMensaje("error", resultado.mensaje);
       return;
     }
 
+    const fueBasadaEnOtra = Boolean(solicitudBaseReferencia);
     cerrarNuevaSolicitud();
-    mostrarMensaje("exito", resultado.mensaje);
+    mostrarMensaje("exito", fueBasadaEnOtra
+      ? "Nueva solicitud enviada al Administrador. Puedes seguirla en Mis solicitudes."
+      : resultado.mensaje);
   };
 
   const limpiarFiltros = () => {
@@ -525,29 +547,13 @@ function SolicitudesSupervisor({ modo = "supervisor" }: { modo?: "supervisor" | 
     fechaFiltroRecibidas !== "" ||
     ordenRecibidas !== "asc";
 
-  const cargarAbastecimientos = async (id: string) => {
-    setConsultandoAbastecimientos(true);
-    try {
-      const resultados = await obtenerAbastecimientosApi(id);
-      setAbastecimientosVinculados(resultados);
-    } catch {
-      mostrarMensaje("error", "No se pudo verificar el historial de abastecimiento de esta solicitud.");
-      setAbastecimientosVinculados([]);
-    } finally {
-      setConsultandoAbastecimientos(false);
-    }
-  };
-
   const abrirGestionSolicitud = (solicitud: SolicitudBackend) => {
-    setAbastecimientosVinculados([]);
-    void cargarAbastecimientos(solicitud.id);
     setSolicitudGestion(solicitud);
     setBorradoresCantidades({});
     setDetalleRecibida(null);
     setObservacionAtencion("");
     setMostrarObservacionRespuesta(false);
     setConfirmacionAtencion(null);
-    setModalAbastecimiento(false);
     setItemsRevision(
       solicitud.detalles.map((detalle) => ({
         detalleId: detalle.id,
@@ -571,61 +577,50 @@ function SolicitudesSupervisor({ modo = "supervisor" }: { modo?: "supervisor" | 
     setGuardandoAtencion(false);
     setMostrarObservacionRespuesta(false);
     setConfirmacionAtencion(null);
-    setModalAbastecimiento(false);
-    setAbastecimientosVinculados([]);
   };
 
-  const abrirModalAbastecimiento = () => {
-    if (!solicitudGestion || consultandoAbastecimientos) return;
-    if (abastecimientosVinculados.some((item) => item.estado === "pendiente" || item.estado === "parcial")) {
-      mostrarMensaje("error", "Ya existe un abastecimiento sin finalizar para esta solicitud.");
+  // Reutilizamos la creación NORMAL de solicitudes del Supervisor.
+  // No creamos un abastecimiento vinculado ni bloqueamos otro pedido por
+  // existir uno anterior. El código de origen se guarda en la observación.
+  const abrirSolicitudBasadaEnRecibida = () => {
+    if (!solicitudGestion || modo !== "supervisor") return;
+
+    const sucursal = limpiarNombreBodega(solicitudGestion.bodegaSolicitante.nombre);
+    const bodegaAsignada = bodegasUsuario.find((nombre) =>
+      normalizarTexto(limpiarNombreBodega(nombre)) === normalizarTexto(sucursal),
+    );
+    if (!bodegaAsignada) {
+      mostrarMensaje("error", "No tienes asignada la sucursal de origen de esta solicitud.");
       return;
     }
 
-    setCantidadesAbastecimiento(Object.fromEntries(
-      itemsRevision.filter((item) => item.pendienteOriginal > 0).map((item) => [
-        item.detalleId,
-        String(Math.max(0, item.pendienteOriginal - item.disponible) || item.pendienteOriginal),
-      ]),
-    ));
-    setObservacionAbastecimiento("");
-    setModalAbastecimiento(true);
-  };
-
-  const enviarAbastecimiento = async () => {
-    if (!solicitudGestion || guardandoAbastecimiento) return;
-    const detalles = itemsRevision
-      .filter((item) => item.pendienteOriginal > 0)
-      .map((item) => ({
-        detalleId: item.detalleId,
-        cantidadSolicitada: Number(cantidadesAbastecimiento[item.detalleId] || 0),
-      }))
-      .filter((item) => item.cantidadSolicitada > 0);
-
-    if (!detalles.length || detalles.some((item) => !Number.isSafeInteger(item.cantidadSolicitada))) {
-      mostrarMensaje("error", "Selecciona cantidades enteras mayores que cero para solicitar abastecimiento.");
+    const faltantes = itemsRevision.filter((item) => item.pendienteOriginal > item.disponible);
+    if (!faltantes.length) {
+      mostrarMensaje("error", "No hay cantidades faltantes. Si necesitas otros bienes, crea una solicitud desde Mis solicitudes.");
       return;
     }
-    setGuardandoAbastecimiento(true);
-    try {
-      await solicitarAbastecimientoApi(solicitudGestion.id, {
-        detalles,
-        observacionSolicitante: observacionAbastecimiento.trim() || undefined,
-      });
-      await Promise.all([recargarDatosInventario(), cargarAbastecimientos(solicitudGestion.id)]);
-      setModalAbastecimiento(false);
-      mostrarMensaje("exito", "Abastecimiento enviado al Administrador. Puedes consultarlo en Mis solicitudes.");
-    } catch (error) {
-      let mensaje = "No se pudo solicitar abastecimiento.";
-      if (axios.isAxiosError(error)) {
-        const data = error.response?.data as { message?: string | string[] } | undefined;
-        if (typeof data?.message === "string") mensaje = data.message;
-        if (Array.isArray(data?.message)) mensaje = data.message.join(" ");
-      }
-      mostrarMensaje("error", mensaje);
-    } finally {
-      setGuardandoAbastecimiento(false);
-    }
+
+    // Se precargan exclusivamente las cantidades que faltan del pedido;
+    // luego el Supervisor puede agregar, quitar o modificar bienes.
+    const precargados = faltantes.map((item) => ({
+      id: `base-${item.detalleId}`,
+      productoId: item.productoId,
+      productoSolicitado: item.productoSolicitado,
+      cantidad: item.pendienteOriginal - item.disponible,
+    }));
+
+    setSolicitudEditando(null);
+    setSolicitudBaseReferencia(solicitudGestion.codigo);
+    setBodegaSolicitud(bodegaAsignada);
+    limpiarFiltrosCatalogo();
+    setObservacion(`Solicitud basada en ${solicitudGestion.codigo} (${sucursal}).`);
+    setItemsFormulario(precargados);
+    setBorradoresItem({});
+
+    // El formulario existente se renderiza en la pestaña "Mis solicitudes".
+    cerrarGestionSolicitud();
+    setBandeja("mias");
+    setModalNuevaSolicitud(true);
   };
 
   const actualizarRevision = (
@@ -1075,10 +1070,22 @@ function SolicitudesSupervisor({ modo = "supervisor" }: { modo?: "supervisor" | 
                                 className="boton-icono-tabla boton-icono-alerta"
                                 type="button"
                                 title="Ver detalle"
+                                aria-label="Ver detalle de solicitud"
                                 onClick={() => setModalDetalle(solicitud)}
                               >
                                 !
                               </button>
+                              {esEditable(solicitud) && (
+                                <button
+                                  className="boton-icono-tabla"
+                                  type="button"
+                                  title="Editar solicitud"
+                                  aria-label="Editar solicitud"
+                                  onClick={() => abrirEdicion(solicitud)}
+                                >
+                                  <Pencil size={16} />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1091,12 +1098,18 @@ function SolicitudesSupervisor({ modo = "supervisor" }: { modo?: "supervisor" | 
 
           {modalNuevaSolicitud && (
             <div className="modal-fondo">
-              <div className="modal-contenedor modal-responsable-solicitud modal-responsable-solicitud-amplio">
+              <div className="modal-contenedor modal-responsable-solicitud modal-responsable-solicitud-amplio modal-solicitud-catalogo">
                 <div className="modal-header">
                   <div>
-                    <h2>Nueva solicitud</h2>
+                    <h2>{solicitudEditando ? "Editar solicitud" : "Nueva solicitud"}</h2>
                     <p>
-                      {modo === "responsable"
+                      {editandoAbastecimientoVinculado
+                        ? "Este abastecimiento está vinculado al pedido de un Responsable: puedes ajustar las cantidades y la observación, pero no cambiar los bienes."
+                        : solicitudEditando
+                        ? "Puedes agregar bienes, ajustar cantidades o cambiar la observación."
+                        : solicitudBaseReferencia
+                        ? `Pedido nuevo basado en ${solicitudBaseReferencia}. Puedes cambiar bienes, cantidades y observación antes de enviarlo al Administrador.`
+                        : modo === "responsable"
                         ? "Selecciona tu sucursal y los bienes que solicitarás al Supervisor."
                         : "Selecciona una bodega y agrega los bienes que necesitas."}
                     </p>
@@ -1106,191 +1119,201 @@ function SolicitudesSupervisor({ modo = "supervisor" }: { modo?: "supervisor" | 
                   </button>
                 </div>
 
-                <form className="formulario-modal" onSubmit={guardarSolicitud}>
-                  <div className="grid-formulario grid-formulario-responsable">
-                    <div className="campo-formulario">
-                      <label>Bodega solicitante *</label>
-                      <CampoDesplegable
-                        valor={bodegaSolicitud}
-                        alCambiar={setBodegaSolicitud}
-                        ariaLabel="Seleccionar bodega solicitante"
-                        opciones={bodegasUsuario.map((bodega) => ({
-                          valor: bodega,
-                          texto: limpiarNombreBodega(bodega),
-                        }))}
-                        mostrarIconoFiltro={false}
-                        anchoMinimo={260}
-                      />
-                    </div>
-
-                    <div className="campo-formulario">
-                      <label>Categoría</label>
-                      <CampoDesplegable
-                        valor={categoriaSeleccionada}
-                        alCambiar={(valor) => {
-                          setCategoriaSeleccionada(valor);
-                          setProductoSeleccionado("");
-                        }}
-                        placeholder="Selecciona una categoría"
-                        ariaLabel="Seleccionar categoría"
-                        opciones={[
-                          { valor: "", texto: "Selecciona una categoría" },
-                          ...categoriasDisponibles.map((categoria) => ({
-                            valor: categoria,
-                            texto: categoria,
-                          })),
-                        ]}
-                        mostrarIconoFiltro={false}
-                        anchoMinimo={230}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="solicitud-selector-bienes solicitud-selector-bienes-categoria">
-                    <div className="campo-formulario">
-                      <label>Tipo de bien</label>
-                      <CampoDesplegable
-                        valor={tipoBienFiltro}
-                        alCambiar={(valor) => {
-                          setTipoBienFiltro(valor as "todos" | "consumible" | "no_consumible");
-                          setProductoSeleccionado("");
-                        }}
-                        ariaLabel="Filtrar por tipo de bien"
-                        opciones={[
-                          { valor: "todos", texto: "Todos" },
-                          { valor: "consumible", texto: "Consumible" },
-                          { valor: "no_consumible", texto: "No consumible" },
-                        ]}
-                        mostrarIconoFiltro={false}
-                        anchoMinimo={210}
-                      />
-                    </div>
-
-                    <div className="campo-formulario">
-                      <label>Bien a solicitar</label>
-                      <CampoDesplegable
-                        valor={productoSeleccionado}
-                        alCambiar={setProductoSeleccionado}
-                        placeholder={categoriaSeleccionada ? "Selecciona un bien" : "Primero selecciona una categoría"}
-                        ariaLabel="Seleccionar bien"
-                        opciones={[
-                          {
-                            valor: "",
-                            texto: categoriaSeleccionada
-                              ? "Selecciona un bien"
-                              : "Primero selecciona una categoría",
-                          },
-                          ...productosDisponibles.map((producto) => ({
-                            valor: String(producto.id),
-                            texto: `${producto.descripcion} · ${
-                              producto.tipoProducto === "no_consumible"
-                                ? producto.empresa || "Sin atributo"
-                                : "Consumible"
-                            }`,
-                          })),
-                        ]}
-                        mostrarIconoFiltro={false}
-                        deshabilitado={!categoriaSeleccionada}
-                        anchoMinimo={260}
-                      />
-                    </div>
-
-                    <div className="campo-formulario">
-                      <label>Cantidad</label>
-                      <input
-                        type="number"
-                        min="1"
-                        step="1"
-                        value={cantidadSeleccionada}
-                        onChange={(e) => setCantidadSeleccionada(e.target.value)}
-                      />
-                    </div>
-
-                    <button
-                      className="boton-principal boton-agregar-solo"
-                      type="button"
-                      onClick={agregarItemSolicitud}
-                      title="Agregar bien"
-                      aria-label="Agregar bien"
-                    >
-                      <Plus size={20} />
-                    </button>
-                  </div>
-
-                  <div className="tabla-card tabla-solicitud-items">
-                    <div className="tabla-contenedor">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Código</th>
-                            <th>Bien</th>
-                            <th>Atributo</th>
-                            <th>Cantidad</th>
-                            <th>Acciones</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {itemsFormulario.length > 0 ? (
-                            itemsFormulario.map((item) => (
-                              <tr key={item.id}>
-                                <td>{productos.find((producto) => producto.id === item.productoId)?.codigo || "S/C"}</td>
-                                <td>{item.productoSolicitado}</td>
-                                <td>
-                                  {productos.find((producto) => producto.id === item.productoId)?.tipoProducto ===
-                                  "no_consumible"
-                                    ? productos.find((producto) => producto.id === item.productoId)?.empresa ||
-                                      "No registrado"
-                                    : "No aplica"}
-                                </td>
-                                <td>
-                                  <input
-                                    className="input-cantidad-tabla"
-                                    type="number"
-                                    min="1"
-                                    value={item.cantidad}
-                                    onChange={(e) => actualizarCantidadItem(item.id, e.target.value)}
-                                  />
-                                </td>
-                                <td>
-                                  <button
-                                    className="boton-icono-tabla boton-icono-peligro"
-                                    type="button"
-                                    onClick={() => quitarItemSolicitud(item.id)}
-                                    title="Quitar bien"
-                                  >
-                                    <Trash2 size={17} />
-                                  </button>
-                                </td>
-                              </tr>
-                            ))
-                          ) : (
+                <form className="formulario-modal formulario-solicitud-catalogo" onSubmit={guardarSolicitud}>
+                  <div className="solicitud-distribucion-dos-paneles">
+                    <section className="solicitud-catalogo-panel" aria-label="Inventario general para solicitar">
+                      <div className="solicitud-panel-cabecera">
+                        <div>
+                          <h3>Inventario general</h3>
+                          <p>Selecciona los bienes que necesitas y pulsa + para agregarlos.</p>
+                        </div>
+                      </div>
+                      <div className="solicitud-catalogo-filtros">
+                        <label className="solicitud-catalogo-busqueda">
+                          <Search size={18} />
+                          <input
+                            type="search"
+                            placeholder="Buscar por código o nombre..."
+                            aria-label="Buscar bien en Inventario general"
+                            value={busquedaCatalogo}
+                            onChange={(event) => setBusquedaCatalogo(event.target.value)}
+                          />
+                        </label>
+                        <div className="solicitud-catalogo-selectores">
+                          <CampoDesplegable
+                            valor={categoriaCatalogo}
+                            alCambiar={setCategoriaCatalogo}
+                            ariaLabel="Filtrar categoría del Inventario general"
+                            anchoMinimo={0}
+                            opciones={[
+                              { valor: "todas", texto: "Todas las categorías" },
+                              ...categoriasDisponibles.map((categoria) => ({ valor: categoria, texto: categoria })),
+                            ]}
+                          />
+                          <CampoDesplegable
+                            valor={tipoCatalogo}
+                            alCambiar={(valor) => setTipoCatalogo(valor as "todos" | "consumible" | "no_consumible")}
+                            ariaLabel="Filtrar tipo de bien"
+                            anchoMinimo={0}
+                            opciones={[
+                              { valor: "todos", texto: "Todo tipo" },
+                              { valor: "consumible", texto: "Consumible" },
+                              { valor: "no_consumible", texto: "No consumible" },
+                            ]}
+                          />
+                          <CampoDesplegable
+                            valor={estadoCatalogo}
+                            alCambiar={setEstadoCatalogo}
+                            ariaLabel="Filtrar estado del bien"
+                            anchoMinimo={0}
+                            opciones={[
+                              { valor: "todos", texto: "Todo estado" },
+                              { valor: "bueno", texto: "Bueno" },
+                              { valor: "regular", texto: "Medio" },
+                              { valor: "malo", texto: "Malo" },
+                            ]}
+                          />
+                        </div>
+                      </div>
+                      <div className="solicitud-catalogo-tabla-contenedor">
+                        <table className="solicitud-catalogo-tabla">
+                          <thead>
                             <tr>
-                              <td colSpan={5} className="tabla-vacia">
-                                Agrega bienes para enviar la solicitud
-                              </td>
+                              <th>Código</th>
+                              <th>Bien</th>
+                              <th>Atributo</th>
+                              <th>Estado</th>
+                              <th>Acciones</th>
                             </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                          </thead>
+                          <tbody>
+                            {productosCatalogo.length ? productosCatalogo.map((producto) => {
+                              const agregado = itemsFormulario.some((item) => String(item.productoId) === String(producto.id));
+                              const bloqueado = agregado || editandoAbastecimientoVinculado;
+                              const estadoTexto = producto.estadoBien === "regular" ? "Medio" : producto.estadoBien === "malo" ? "Malo" : "Bueno";
+                              return (
+                                <tr key={producto.id}>
+                                  <td>{producto.codigo}</td>
+                                  <td title={producto.descripcion}>{producto.descripcion}</td>
+                                  <td>{producto.tipoProducto === "no_consumible" ? producto.empresa || "Sin atributo" : "No aplica"}</td>
+                                  <td><span className={`estado-bien estado-bien-${producto.estadoBien}`}>{estadoTexto}</span></td>
+                                  <td>
+                                    <button
+                                      className="solicitud-catalogo-agregar"
+                                      type="button"
+                                      disabled={bloqueado}
+                                      onClick={() => agregarItemSolicitud(producto)}
+                                      title={editandoAbastecimientoVinculado ? "Este abastecimiento tiene los bienes definidos" : agregado ? "Bien agregado" : "Agregar a la solicitud"}
+                                      aria-label={agregado ? `${producto.descripcion} ya agregado` : `Agregar ${producto.descripcion}`}
+                                    >
+                                      {agregado ? <Check size={16} /> : <Plus size={18} />}
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            }) : (
+                              <tr><td className="solicitud-catalogo-vacio" colSpan={5}>No hay bienes que coincidan con los filtros.</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
 
-                  <div className="campo-formulario campo-completo solicitud-observacion-final">
-                    <label>Observación</label>
-                    <textarea
-                      value={observacion}
-                      onChange={(e) => setObservacion(e.target.value)}
-                      placeholder="Detalle el motivo de la solicitud"
-                    />
+                    <section className="solicitud-formulario-panel" aria-label="Formulario de solicitud">
+                      <div className="solicitud-panel-cabecera">
+                        <div>
+                          <h3>Datos de la solicitud</h3>
+                          <p>Ajusta las cantidades de los bienes seleccionados.</p>
+                        </div>
+                        <span className="solicitud-items-contador">{itemsFormulario.length} bienes</span>
+                      </div>
+                      <div className="campo-formulario solicitud-bodega-formulario">
+                        <label>{modo === "responsable" ? "Sucursal solicitante" : "Bodega solicitante"} *</label>
+                        <CampoDesplegable
+                          valor={bodegaSolicitud}
+                          alCambiar={setBodegaSolicitud}
+                          deshabilitado={Boolean(solicitudEditando)}
+                          ariaLabel="Seleccionar destino de la solicitud"
+                          opciones={bodegasUsuario.map((bodega) => ({
+                            valor: bodega,
+                            texto: limpiarNombreBodega(bodega),
+                          }))}
+                          mostrarIconoFiltro={false}
+                          anchoMinimo={0}
+                        />
+                      </div>
+                      {editandoAbastecimientoVinculado && (
+                        <p className="solicitud-bienes-bloqueados">El abastecimiento vinculado conserva sus bienes; puedes editar las cantidades y la observación.</p>
+                      )}
+                      <div className="tabla-card tabla-solicitud-items solicitud-formulario-tabla-contenedor">
+                        <div className="tabla-contenedor">
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Código</th>
+                                <th>Bien</th>
+                                <th>Atributo</th>
+                                <th>Cantidad</th>
+                                {!editandoAbastecimientoVinculado && <th>Acciones</th>}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {itemsFormulario.length ? itemsFormulario.map((item) => {
+                                const producto = productos.find((productoActual) => String(productoActual.id) === String(item.productoId));
+                                return (
+                                  <tr key={item.id}>
+                                    <td>{producto?.codigo || "S/C"}</td>
+                                    <td>{item.productoSolicitado}</td>
+                                    <td>{producto?.tipoProducto === "no_consumible" ? producto.empresa || "Sin atributo" : "No aplica"}</td>
+                                    <td>
+                                      <input
+                                        className="input-cantidad-tabla"
+                                        type="number"
+                                        min="1"
+                                        step="1"
+                                        value={borradoresItem[item.id] ?? item.cantidad}
+                                        onFocus={(event) => event.currentTarget.select()}
+                                        onChange={(event) => actualizarCantidadItem(item.id, event.target.value)}
+                                        onBlur={() => setBorradoresItem((actual) => {
+                                          const copia = { ...actual };
+                                          delete copia[item.id];
+                                          return copia;
+                                        })}
+                                      />
+                                    </td>
+                                    {!editandoAbastecimientoVinculado && (
+                                      <td>
+                                        <button
+                                          className="boton-icono-tabla boton-icono-peligro"
+                                          type="button"
+                                          onClick={() => quitarItemSolicitud(item.id)}
+                                          title="Quitar bien"
+                                          aria-label={`Quitar ${item.productoSolicitado}`}
+                                        ><Trash2 size={17} /></button>
+                                      </td>
+                                    )}
+                                  </tr>
+                                );
+                              }) : (
+                                <tr><td className="tabla-vacia" colSpan={editandoAbastecimientoVinculado ? 4 : 5}>Agrega bienes desde el Inventario general de la izquierda.</td></tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                      <div className="campo-formulario campo-completo solicitud-observacion-final">
+                        <label>Observación</label>
+                        <textarea
+                          value={observacion}
+                          onChange={(event) => setObservacion(event.target.value)}
+                          placeholder="Detalle el motivo de la solicitud"
+                        />
+                      </div>
+                    </section>
                   </div>
-
-                  <div className="modal-acciones">
-                    <button className="boton-secundario" type="button" onClick={cerrarNuevaSolicitud}>
-                      Cancelar
-                    </button>
-                    <button className="boton-principal" type="submit">
-                      Enviar solicitud
-                    </button>
+                  <div className="modal-acciones solicitud-catalogo-acciones">
+                    <button className="boton-secundario" type="button" onClick={cerrarNuevaSolicitud}>Cancelar</button>
+                    <button className="boton-principal" type="submit">{solicitudEditando ? "Guardar cambios" : "Enviar solicitud"}</button>
                   </div>
                 </form>
               </div>
@@ -1621,13 +1644,8 @@ function SolicitudesSupervisor({ modo = "supervisor" }: { modo?: "supervisor" | 
                   : itemsRevision.some((item) => item.pendienteOriginal > item.disponible)
                     ? "Tu stock es insuficiente para atender completamente esta solicitud."
                     : "Cuentas con existencias suficientes para atender esta solicitud."}
-                {itemsRevision.some((item) => item.pendienteOriginal > item.disponible) && (
-                  abastecimientosVinculados.some((item) => item.estado === "pendiente" || item.estado === "parcial")
-                    ? " Ya tienes un pedido de abastecimiento en proceso con el Administrador."
-                    : abastecimientosVinculados.some((item) => item.estado === "atendida")
-                      ? " El Administrador ya atendió tu pedido de abastecimiento."
-                      : " Puedes solicitar abastecimiento al Administrador desde aquí."
-                )}
+                {itemsRevision.some((item) => item.pendienteOriginal > item.disponible) &&
+                  " Puedes crear una solicitud al Administrador con los bienes faltantes."}
               </p>
             )}
 
@@ -1659,10 +1677,10 @@ function SolicitudesSupervisor({ modo = "supervisor" }: { modo?: "supervisor" | 
               <button
                 className="boton-secundario"
                 type="button"
-                disabled={consultandoAbastecimientos || guardandoAtencion || abastecimientosVinculados.some((item) => item.estado === "pendiente" || item.estado === "parcial")}
-                onClick={abrirModalAbastecimiento}
+                disabled={guardandoAtencion || !itemsRevision.some((item) => item.pendienteOriginal > item.disponible)}
+                onClick={abrirSolicitudBasadaEnRecibida}
               >
-                Solicitar abastecimiento
+                Solicitar al Administrador
               </button>
               <button className="boton-secundario" type="button" disabled={guardandoAtencion} onClick={prepararRechazoRecibida}>
                 Rechazar
@@ -1676,67 +1694,6 @@ function SolicitudesSupervisor({ modo = "supervisor" }: { modo?: "supervisor" | 
                 {itemsRevision.reduce((total, item) => total + item.cantidadPendiente, 0) === 0
                   ? "Aceptar solicitud"
                   : "Aceptar parcialmente"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {solicitudGestion && modalAbastecimiento && (
-        <div className="modal-fondo modal-fondo-confirmacion">
-          <div className="modal-contenedor modal-solicitud-abastecimiento">
-            <div className="modal-header">
-              <div>
-                <h2>Solicitar abastecimiento</h2>
-                <p>Se enviará al Administrador una solicitud a tu nombre, vinculada internamente con este pedido. La entrega al Responsable no será automática.</p>
-              </div>
-              <button className="modal-cerrar" type="button" onClick={() => setModalAbastecimiento(false)} disabled={guardandoAbastecimiento}><X size={20} /></button>
-            </div>
-            <div className="tabla-card tabla-solicitud-atencion">
-              <div className="tabla-contenedor">
-                <table>
-                  <thead>
-                    <tr><th>Bien</th><th>Pendiente del Responsable</th><th>Tu stock</th><th>Cantidad a solicitar al Admin</th></tr>
-                  </thead>
-                  <tbody>
-                    {itemsRevision.filter((item) => item.pendienteOriginal > 0).map((item) => (
-                      <tr key={item.detalleId}>
-                        <td>{item.productoSolicitado}</td>
-                        <td>{item.pendienteOriginal}</td>
-                        <td>{item.disponible}</td>
-                        <td>
-                          <input
-                            className="input-cantidad-tabla"
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={cantidadesAbastecimiento[item.detalleId] ?? "0"}
-                            aria-label={`Cantidad a solicitar de ${item.productoSolicitado}`}
-                            onChange={(event) => setCantidadesAbastecimiento((actual) => ({
-                              ...actual,
-                              [item.detalleId]: event.target.value,
-                            }))}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div className="campo-formulario campo-completo abastecimiento-observacion">
-              <label>Observación (opcional)</label>
-              <textarea
-                value={observacionAbastecimiento}
-                maxLength={500}
-                onChange={(event) => setObservacionAbastecimiento(event.target.value)}
-                placeholder="Indica el motivo del abastecimiento."
-              />
-            </div>
-            <div className="modal-acciones">
-              <button className="boton-secundario" type="button" disabled={guardandoAbastecimiento} onClick={() => setModalAbastecimiento(false)}>Cancelar</button>
-              <button className="boton-principal" type="button" disabled={guardandoAbastecimiento} onClick={() => void enviarAbastecimiento()}>
-                {guardandoAbastecimiento ? "Enviando..." : "Enviar al Administrador"}
               </button>
             </div>
           </div>

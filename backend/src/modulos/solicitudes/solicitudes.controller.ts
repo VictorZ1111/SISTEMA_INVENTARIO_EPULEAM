@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -17,6 +18,7 @@ import type { UsuarioAutenticado } from "../auth/interfaces/usuario-autenticado.
 import { RolUsuario } from "../usuarios/enums/rol-usuario.enum";
 import { AtenderSolicitudDto } from "./dto/atender-solicitud.dto";
 import { CrearSolicitudDto } from "./dto/crear-solicitud.dto";
+import { EditarSolicitudDto } from "./dto/editar-solicitud.dto";
 import { FiltrarSolicitudesDto } from "./dto/filtrar-solicitudes.dto";
 import { RechazarSolicitudDto } from "./dto/rechazar-solicitud.dto";
 import { RevertirSolicitudDto } from "./dto/revertir-solicitud.dto";
@@ -87,6 +89,16 @@ export class SolicitudesController {
     @UsuarioActual() usuario: UsuarioAutenticado,
   ): Promise<SolicitudPublica> {
     return this.solicitudesService.crear(dto, usuario);
+  }
+
+  @Patch(":id")
+  @Roles(RolUsuario.SUPERVISOR, RolUsuario.RESPONSABLE)
+  editar(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: EditarSolicitudDto,
+    @UsuarioActual() usuario: UsuarioAutenticado,
+  ): Promise<SolicitudPublica> {
+    return this.solicitudesService.editar(id, dto, usuario);
   }
 
   @Get(":id/abastecimientos")

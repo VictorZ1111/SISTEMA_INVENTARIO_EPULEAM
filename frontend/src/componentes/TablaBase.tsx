@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Children, type ReactNode } from "react";
 
 interface Props {
   titulo?: string;
@@ -12,10 +12,22 @@ function TablaBase({
   titulo,
   columnas,
   children,
-  mensajeVacio = "No se encontraron registros",
+  mensajeVacio,
   accion,
 }: Props) {
-  const estaVacia = !children;
+  const estaVacia = Children.toArray(children).length === 0;
+  const identificador = `${titulo || ""} ${columnas.join(" ")}`.toLowerCase();
+  const mensajeVacioPredeterminado = identificador.includes("solicitud") || identificador.includes("solicitado")
+    ? "Aún no se han registrado solicitudes."
+    : identificador.includes("movimiento") || identificador.includes("tipo movimiento")
+      ? "Aún no se han registrado movimientos."
+      : identificador.includes("usuario") || identificador.includes("correo")
+        ? "Aún no se han registrado usuarios."
+        : identificador.includes("bodega") && !identificador.includes("bien")
+          ? "Aún no se han registrado bodegas."
+          : identificador.includes("bien") || identificador.includes("producto")
+            ? "Aún no se han registrado productos en este inventario."
+            : "Aún no se han registrado elementos en este apartado.";
 
   const columnasCentradas = columnas
     .map((columna, indice) => {
@@ -64,7 +76,7 @@ function TablaBase({
             {estaVacia ? (
               <tr>
                 <td colSpan={columnas.length} className="tabla-vacia">
-                  {mensajeVacio}
+                  {mensajeVacio ?? mensajeVacioPredeterminado}
                 </td>
               </tr>
             ) : (

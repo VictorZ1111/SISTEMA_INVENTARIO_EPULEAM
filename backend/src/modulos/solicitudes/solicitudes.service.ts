@@ -16,6 +16,7 @@ import {
 import { LIMITE_REVERSA_MS } from "../../comun/constantes/reversiones";
 
 import { UsuarioBodega } from "../asignaciones/entities/usuario-bodega.entity";
+import { AuditoriaAdministrativa } from "../auditoria/entities/auditoria-administrativa.entity";
 import { TipoAsignacion } from "../asignaciones/enums/tipo-asignacion.enum";
 import type { UsuarioAutenticado } from "../auth/interfaces/usuario-autenticado.interface";
 import { Bodega } from "../bodegas/entities/bodega.entity";
@@ -30,6 +31,7 @@ import { EstadoUsuario } from "../usuarios/enums/estado-usuario.enum";
 import { RolUsuario } from "../usuarios/enums/rol-usuario.enum";
 import { AtenderSolicitudDto } from "./dto/atender-solicitud.dto";
 import { CrearSolicitudDto } from "./dto/crear-solicitud.dto";
+import { EditarSolicitudDto } from "./dto/editar-solicitud.dto";
 import { FiltrarSolicitudesDto } from "./dto/filtrar-solicitudes.dto";
 import { RechazarSolicitudDto } from "./dto/rechazar-solicitud.dto";
 import { RevertirSolicitudDto } from "./dto/revertir-solicitud.dto";
@@ -199,6 +201,152 @@ export class SolicitudesService {
     return this.buscarPorId(solicitudId, usuario);
   }
 
+  // Editar en su lugar los detalles existentes para conservar las referencias
+  // históricas de Movimientos, incluidas las entregas ya revertidas.
+  async editar(id: string, dto: EditarSolicitudDto, usuario: UsuarioAutenticado): Promise<SolicitudPublica> {
+    const ids = dto.detalles.map((detalle) => detalle.productoId);
+    if (new Set(ids).size !== ids.length) {
+      throw new ConflictException("No puedes solicitar un mismo bien dos veces.");
+    }
+
+    await this.dataSource.transaction(async (administrador) => {
+      const solicitud = await this.obtenerSolicitudBloqueada(administrador, id);
+      if (solicitud.usuarioSolicitanteId !== usuario.id) {
+        throw new ForbiddenException("Solo el solicitante original puede editar esta solicitud.");
+      }
+      if (solicitud.estado !== EstadoSolicitud.PENDIENTE || solicitud.atendidaAt !== null ||
+          solicitud.usuarioAtencionId !== null || solicitud.detalles.some((detalle) =>
+          detalle.cantidadEntregada > 0 || detalle.cantidadRechazada > 0)) {
+        throw new ConflictException("La solicitud ya tuvo una atención y no puede editarse.");
+      }
+      if (dto.bodegaSolicitanteId !== solicitud.bodegaSolicitanteId) {
+        throw new ForbiddenException("La bodega de destino no puede cambiarse después del envío.");
+      }
+      this.validarBodegaActiva(solicitud.bodegaSolicitante);
+      await this.validarBodegaAsignada(usuario, solicitud.bodegaSolicitante);
+      this.validarBodegaSegunRol(usuario, solicitud.bodegaSolicitante);
+      if (usuario.rol === RolUsuario.RESPONSABLE) {
+        await this.validarSupervisorReceptor(solicitud.bodegaSolicitante);
+      }
+
+      const productos = await administrador.getRepository(Producto).find({ where: { id: In(ids) } });
+      if (productos.length !== ids.length) {
+        throw new NotFoundException("No se encontró alguno de los bienes de la solicitud.");
+      }
+      if (productos.some((producto) => producto.estado !== EstadoProducto.ACTIVO)) {
+        throw new ConflictException("No puedes solicitar bienes inactivos.");
+      }
+
+      // Un abastecimiento creado a partir del pedido de un Responsable no es
+      // un pedido independiente: el Supervisor solo ajusta las cantidades y
+      // la observación, nunca añade, sustituye ni elimina los bienes de origen.
+      if (solicitud.solicitudOrigenId !== null) {
+        const productosOriginales = new Set(solicitud.detalles.map((detalle) => detalle.productoId));
+        if (dto.detalles.length !== productosOriginales.size ||
+            dto.detalles.some((detalle) => !productosOriginales.has(detalle.productoId))) {
+          throw new ConflictException(
+            "Este abastecimiento está vinculado a la solicitud de un Responsable. Solo puedes modificar las cantidades y la observación; no cambiar los bienes solicitados.",
+          );
+        }
+      }
+
+      const repositorio = administrador.getRepository(SolicitudDetalle);
+      const nuevosPorProducto = new Map(dto.detalles.map((detalle) => [detalle.productoId, detalle]));
+      const resumenAnterior = solicitud.detalles.map((detalle) =>
+        `${detalle.producto.codigo}:${detalle.cantidadSolicitada}`).join(",");
+      const resumenNuevo = dto.detalles.map((detalle) =>
+        `${productos.find((p) => p.id === detalle.productoId)?.codigo}:${detalle.cantidadSolicitada}`).join(",");
+
+      // En la solicitud original del Responsable solo están comprometidos
+      // los bienes incluidos en abastecimientos todavía pendientes o parciales.
+      // Los ya atendidos o rechazados se conservan como historial y no impiden
+      // corregir el pedido original si su propia atención está revertida.
+      const abastecimientos = solicitud.solicitudOrigenId === null
+        ? await administrador.getRepository(Solicitud).find({
+            where: { solicitudOrigenId: solicitud.id },
+            relations: { detalles: true },
+          })
+        : [];
+      const productosAbastecidos = new Set(
+        abastecimientos
+          .filter((abastecimiento) =>
+            abastecimiento.estado === EstadoSolicitud.PENDIENTE ||
+            abastecimiento.estado === EstadoSolicitud.PARCIAL)
+          .flatMap((abastecimiento) =>
+            abastecimiento.detalles.filter((detalle) => !detalle.retirado).map((detalle) => detalle.productoId)),
+      );
+
+      // No eliminamos registros referenciados por Movimientos: los bienes
+      // retirados dejan de formar parte del pedido activo, pero mantienen
+      // la misma fila histórica y su vínculo de auditoría.
+      for (const anterior of solicitud.detalles) {
+        const nuevo = nuevosPorProducto.get(anterior.productoId);
+        if (productosAbastecidos.has(anterior.productoId) &&
+            (!nuevo || nuevo.cantidadSolicitada < anterior.cantidadSolicitada)) {
+          throw new ConflictException(
+            `El bien "${anterior.producto.nombre}" ya tiene abastecimientos vinculados. Puedes aumentar la cantidad, pero no reducirla ni quitar el bien mientras esos abastecimientos existan.`,
+          );
+        }
+        if (nuevo) {
+          if (anterior.cantidadSolicitada !== nuevo.cantidadSolicitada) {
+            await repositorio.update(anterior.id, {
+              cantidadSolicitada: nuevo.cantidadSolicitada,
+              cantidadPendiente: nuevo.cantidadSolicitada,
+            });
+          }
+        } else {
+          await repositorio.update(anterior.id, { retirado: true });
+        }
+      }
+
+      const existentes = new Set(solicitud.detalles.map((detalle) => detalle.productoId));
+      const adicionales = dto.detalles.filter((detalle) => !existentes.has(detalle.productoId));
+      if (adicionales.length > 0) {
+        // La restricción UNIQUE (solicitud, producto) sigue intacta. Si se
+        // agrega nuevamente un bien retirado, restauramos su mismo detalle
+        // en lugar de crear otra fila o desprender el movimiento histórico.
+        const retirados = await repositorio.find({
+          where: { solicitudId: solicitud.id, retirado: true },
+        });
+        const retiradosPorProducto = new Map(retirados.map((detalle) => [detalle.productoId, detalle]));
+        for (const detalle of adicionales) {
+          const anteriorRetirado = retiradosPorProducto.get(detalle.productoId);
+          if (anteriorRetirado) {
+            await repositorio.update(anteriorRetirado.id, {
+              retirado: false,
+              cantidadSolicitada: detalle.cantidadSolicitada,
+              cantidadEntregada: 0,
+              cantidadRechazada: 0,
+              cantidadPendiente: detalle.cantidadSolicitada,
+            });
+          } else {
+            await repositorio.save(repositorio.create({
+              solicitudId: solicitud.id,
+              productoId: detalle.productoId,
+              cantidadSolicitada: detalle.cantidadSolicitada,
+              cantidadEntregada: 0,
+              cantidadRechazada: 0,
+              cantidadPendiente: detalle.cantidadSolicitada,
+            }));
+          }
+        }
+      }
+
+      await administrador.getRepository(Solicitud).update(solicitud.id, {
+        observacionSolicitante: this.normalizarObservacion(dto.observacionSolicitante),
+        updatedAt: new Date(),
+      });
+      await administrador.getRepository(AuditoriaAdministrativa).save({
+        usuarioId: usuario.id,
+        modulo: "solicitudes",
+        accion: "editar",
+        registroId: solicitud.id,
+        descripcion: `Edición ${solicitud.codigo}. Antes ${resumenAnterior}. Después ${resumenNuevo}`.slice(0, 255),
+      });
+    });
+    return this.buscarPorId(id, usuario);
+  }
+
   // El Supervisor puede generar el abastecimiento desde una solicitud recibida.
   // Bloqueamos la solicitud original para serializar solicitudes simultáneas.
   async solicitarAbastecimiento(
@@ -225,21 +373,35 @@ export class SolicitudesService {
         administrador, solicitudOrigen.bodegaSolicitante, usuario,
       );
 
+      // Los abastecimientos se vinculan a la solicitud original, pero cada
+      // bien puede necesitar un abastecimiento distinto después de una edición.
+      // Solo bloqueamos duplicar un mismo producto si todavía tiene unidades
+      // pendientes en un abastecimiento del Supervisor al Administrador.
+      // Uno ya atendido (o completamente rechazado) es historial, no bloqueo.
       const existentes = await administrador.getRepository(Solicitud).find({
         where: { solicitudOrigenId: solicitudOrigen.id },
+        relations: { detalles: true },
       });
-      if (existentes.some((item) =>
-        item.estado === EstadoSolicitud.PENDIENTE || item.estado === EstadoSolicitud.PARCIAL
-      )) {
-        throw new ConflictException(
-          "Ya existe un abastecimiento pendiente o parcial para esta solicitud. Revísalo en Mis solicitudes antes de generar otro.",
-        );
-      }
+      const productosEnAbastecimientoPendiente = new Set(
+        existentes
+          .filter((item) =>
+            item.estado === EstadoSolicitud.PENDIENTE ||
+            item.estado === EstadoSolicitud.PARCIAL)
+          .flatMap((item) =>
+            item.detalles
+              .filter((detalle) => !detalle.retirado && detalle.cantidadPendiente > 0)
+              .map((detalle) => detalle.productoId)),
+      );
 
       const detallesSeleccionados = dto.detalles.map((seleccion) => {
         const detalle = solicitudOrigen.detalles.find((item) => item.id === seleccion.detalleId);
         if (!detalle || detalle.cantidadPendiente <= 0) {
           throw new ConflictException("El bien ya no tiene cantidades pendientes en la solicitud original.");
+        }
+        if (productosEnAbastecimientoPendiente.has(detalle.productoId)) {
+          throw new ConflictException(
+            `El bien "${detalle.producto.nombre}" ya tiene un abastecimiento pendiente. Puedes editar su cantidad en Mis solicitudes o solicitar otros bienes sin abastecimiento en trámite.`,
+          );
         }
         if (!Number.isSafeInteger(seleccion.cantidadSolicitada) || seleccion.cantidadSolicitada <= 0) {
           throw new ConflictException("La cantidad de abastecimiento debe ser un entero positivo.");
@@ -717,7 +879,7 @@ export class SolicitudesService {
         "solicitud.bodegaSolicitante",
         "bodegaSolicitante",
       )
-      .leftJoinAndSelect("solicitud.detalles", "detalle")
+      .leftJoinAndSelect("solicitud.detalles", "detalle", "detalle.retirado = false")
       .leftJoinAndSelect("detalle.producto", "producto");
   }
 
@@ -788,7 +950,7 @@ export class SolicitudesService {
         "solicitud.bodegaSolicitante",
         "bodegaSolicitante",
       )
-      .innerJoinAndSelect("solicitud.detalles", "detalle")
+      .innerJoinAndSelect("solicitud.detalles", "detalle", "detalle.retirado = false")
       .innerJoinAndSelect("detalle.producto", "producto")
       .where("solicitud.id = :id", { id })
       .getOne();

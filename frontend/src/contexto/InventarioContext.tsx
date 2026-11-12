@@ -39,6 +39,7 @@ import {
 import {
   atenderSolicitudApi,
   crearSolicitudApi,
+  editarSolicitudApi,
   obtenerSolicitudesApi,
   rechazarSolicitudApi,
   revertirSolicitudApi,
@@ -103,6 +104,7 @@ interface InventarioContexto {
   ) => Promise<boolean>;
 
   agregarSolicitud: (solicitud: NuevaSolicitud) => Promise<ResultadoAtencionSolicitud>;
+  editarSolicitud: (id: string | number, solicitud: NuevaSolicitud) => Promise<ResultadoAtencionSolicitud>;
   cambiarEstadoSolicitud: (
     id: string | number,
     estado: EstadoSolicitud,
@@ -631,6 +633,29 @@ export function InventarioProvider({ children }: Props) {
     }
   };
 
+  const editarSolicitud = async (id: string | number, solicitud: NuevaSolicitud): Promise<ResultadoAtencionSolicitud> => {
+    try {
+      const bodega = await buscarBodegaPorNombre(solicitud.bodega);
+      if (!bodega) return { exito: false, mensaje: "No se encontró la bodega solicitante." };
+      const detalles = (solicitud.items || []).map((item) => ({
+        productoId: String(item.productoId || ""),
+        cantidadSolicitada: item.cantidad,
+      }));
+      if (!detalles.length || detalles.some((item) => !item.productoId || !Number.isSafeInteger(item.cantidadSolicitada) || item.cantidadSolicitada <= 0)) {
+        return { exito: false, mensaje: "Agrega bienes con cantidades enteras mayores que cero." };
+      }
+      await editarSolicitudApi(String(id), {
+        bodegaSolicitanteId: bodega.id,
+        observacionSolicitante: solicitud.descripcion.trim() || undefined,
+        detalles,
+      });
+      await recargarSolicitudesMovimientos();
+      return { exito: true, estado: "pendiente", mensaje: "Solicitud actualizada correctamente." };
+    } catch (error) {
+      return { exito: false, mensaje: obtenerMensajeErrorInventario(error) };
+    }
+  };
+
   const cambiarEstadoSolicitud = async (
     id: string | number,
     estado: EstadoSolicitud,
@@ -674,11 +699,11 @@ export function InventarioProvider({ children }: Props) {
     observacionAdmin = "",
   ): Promise<ResultadoAtencionSolicitud> => {
     const detalles = entregas
-      .filter((entrega) => entrega.cantidad > 0 && entrega.itemId)
+      .filter((entrega) => (entrega.cantidad > 0 || (entrega.cantidadRechazada || 0) > 0) && entrega.itemId)
       .map((entrega) => ({
         detalleId: String(entrega.itemId),
         cantidadEntregada: entrega.cantidad,
-        cantidadRechazada: 0,
+        cantidadRechazada: entrega.cantidadRechazada || 0,
       }));
 
     if (detalles.length === 0) {
@@ -825,6 +850,7 @@ export function InventarioProvider({ children }: Props) {
     distribuirProducto,
     distribuirAutomaticamenteConsumible,
     agregarSolicitud,
+    editarSolicitud,
     cambiarEstadoSolicitud,
     atenderSolicitud,
     reversarAtencionSolicitud,

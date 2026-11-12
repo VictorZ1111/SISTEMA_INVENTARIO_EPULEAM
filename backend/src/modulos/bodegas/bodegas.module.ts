@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { AuditoriaModule } from "../auditoria/auditoria.module";
+import { UsuariosModule } from "../usuarios/usuarios.module";
 
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
@@ -10,7 +11,7 @@ import { BodegasService } from "./bodegas.service";
 import { Bodega } from "./entities/bodega.entity";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Bodega]), AuditoriaModule],
+  imports: [TypeOrmModule.forFeature([Bodega]), AuditoriaModule, UsuariosModule],
   controllers: [BodegasController],
   providers: [
     BodegasService,

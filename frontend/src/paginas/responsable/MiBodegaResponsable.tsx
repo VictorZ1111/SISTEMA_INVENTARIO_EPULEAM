@@ -250,16 +250,16 @@ function MiBodegaResponsable() {
       )}
 
       <EncabezadoPagina
-        titulo="Mis bodegas"
-        descripcion="Consulta el inventario de las bodegas asignadas a tu supervisión."
+        titulo="Mis sucursales"
+        descripcion="Consulta el inventario de las sucursales que tienes asignadas."
       />
 
       {!bodegaSeleccionada ? (
         <section className="seccion-dashboard">
           <div className="seccion-dashboard-header solicitudes-header-simple">
             <div>
-              <h2>Bodegas asignadas</h2>
-              <p>Selecciona una bodega para ingresar a su inventario.</p>
+              <h2>Áreas asignadas</h2>
+              <p>Selecciona un área asignada para consultar su inventario.</p>
             </div>
           </div>
 
@@ -283,9 +283,6 @@ function MiBodegaResponsable() {
 
                     <span className="responsable-bodega-card-info">
                       <strong>{limpiarNombreBodega(bodega)}</strong>
-                  <span style={{ fontSize: "13px", color: "#64748b" }}>
-                    Supervisor: {obtenerSupervisorBodega(usuarios, bodega)?.nombre || "Sin supervisor asignado"}
-                  </span>
                       <p>{obtenerDescripcionBodega(bodega)}</p>
                     </span>
                   </button>
@@ -329,6 +326,7 @@ function MiBodegaResponsable() {
 
                       <span className="responsable-bodega-card-info">
                         <strong>{limpiarNombreBodega(bodega)}</strong>
+                        <span className="tarjeta-sucursal-etiqueta">Sucursal gastronómica de {limpiarNombreBodega(bodega)}.</span>
                       </span>
                     </button>
                   );
@@ -346,8 +344,13 @@ function MiBodegaResponsable() {
           <div className="seccion-dashboard-header solicitudes-header-simple">
             <div>
               <h2>Inventario de {limpiarNombreBodega(bodegaSeleccionada)}</h2>
-              <p>Bienes registrados para la bodega seleccionada.</p>
+              <p>Bienes registrados en la sucursal seleccionada.</p>
             </div>
+          </div>
+
+          <div className="bodega-responsables-resumen">
+            <span>Supervisor encargado:</span>
+            <strong>{obtenerSupervisorBodega(usuarios, bodegaSeleccionada)?.nombre || "Sin supervisor asignado"}</strong>
           </div>
 
           <div className="responsable-filtros-bodega-completos">

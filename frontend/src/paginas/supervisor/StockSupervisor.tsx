@@ -26,6 +26,8 @@ import CampoDesplegable from "../../componentes/CampoDesplegable";
 import EncabezadoPagina from "../../componentes/EncabezadoPagina";
 import TablaBase from "../../componentes/TablaBase";
 import { useInventario } from "../../contexto/InventarioContext";
+import { useAuth } from "../../contexto/AuthContext";
+import { obtenerBodegasPrincipalesUsuario } from "../../dominio/bodegas";
 
 type FiltroTipo = "todos" | "consumible" | "no_consumible";
 type FiltroEstado = "todos" | "bueno" | "regular" | "malo";
@@ -58,6 +60,11 @@ function limpiarNombreBodega(nombre: string) {
   return nombre.replace(/^Bodega\s+/i, "").trim();
 }
 
+function claveAreaStock(nombre: string) {
+  return limpiarNombreBodega(nombre)
+    .toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+}
+
 function obtenerMensajeError(error: unknown) {
   if (axios.isAxiosError(error)) {
     const mensaje = error.response?.data?.message;
@@ -75,11 +82,14 @@ function obtenerMensajeError(error: unknown) {
 
 function StockSupervisor() {
   const { recargarDatosInventario } = useInventario();
+  const { usuarioActual } = useAuth();
+  const bodegasAsignadas = useMemo(() => obtenerBodegasPrincipalesUsuario(usuarioActual), [usuarioActual]);
   const [stock, setStock] = useState<StockSupervisorItemApi[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [categoriaFiltro, setCategoriaFiltro] = useState("todas");
+  const [areaActiva, setAreaActiva] = useState("");
   const [tipoFiltro, setTipoFiltro] = useState<FiltroTipo>("todos");
   const [estadoFiltro, setEstadoFiltro] = useState<FiltroEstado>("todos");
   const [ordenStock, setOrdenStock] = useState<OrdenStock>("asc");
@@ -136,6 +146,25 @@ function StockSupervisor() {
     [stock],
   );
 
+  // Mostrar todas las bodegas asignadas, incluidas las que todavía no tienen stock.
+  // El identificador visual de la pestaña es el nombre normalizado del área.
+  const areasStock = useMemo(() => {
+    const porArea = new Map<string, string>();
+    bodegasAsignadas.forEach((nombre) => porArea.set(claveAreaStock(nombre), nombre));
+    stock.forEach((item) => porArea.set(claveAreaStock(item.area.nombre), item.area.nombre));
+    return Array.from(porArea, ([id, nombre]) => ({ id, nombre })).sort((a, b) =>
+      a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }),
+    );
+  }, [stock, bodegasAsignadas]);
+
+  useEffect(() => {
+    if (areasStock.length === 0) {
+      if (areaActiva !== "") setAreaActiva("");
+    } else if (!areasStock.some((area) => area.id === areaActiva)) {
+      setAreaActiva(areasStock[0].id);
+    }
+  }, [areaActiva, areasStock]);
+
   const filtrosActivos =
     busqueda.trim() !== "" ||
     categoriaFiltro !== "todas" ||
@@ -155,6 +184,7 @@ function StockSupervisor() {
     const termino = busqueda.trim().toLowerCase();
 
     const filtrado = stock.filter((item) => {
+      if (!areaActiva || claveAreaStock(item.area.nombre) !== areaActiva) return false;
       const coincideBusqueda =
         termino === "" ||
         [
@@ -193,6 +223,7 @@ function StockSupervisor() {
       return ordenStock === "asc" ? comparacion : comparacion * -1;
     });
   }, [
+    areaActiva,
     busqueda,
     categoriaFiltro,
     estadoFiltro,
@@ -238,6 +269,7 @@ function StockSupervisor() {
       .filter(
         (item) =>
           item.productoId === itemAccion.productoId &&
+          item.area.id === itemAccion.area.id &&
           item.cantidad > 0,
       )
       .forEach((item) => porArea.set(item.area.id, item));
@@ -411,6 +443,32 @@ function StockSupervisor() {
             <h2>Stock disponible</h2>
             <p>Revisa los productos pendientes antes de asignarlos o devolverlos.</p>
           </div>
+        </div>
+
+        <div className="stock-areas-pestanas" role="tablist" aria-label="Bodegas con productos en stock">
+          {areasStock.map((area) => {
+            const cantidadBienes = stock.filter((item) => claveAreaStock(item.area.nombre) === area.id).length;
+            const activa = areaActiva === area.id;
+            return (
+              <button
+                key={area.id}
+                type="button"
+                role="tab"
+                aria-selected={activa}
+                className={`stock-area-pestana ${activa ? "stock-area-pestana-activa" : ""}`}
+                onClick={() => {
+                  setAreaActiva(area.id);
+                  limpiarFiltros();
+                }}
+              >
+                <span>{limpiarNombreBodega(area.nombre)}</span>
+                <span className="stock-area-contador">{cantidadBienes}</span>
+              </button>
+            );
+          })}
+          {!cargando && areasStock.length === 0 ? (
+            <p className="stock-areas-vacio">No tienes productos en stock en tus bodegas asignadas.</p>
+          ) : null}
         </div>
 
         <div className="responsable-filtros-inventario stock-supervisor-filtros">

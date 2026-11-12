@@ -399,9 +399,12 @@ export class ReversionesMovimientosService {
     // revertida. Cuando ya no quedan unidades entregadas activas en el pedido,
     // también devolvemos sus rechazos a pendientes (no hay stock físico que
     // devolver por esas unidades).
-    const noQuedanEntregas = detalles.every((item) => item.cantidadEntregada === 0);
+    // Los bienes retirados siguen en la BD por trazabilidad, pero no deben
+    // intervenir en el recálculo de la solicitud vigente.
+    const detallesActivos = detalles.filter((item) => !item.retirado);
+    const noQuedanEntregas = detallesActivos.every((item) => item.cantidadEntregada === 0);
     if (noQuedanEntregas) {
-      for (const item of detalles) {
+      for (const item of detallesActivos) {
         if (item.cantidadRechazada > 0) {
           item.cantidadPendiente += item.cantidadRechazada;
           item.cantidadRechazada = 0;
@@ -425,15 +428,15 @@ export class ReversionesMovimientosService {
 
     await detallesRepository.save(detalles);
 
-    const totalPendiente = detalles.reduce(
+    const totalPendiente = detallesActivos.reduce(
       (total, item) => total + item.cantidadPendiente,
       0,
     );
-    const totalEntregado = detalles.reduce(
+    const totalEntregado = detallesActivos.reduce(
       (total, item) => total + item.cantidadEntregada,
       0,
     );
-    const totalRechazado = detalles.reduce(
+    const totalRechazado = detallesActivos.reduce(
       (total, item) => total + item.cantidadRechazada,
       0,
     );

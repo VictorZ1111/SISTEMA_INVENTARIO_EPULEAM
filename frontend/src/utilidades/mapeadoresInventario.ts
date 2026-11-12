@@ -81,6 +81,7 @@ export function convertirSolicitudBackend(solicitud: SolicitudBackend): Solicitu
   return {
     id: solicitud.id,
     codigo: solicitud.codigo,
+    solicitudOrigenId: solicitud.solicitudOrigenId ?? null,
     tipo: "producto",
     solicitante: solicitud.usuarioSolicitante.nombre,
     bodega: normalizarNombreBodega(solicitud.bodegaSolicitante.nombre),

@@ -4,6 +4,9 @@ import {
   ArrowUpAZ,
   Building2,
   Edit,
+  Trash2,
+  Eye,
+  EyeOff,
   Plus,
   Paintbrush,
   Search,
@@ -152,6 +155,10 @@ function BodegasAdmin() {
   const [modalBodegaAbierto, setModalBodegaAbierto] = useState(false);
   const [bienDetalle, setBienDetalle] = useState<InventarioBodega | null>(null);
   const [bodegaEditando, setBodegaEditando] = useState<Bodega | null>(null);
+  const [bodegaEliminando, setBodegaEliminando] = useState<Bodega | null>(null);
+  const [codigoAutorizacion, setCodigoAutorizacion] = useState("");
+  const [codigoVisible, setCodigoVisible] = useState(false);
+  const [procesandoBodega, setProcesandoBodega] = useState(false);
   const [mensajeSistema, setMensajeSistema] =
     useState<MensajeSistema | null>(null);
   const [formulario, setFormulario] =
@@ -293,32 +300,57 @@ function BodegasAdmin() {
   const abrirModalCrear = () => {
     setBodegaEditando(null);
     setFormulario(formularioInicial);
+    setCodigoAutorizacion("");
+    setCodigoVisible(false);
     setModalBodegaAbierto(true);
   };
 
   const abrirModalEditar = (bodega: Bodega) => {
-    if (bodega.esSistema) {
-      mostrarMensaje(
-        "error",
-        "Las bodegas oficiales del sistema están protegidas y no pueden editarse.",
-      );
-      return;
-    }
-
     setBodegaEditando(bodega);
-
-    setFormulario({
-      nombre: bodega.nombre,
-      descripcion: bodega.descripcion,
-    });
-
+    setFormulario({ nombre: bodega.nombre, descripcion: bodega.descripcion });
+    setCodigoAutorizacion("");
+    setCodigoVisible(false);
     setModalBodegaAbierto(true);
   };
 
   const cerrarModalBodega = () => {
+    if (procesandoBodega) return;
     setBodegaEditando(null);
     setFormulario(formularioInicial);
+    setCodigoAutorizacion("");
     setModalBodegaAbierto(false);
+  };
+
+  const abrirModalEliminar = (bodega: Bodega) => {
+    setCodigoAutorizacion("");
+    setCodigoVisible(false);
+    setBodegaEliminando(bodega);
+  };
+
+  const eliminarBodega = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!bodegaEliminando || procesandoBodega) return;
+    if (!codigoAutorizacion.trim()) {
+      mostrarMensaje("error", "Ingresa el código del Administrador General.");
+      return;
+    }
+    try {
+      setProcesandoBodega(true);
+      await clienteApi.delete(`/bodegas/${bodegaEliminando.id}`, {
+        data: { codigoAdministradorGeneral: codigoAutorizacion.trim() },
+      });
+      const eliminadaId = String(bodegaEliminando.id);
+      setBodegaEliminando(null);
+      setCodigoAutorizacion("");
+      await cargarBodegas();
+      await recargarUsuarios();
+      if (id === eliminadaId) navigate("/admin/bodegas");
+      mostrarMensaje("exito", "Bodega eliminada correctamente.");
+    } catch (error) {
+      mostrarMensaje("error", obtenerMensajeError(error));
+    } finally {
+      setProcesandoBodega(false);
+    }
   };
 
   const limpiarFiltrosInventario = () => {
@@ -363,17 +395,15 @@ function BodegasAdmin() {
 
     try {
       if (bodegaEditando) {
-        if (bodegaEditando.esSistema) {
-          mostrarMensaje(
-            "error",
-            "Las bodegas oficiales del sistema están protegidas y no pueden editarse.",
-          );
+        if (!codigoAutorizacion.trim()) {
+          mostrarMensaje("error", "Ingresa el código del Administrador General para guardar los cambios.");
           return;
         }
 
         await clienteApi.patch(`/bodegas/${bodegaEditando.id}`, {
-          nombre,
+          ...(bodegaEditando.esSistema ? {} : { nombre }),
           descripcion,
+          codigoAdministradorGeneral: codigoAutorizacion.trim(),
         });
       } else {
         await clienteApi.post("/bodegas", {
@@ -624,12 +654,15 @@ function BodegasAdmin() {
             </div>
 
             <button
-              className="boton-secundario"
+              className="boton-secundario boton-gestion-bodega boton-gestion-bodega--editar"
               type="button"
               onClick={() => abrirModalEditar(bodegaSeleccionada)}
             >
               <Edit size={17} />
               Editar
+            </button>
+            <button type="button" className="boton-secundario boton-gestion-bodega boton-gestion-bodega--eliminar" onClick={() => abrirModalEliminar(bodegaSeleccionada)}>
+              <Trash2 size={17} /> Eliminar
             </button>
           </div>
         </section>
@@ -906,49 +939,6 @@ function BodegasAdmin() {
                     {sucursal.descripcion}
                   </p>
 
-                  <div style={{ display: "grid", gap: "3px" }}>
-                    <div>
-                      <span
-                        style={{
-                          color: "#64748b",
-                          fontSize: "13px",
-                        }}
-                      >
-                        Supervisor:
-                      </span>
-
-                      <strong
-                        style={{
-                          marginLeft: "5px",
-                          color: "#111827",
-                          fontSize: "13px",
-                        }}
-                      >
-                        {obtenerTextoSupervisores(sucursal.nombre)}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <span
-                        style={{
-                          color: "#64748b",
-                          fontSize: "13px",
-                        }}
-                      >
-                        Responsable:
-                      </span>
-
-                      <strong
-                        style={{
-                          marginLeft: "5px",
-                          color: "#111827",
-                          fontSize: "13px",
-                        }}
-                      >
-                        {obtenerTextoResponsables(sucursal.nombre)}
-                      </strong>
-                    </div>
-                  </div>
                 </button>
               ))}
             </div>
@@ -1019,6 +1009,38 @@ function BodegasAdmin() {
           </div>
         )}
 
+        {bodegaEliminando && (
+          <div className="modal-fondo">
+            <div className="modal-contenedor" style={{ maxWidth: 530 }}>
+              <div className="modal-header">
+                <div>
+                  <h2>Eliminar bodega</h2>
+                  <p>Esta operación exige autorización y solo se permite si no existen inventarios, asignaciones, solicitudes ni movimientos relacionados.</p>
+                </div>
+                <button type="button" className="modal-cerrar" aria-label="Cerrar" disabled={procesandoBodega} onClick={() => setBodegaEliminando(null)}><X size={20} /></button>
+              </div>
+              <form className="formulario-modal" onSubmit={eliminarBodega}>
+                <p>¿Eliminar <strong>{bodegaEliminando.nombre}</strong>? Si tiene inventario, asignaciones o movimientos, el sistema impedirá la eliminación.</p>
+                <div className="campo-formulario campo-completo">
+                  <label>Código del Administrador General *</label>
+                  <div className="codigo-bodega-contenedor">
+                    <input required type={codigoVisible ? "text" : "password"} autoComplete="off"
+                      placeholder="Código de autorización" value={codigoAutorizacion}
+                      onChange={(e) => setCodigoAutorizacion(e.target.value)} />
+                    <button type="button" onClick={() => setCodigoVisible(!codigoVisible)} aria-label={codigoVisible ? "Ocultar código" : "Mostrar código"}>
+                      {codigoVisible ? <EyeOff size={17} /> : <Eye size={17} />}
+                    </button>
+                  </div>
+                </div>
+                <div className="modal-acciones">
+                  <button type="button" className="boton-secundario" disabled={procesandoBodega} onClick={() => setBodegaEliminando(null)}>Cancelar</button>
+                  <button type="submit" className="boton-principal" disabled={procesandoBodega}>Confirmar eliminación</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {modalBodegaAbierto && (
           <div className="modal-fondo">
             <div className="modal-contenedor" style={{ maxWidth: 620 }}>
@@ -1047,6 +1069,7 @@ function BodegasAdmin() {
                     <label>Nombre de la bodega *</label>
                     <input
                       required
+                      disabled={Boolean(bodegaEditando?.esSistema)}
                       value={formulario.nombre}
                       onChange={(e) =>
                         actualizarCampo("nombre", e.target.value)
@@ -1066,6 +1089,22 @@ function BodegasAdmin() {
                       placeholder="Ej: Almacén de equipos y recursos tecnológicos."
                     />
                   </div>
+                  {bodegaEditando && (
+                    <div className="campo-formulario campo-completo">
+                      <label>Código del Administrador General *</label>
+                      <div className="codigo-bodega-contenedor">
+                        <input required type={codigoVisible ? "text" : "password"}
+                          autoComplete="off" value={codigoAutorizacion}
+                          onChange={(e) => setCodigoAutorizacion(e.target.value)}
+                          placeholder="Ingresa el código de autorización" />
+                        <button type="button" aria-label={codigoVisible ? "Ocultar código" : "Mostrar código"}
+                          onClick={() => setCodigoVisible(!codigoVisible)}>
+                          {codigoVisible ? <EyeOff size={17} /> : <Eye size={17} />}
+                        </button>
+                      </div>
+                      {bodegaEditando.esSistema && <p className="codigo-bodega-aclaracion">La bodega oficial conserva su nombre; puedes modificar su descripción.</p>}
+                    </div>
+                  )}
                 </div>
 
                 <div className="modal-acciones">
@@ -1080,6 +1119,7 @@ function BodegasAdmin() {
                   <button
                     className="boton-principal"
                     type="submit"
+                    disabled={procesandoBodega}
                   >
                     {bodegaEditando ? "Guardar cambios" : "Guardar bodega"}
                   </button>
@@ -1162,9 +1202,12 @@ function BodegasAdmin() {
         >
           {bodegasFiltradas.map((bodega) => {
             return (
-              <button
+              <div
                 key={bodega.id}
-                type="button"
+                role="button"
+                tabIndex={0}
+                aria-label={`Abrir inventario de ${bodega.nombre}`}
+                onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); navegarABodega(bodega); } }}
                 onClick={() => navegarABodega(bodega)}
                 style={{
                   width: "100%",
@@ -1221,63 +1264,44 @@ function BodegasAdmin() {
                   {bodega.descripcion}
                 </p>
 
-                <div
-                  style={{
-                    borderTop: "1px solid #f1f5f9",
-                    paddingTop: "9px",
-                    display: "grid",
-                    gap: "3px",
-                  }}
-                >
-                  <div>
-                    <span
-                      style={{
-                        color: "#64748b",
-                        fontSize: "13px",
-                      }}
-                    >
-                      Supervisor:
-                    </span>
-
-                    <strong
-                      style={{
-                        marginLeft: "5px",
-                        color: "#111827",
-                        fontSize: "13.5px",
-                      }}
-                    >
-                      {obtenerTextoSupervisores(bodega.nombre)}
-                    </strong>
-                  </div>
-
-                  {esSucursalTasty(bodega.nombre) && (
-                    <div>
-                      <span
-                        style={{
-                          color: "#64748b",
-                          fontSize: "13px",
-                        }}
-                      >
-                        Responsable:
-                      </span>
-
-                      <strong
-                        style={{
-                          marginLeft: "5px",
-                          color: "#111827",
-                          fontSize: "13.5px",
-                        }}
-                      >
-                        {obtenerTextoResponsables(bodega.nombre)}
-                      </strong>
-                    </div>
-                  )}
-                </div>
-              </button>
+              </div>
             );
           })}
         </div>
       </section>
+
+        {bodegaEliminando && (
+          <div className="modal-fondo">
+            <div className="modal-contenedor" style={{ maxWidth: 530 }}>
+              <div className="modal-header">
+                <div>
+                  <h2>Eliminar bodega</h2>
+                  <p>Esta operación exige autorización y solo se permite si no existen inventarios, asignaciones, solicitudes ni movimientos relacionados.</p>
+                </div>
+                <button type="button" className="modal-cerrar" aria-label="Cerrar" disabled={procesandoBodega} onClick={() => setBodegaEliminando(null)}><X size={20} /></button>
+              </div>
+              <form className="formulario-modal" onSubmit={eliminarBodega}>
+                <p>¿Eliminar <strong>{bodegaEliminando.nombre}</strong>? Si tiene inventario, asignaciones o movimientos, el sistema impedirá la eliminación.</p>
+                <div className="campo-formulario campo-completo">
+                  <label>Código del Administrador General *</label>
+                  <div className="codigo-bodega-contenedor">
+                    <input required type={codigoVisible ? "text" : "password"} autoComplete="off"
+                      placeholder="Código de autorización" value={codigoAutorizacion}
+                      onChange={(e) => setCodigoAutorizacion(e.target.value)} />
+                    <button type="button" onClick={() => setCodigoVisible(!codigoVisible)} aria-label={codigoVisible ? "Ocultar código" : "Mostrar código"}>
+                      {codigoVisible ? <EyeOff size={17} /> : <Eye size={17} />}
+                    </button>
+                  </div>
+                </div>
+                <div className="modal-acciones">
+                  <button type="button" className="boton-secundario" disabled={procesandoBodega} onClick={() => setBodegaEliminando(null)}>Cancelar</button>
+                  <button type="submit" className="boton-principal" disabled={procesandoBodega}>Confirmar eliminación</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
 
       {modalBodegaAbierto && (
         <div className="modal-fondo">
@@ -1307,6 +1331,7 @@ function BodegasAdmin() {
                   <label>Nombre de la bodega *</label>
                   <input
                     required
+                    disabled={Boolean(bodegaEditando?.esSistema)}
                     value={formulario.nombre}
                     onChange={(e) => actualizarCampo("nombre", e.target.value)}
                     placeholder="Ej: Bodega Tecnológica"
@@ -1324,6 +1349,22 @@ function BodegasAdmin() {
                     placeholder="Ej: Almacén de equipos y recursos tecnológicos."
                   />
                 </div>
+                {bodegaEditando && (
+                    <div className="campo-formulario campo-completo">
+                      <label>Código del Administrador General *</label>
+                      <div className="codigo-bodega-contenedor">
+                        <input required type={codigoVisible ? "text" : "password"}
+                          autoComplete="off" value={codigoAutorizacion}
+                          onChange={(e) => setCodigoAutorizacion(e.target.value)}
+                          placeholder="Ingresa el código de autorización" />
+                        <button type="button" aria-label={codigoVisible ? "Ocultar código" : "Mostrar código"}
+                          onClick={() => setCodigoVisible(!codigoVisible)}>
+                          {codigoVisible ? <EyeOff size={17} /> : <Eye size={17} />}
+                        </button>
+                      </div>
+                      {bodegaEditando.esSistema && <p className="codigo-bodega-aclaracion">La bodega oficial conserva su nombre; puedes modificar su descripción.</p>}
+                    </div>
+                  )}
               </div>
 
               <div className="modal-acciones">

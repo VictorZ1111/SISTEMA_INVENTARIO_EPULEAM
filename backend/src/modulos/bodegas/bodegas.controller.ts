@@ -23,6 +23,7 @@ import {
 import { ActualizarBodegaDto } from "./dto/actualizar-bodega.dto";
 import { CambiarEstadoBodegaDto } from "./dto/cambiar-estado-bodega.dto";
 import { CrearBodegaDto } from "./dto/crear-bodega.dto";
+import { EliminarBodegaDto } from "./dto/eliminar-bodega.dto";
 
 @Controller("bodegas")
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -94,7 +95,9 @@ export class BodegasController {
   @Roles(RolUsuario.ADMINISTRADOR)
   eliminar(
     @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: EliminarBodegaDto,
+    @UsuarioActual() usuario: UsuarioAutenticado,
   ): Promise<{ message: string }> {
-    return this.bodegasService.eliminar(id);
+    return this.bodegasService.eliminar(id, usuario, dto.codigoAdministradorGeneral);
   }
 }

@@ -1,5 +1,6 @@
 import { clienteApi } from "./clienteApi";
 import type { EstadoUsuario } from "../tipos/usuario";
+import type { HorarioSemanal } from "../tipos/horarioAcceso";
 
 export type RolBackend = "administrador" | "supervisor" | "responsable";
 
@@ -11,6 +12,9 @@ export interface UsuarioBackend {
   rol: RolBackend;
   estado: EstadoUsuario;
   esAdministradorGeneral: boolean;
+  horarioAcceso: HorarioSemanal;
+  accesoTemporalPermitido: boolean | null;
+  accesoTemporalHasta: string | null;
 }
 
 export interface BodegaBackend {
@@ -47,9 +51,11 @@ export interface CrearUsuarioApiPayload {
   telefono?: string;
   rol: RolBackend;
   codigoAcceso?: string;
+  horarioAcceso?: HorarioSemanal;
 }
 
 export interface EditarUsuarioApiPayload {
+  horarioAcceso?: HorarioSemanal;
   nombre: string;
   telefono: string;
   rol: RolBackend;
@@ -137,4 +143,14 @@ export async function restablecerCodigoAccesoApi(
     nuevoCodigo,
     codigoAdministradorGeneral,
   });
+}
+
+export async function configurarAccesoTemporalApi(id: string, permitido: boolean) {
+  const { data } = await clienteApi.patch<UsuarioBackend>(`/usuarios/${id}/acceso-temporal`, { permitido });
+  return data;
+}
+
+export async function cancelarAccesoTemporalApi(id: string) {
+  const { data } = await clienteApi.delete<UsuarioBackend>(`/usuarios/${id}/acceso-temporal`);
+  return data;
 }

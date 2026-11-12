@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { UsuarioBodega } from "../asignaciones/entities/usuario-bodega.entity";
+import { AuditoriaAdministrativa } from "../auditoria/entities/auditoria-administrativa.entity";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { RolesGuard } from "../auth/guards/roles.guard";
 import { Bodega } from "../bodegas/entities/bodega.entity";
@@ -21,6 +22,7 @@ import { SolicitudesService } from "./solicitudes.service";
       Producto,
       Bodega,
       UsuarioBodega,
+      AuditoriaAdministrativa,
     ]),
   ],
   controllers: [SolicitudesController],

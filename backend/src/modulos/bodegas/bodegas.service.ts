@@ -9,7 +9,11 @@ import {
 import { InjectRepository } from "@nestjs/typeorm";
 import type { UsuarioAutenticado } from "../auth/interfaces/usuario-autenticado.interface";
 import { AuditoriaService } from "../auditoria/auditoria.service";
-import { Not, Repository } from "typeorm";
+import { Not, QueryFailedError, Repository } from "typeorm";
+import { UsuariosService } from "../usuarios/usuarios.service";
+import { Existencia } from "../inventario/entities/existencia.entity";
+import { Movimiento } from "../movimientos/entities/movimiento.entity";
+import { Solicitud } from "../solicitudes/entities/solicitud.entity";
 
 import { ActualizarBodegaDto } from "./dto/actualizar-bodega.dto";
 import { CrearBodegaDto } from "./dto/crear-bodega.dto";
@@ -77,6 +81,7 @@ export class BodegasService implements OnApplicationBootstrap {
     @InjectRepository(Bodega)
     private readonly bodegasRepository: Repository<Bodega>,
     private readonly auditoriaService: AuditoriaService,
+    private readonly usuariosService: UsuariosService,
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
@@ -97,7 +102,11 @@ export class BodegasService implements OnApplicationBootstrap {
       },
     });
 
-    return bodegas.map((bodega) => this.convertirAPublica(bodega));
+    // Las bodegas oficiales retiradas de forma autorizada se conservan en la
+    // base de datos, pero dejan de aparecer en los listados operativos.
+    return bodegas
+      .filter((bodega) => !bodega.esSistema || bodega.estado === EstadoBodega.ACTIVA)
+      .map((bodega) => this.convertirAPublica(bodega));
   }
 
   async listarActivas(): Promise<BodegaPublica[]> {
@@ -169,7 +178,33 @@ export class BodegasService implements OnApplicationBootstrap {
     actor: UsuarioAutenticado,
   ): Promise<BodegaPublica> {
     const bodega = await this.obtenerPorId(id);
-    this.validarNoProtegida(bodega);
+    await this.usuariosService.autorizarCodigoAdministradorGeneral(dto.codigoAdministradorGeneral);
+
+    // La estructura oficial (Limpieza, Oficina, Gastronomía y Tasty) debe conservar
+    // nombre, tipo y jerarquía: puede editarse su descripción, pero no su identidad.
+    if (bodega.esSistema) {
+      if (
+        (dto.nombre !== undefined && dto.nombre.trim() !== bodega.nombre) ||
+        (dto.tipo !== undefined && dto.tipo !== bodega.tipo) ||
+        (dto.bodegaPadreId !== undefined && dto.bodegaPadreId !== bodega.bodegaPadreId)
+      ) {
+        throw new ConflictException(
+          "Las bodegas oficiales conservan su nombre, tipo y ubicación. Solo puedes cambiar su descripción.",
+        );
+      }
+      if (dto.descripcion !== undefined) {
+        bodega.descripcion = this.normalizarDescripcion(dto.descripcion);
+      }
+      await this.bodegasRepository.save(bodega);
+      await this.auditoriaService.registrar({
+        usuarioId: actor.id,
+        modulo: "bodegas",
+        accion: "editar",
+        registroId: bodega.id,
+        descripcion: `Actualización de la descripción de ${bodega.nombre}.`,
+      });
+      return this.buscarPublicaPorId(id);
+    }
 
     const tipoFinal = dto.tipo ?? bodega.tipo;
     const padreFinal =
@@ -254,20 +289,27 @@ export class BodegasService implements OnApplicationBootstrap {
     return this.buscarPublicaPorId(id);
   }
 
-  async eliminar(id: string): Promise<{ message: string }> {
+  async eliminar(
+    id: string,
+    actor: UsuarioAutenticado,
+    codigoAdministradorGeneral: string,
+  ): Promise<{ message: string }> {
     const bodega = await this.obtenerPorId(id);
-    this.validarNoProtegida(bodega);
+    await this.usuariosService.autorizarCodigoAdministradorGeneral(codigoAdministradorGeneral);
+
+    // El Inventario General y las sucursales Tasty son partes operativas de la
+    // estructura fija. No se retiran mediante la administración de bodegas.
+    if (bodega.esSistema && bodega.tipo !== TipoBodega.PRINCIPAL) {
+      throw new ConflictException(
+        "Esta sucursal o inventario institucional tiene una estructura permanente y no se puede eliminar desde Bodegas.",
+      );
+    }
 
     const sucursales = await this.bodegasRepository.count({
-      where: {
-        bodegaPadreId: id,
-      },
+      where: { bodegaPadreId: id },
     });
-
     if (sucursales > 0) {
-      throw new ConflictException(
-        "No se puede eliminar una bodega que contiene sucursales.",
-      );
+      throw new ConflictException("No se puede eliminar una bodega que contiene sucursales.");
     }
 
     const asignaciones = await this.bodegasRepository
@@ -276,18 +318,65 @@ export class BodegasService implements OnApplicationBootstrap {
       .where("bodega.id = :id", { id })
       .andWhere("asignacion.id IS NOT NULL")
       .getCount();
+    if (asignaciones > 0 || bodega.supervisorId) {
+      throw new ConflictException("No se puede eliminar una bodega con usuarios asignados. Retira primero las asignaciones.");
+    }
 
-    if (asignaciones > 0) {
+    // Comprobar incluso existencias de cantidad cero, solicitudes ya atendidas
+    // y movimientos revertidos: todos forman parte del historial institucional.
+    const repositorioExistencias = this.bodegasRepository.manager.getRepository(Existencia);
+    const repositorioSolicitudes = this.bodegasRepository.manager.getRepository(Solicitud);
+    const repositorioMovimientos = this.bodegasRepository.manager.getRepository(Movimiento);
+    const [existencias, solicitudes, movimientos] = await Promise.all([
+      repositorioExistencias.count({ where: { bodegaId: id } }),
+      repositorioSolicitudes.count({ where: { bodegaSolicitanteId: id } }),
+      repositorioMovimientos.count({ where: [
+        { bodegaOrigenId: id }, { bodegaDestinoId: id },
+      ] }),
+    ]);
+    if (existencias > 0 || solicitudes > 0 || movimientos > 0) {
       throw new ConflictException(
-        "No se puede eliminar una bodega que tiene usuarios asignados.",
+        "Esta bodega tiene existencias, solicitudes o movimientos registrados. No puede eliminarse porque debe conservarse su historial.",
       );
     }
 
-    await this.bodegasRepository.remove(bodega);
+    // Las bodegas oficiales se retiran lógicamente para que no se pierda su
+    // identidad y el arranque de EPULEAM no vuelva a crearlas. Sin migraciones.
+    if (bodega.esSistema) {
+      bodega.estado = EstadoBodega.INACTIVA;
+      await this.bodegasRepository.save(bodega);
+      await this.auditoriaService.registrar({
+        usuarioId: actor.id,
+        modulo: "bodegas",
+        accion: "eliminar",
+        registroId: id,
+        descripcion: `Retiro autorizado de la bodega oficial ${bodega.nombre} sin referencias operativas.`,
+      });
+      return { message: "Bodega retirada correctamente. Se conservó su registro institucional." };
+    }
 
-    return {
-      message: "Bodega eliminada correctamente.",
-    };
+    // Nunca borrar registros históricos para hacer posible una eliminación.
+    // PostgreSQL impide borrar bodegas que siguen referenciadas en existencias,
+    // solicitudes, movimientos u otros registros institucionales.
+    try {
+      await this.bodegasRepository.remove(bodega);
+    } catch (error) {
+      if (error instanceof QueryFailedError) {
+        throw new ConflictException(
+          "Esta bodega tiene inventario o registros relacionados. No puede eliminarse porque debe conservarse el historial.",
+        );
+      }
+      throw error;
+    }
+
+    await this.auditoriaService.registrar({
+      usuarioId: actor.id,
+      modulo: "bodegas",
+      accion: "eliminar",
+      registroId: id,
+      descripcion: `Eliminación de la bodega ${bodega.nombre}.`,
+    });
+    return { message: "Bodega eliminada correctamente." };
   }
 
   convertirAPublica(bodega: Bodega): BodegaPublica {
@@ -318,8 +407,8 @@ export class BodegasService implements OnApplicationBootstrap {
       },
     });
 
-    if (!bodega) {
-      throw new NotFoundException("La bodega solicitada no existe.");
+    if (!bodega || (bodega.esSistema && bodega.estado === EstadoBodega.INACTIVA)) {
+      throw new NotFoundException("La bodega solicitada no está disponible.");
     }
 
     return bodega;
@@ -476,9 +565,14 @@ export class BodegasService implements OnApplicationBootstrap {
       });
     } else {
       bodega.nombre = oficial.nombre;
-      bodega.descripcion = oficial.descripcion;
+      // Conservar descripciones editadas por un administrador autorizado.
+      if (!bodega.descripcion) bodega.descripcion = oficial.descripcion;
       bodega.tipo = oficial.tipo;
-      bodega.estado = EstadoBodega.ACTIVA;
+      // Una bodega oficial retirada por un administrador autorizado no debe
+      // reaparecer tras reiniciar el backend.
+      if (bodega.estado !== EstadoBodega.INACTIVA) {
+        bodega.estado = EstadoBodega.ACTIVA;
+      }
       bodega.esSistema = true;
       bodega.bodegaPadreId = bodegaPadreId;
     }
