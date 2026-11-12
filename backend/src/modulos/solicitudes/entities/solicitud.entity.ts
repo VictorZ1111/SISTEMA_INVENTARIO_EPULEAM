@@ -65,6 +65,19 @@ export class Solicitud {
   @JoinColumn({ name: "bodega_solicitante_id" })
   bodegaSolicitante!: Bodega;
 
+  // Una solicitud de abastecimiento mantiene el vínculo con el pedido
+  // del Responsable sin automatizar la entrega posterior.
+  @Column({
+    name: "solicitud_origen_id",
+    type: "uuid",
+    nullable: true,
+  })
+  solicitudOrigenId!: string | null;
+
+  @ManyToOne(() => Solicitud, { nullable: true, onDelete: "RESTRICT" })
+  @JoinColumn({ name: "solicitud_origen_id" })
+  solicitudOrigen!: Solicitud | null;
+
   @Column({
     type: "enum",
     enum: EstadoSolicitud,

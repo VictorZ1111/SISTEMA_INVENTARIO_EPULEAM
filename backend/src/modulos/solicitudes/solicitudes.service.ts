@@ -16,6 +16,7 @@ import {
 import { LIMITE_REVERSA_MS } from "../../comun/constantes/reversiones";
 
 import { UsuarioBodega } from "../asignaciones/entities/usuario-bodega.entity";
+import { TipoAsignacion } from "../asignaciones/enums/tipo-asignacion.enum";
 import type { UsuarioAutenticado } from "../auth/interfaces/usuario-autenticado.interface";
 import { Bodega } from "../bodegas/entities/bodega.entity";
 import { EstadoBodega } from "../bodegas/enums/estado-bodega.enum";
@@ -32,6 +33,7 @@ import { CrearSolicitudDto } from "./dto/crear-solicitud.dto";
 import { FiltrarSolicitudesDto } from "./dto/filtrar-solicitudes.dto";
 import { RechazarSolicitudDto } from "./dto/rechazar-solicitud.dto";
 import { RevertirSolicitudDto } from "./dto/revertir-solicitud.dto";
+import { SolicitarAbastecimientoDto } from "./dto/solicitar-abastecimiento.dto";
 import { ReversaSolicitud } from "./entities/reversa-solicitud.entity";
 import { SolicitudDetalle } from "./entities/solicitud-detalle.entity";
 import { Solicitud } from "./entities/solicitud.entity";
@@ -42,6 +44,7 @@ export interface SolicitudPublica {
   codigo: string;
   estado: EstadoSolicitud;
   observacionSolicitante: string | null;
+  solicitudOrigenId: string | null;
   observacionAtencion: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -119,6 +122,10 @@ export class SolicitudesService {
     await this.validarBodegaAsignada(usuario, bodega);
     this.validarBodegaSegunRol(usuario, bodega);
 
+    if (usuario.rol === RolUsuario.RESPONSABLE) {
+      await this.validarSupervisorReceptor(bodega);
+    }
+
     const productoIds = dto.detalles.map(
       (detalle) => detalle.productoId,
     );
@@ -160,6 +167,7 @@ export class SolicitudesService {
           codigo: await this.generarCodigo(),
           usuarioSolicitanteId: usuario.id,
           bodegaSolicitanteId: bodega.id,
+          solicitudOrigenId: null,
           estado: EstadoSolicitud.PENDIENTE,
           observacionSolicitante: this.normalizarObservacion(
             dto.observacionSolicitante,
@@ -191,6 +199,100 @@ export class SolicitudesService {
     return this.buscarPorId(solicitudId, usuario);
   }
 
+  // El Supervisor puede generar el abastecimiento desde una solicitud recibida.
+  // Bloqueamos la solicitud original para serializar solicitudes simultáneas.
+  async solicitarAbastecimiento(
+    id: string,
+    dto: SolicitarAbastecimientoDto,
+    usuario: UsuarioAutenticado,
+  ): Promise<SolicitudPublica> {
+    if (usuario.rol !== RolUsuario.SUPERVISOR) {
+      throw new ForbiddenException("Solo un Supervisor puede solicitar abastecimiento.");
+    }
+
+    const detalleIds = dto.detalles.map((detalle) => detalle.detalleId);
+    if (new Set(detalleIds).size !== detalleIds.length) {
+      throw new ConflictException("No repitas un producto en el abastecimiento.");
+    }
+
+    const nuevaId = await this.dataSource.transaction(async (administrador) => {
+      const solicitudOrigen = await this.obtenerSolicitudBloqueada(administrador, id);
+      if (solicitudOrigen.usuarioSolicitante.rol !== RolUsuario.RESPONSABLE) {
+        throw new ForbiddenException("El abastecimiento debe originarse en una solicitud de Responsable.");
+      }
+      this.validarSolicitudAbierta(solicitudOrigen);
+      await this.resolverRutaAtencionSupervisor(
+        administrador, solicitudOrigen.bodegaSolicitante, usuario,
+      );
+
+      const existentes = await administrador.getRepository(Solicitud).find({
+        where: { solicitudOrigenId: solicitudOrigen.id },
+      });
+      if (existentes.some((item) =>
+        item.estado === EstadoSolicitud.PENDIENTE || item.estado === EstadoSolicitud.PARCIAL
+      )) {
+        throw new ConflictException(
+          "Ya existe un abastecimiento pendiente o parcial para esta solicitud. Revísalo en Mis solicitudes antes de generar otro.",
+        );
+      }
+
+      const detallesSeleccionados = dto.detalles.map((seleccion) => {
+        const detalle = solicitudOrigen.detalles.find((item) => item.id === seleccion.detalleId);
+        if (!detalle || detalle.cantidadPendiente <= 0) {
+          throw new ConflictException("El bien ya no tiene cantidades pendientes en la solicitud original.");
+        }
+        if (!Number.isSafeInteger(seleccion.cantidadSolicitada) || seleccion.cantidadSolicitada <= 0) {
+          throw new ConflictException("La cantidad de abastecimiento debe ser un entero positivo.");
+        }
+        if (detalle.producto.estado !== EstadoProducto.ACTIVO) {
+          throw new ConflictException("No puedes solicitar abastecimiento de un producto inactivo.");
+        }
+        return { productoId: detalle.productoId, cantidad: seleccion.cantidadSolicitada };
+      });
+
+      const area = await this.obtenerAreaSolicitud(administrador, solicitudOrigen.bodegaSolicitante);
+      const nueva = administrador.getRepository(Solicitud).create({
+        codigo: await this.generarCodigo(),
+        usuarioSolicitanteId: usuario.id,
+        bodegaSolicitanteId: area.id,
+        solicitudOrigenId: solicitudOrigen.id,
+        estado: EstadoSolicitud.PENDIENTE,
+        observacionSolicitante: this.normalizarObservacion(dto.observacionSolicitante),
+        observacionAtencion: null,
+        usuarioAtencionId: null,
+        atendidaAt: null,
+      });
+      const guardada = await administrador.getRepository(Solicitud).save(nueva);
+      await administrador.getRepository(SolicitudDetalle).save(
+        detallesSeleccionados.map((item) => administrador.getRepository(SolicitudDetalle).create({
+          solicitudId: guardada.id,
+          productoId: item.productoId,
+          cantidadSolicitada: item.cantidad,
+          cantidadEntregada: 0,
+          cantidadRechazada: 0,
+          cantidadPendiente: item.cantidad,
+        })),
+      );
+      return guardada.id;
+    });
+    return this.buscarPorId(nuevaId, usuario);
+  }
+
+  async listarAbastecimientos(
+    id: string,
+    usuario: UsuarioAutenticado,
+  ): Promise<SolicitudPublica[]> {
+    const original = await this.buscarPorId(id, usuario);
+    if (original.usuarioSolicitante.rol !== RolUsuario.RESPONSABLE) {
+      throw new ForbiddenException("La solicitud indicada no es una solicitud recibida.");
+    }
+    return (await this.crearConsultaBase()
+      .where("solicitud.solicitudOrigenId = :id", { id })
+      .andWhere("solicitud.usuarioSolicitanteId = :usuarioId", { usuarioId: usuario.id })
+      .orderBy("solicitud.createdAt", "DESC")
+      .getMany()).map((solicitud) => this.convertirAPublica(solicitud));
+  }
+
   async atender(
     id: string,
     dto: AtenderSolicitudDto,
@@ -212,12 +314,12 @@ export class SolicitudesService {
         id,
       );
 
-      this.validarSolicitudAbierta(solicitud);
-
-      const rutaAtencion = await this.resolverRutaAtencionSolicitud(
+      const rutaAtencion = await this.resolverContextoAtencionSolicitud(
         administrador,
-        solicitud.bodegaSolicitante,
+        solicitud,
+        usuario,
       );
+      this.validarSolicitudAbierta(solicitud);
 
       for (const atencion of dto.detalles) {
         const detalle = solicitud.detalles.find(
@@ -295,6 +397,11 @@ export class SolicitudesService {
         id,
       );
 
+      await this.validarAtencionSegunUsuario(
+        administrador,
+        solicitud,
+        usuario,
+      );
       this.validarSolicitudAbierta(solicitud);
 
       for (const detalle of solicitud.detalles) {
@@ -331,6 +438,8 @@ export class SolicitudesService {
         administrador,
         id,
       );
+
+      this.validarSolicitudAdministrativa(solicitud);
 
       if (
         solicitud.estado !== EstadoSolicitud.ATENDIDA &&
@@ -482,7 +591,9 @@ export class SolicitudesService {
     filtros: FiltrarSolicitudesDto,
   ): Promise<SolicitudPublica[]> {
     const solicitudes = await this.aplicarFiltros(
-      this.crearConsultaBase(),
+      this.crearConsultaBase().where("usuarioSolicitante.rol = :rolSolicitante", {
+        rolSolicitante: RolUsuario.SUPERVISOR,
+      }),
       filtros,
     )
       .orderBy("solicitud.createdAt", "DESC")
@@ -515,6 +626,38 @@ export class SolicitudesService {
     );
   }
 
+  async listarRecibidas(
+    usuario: UsuarioAutenticado,
+  ): Promise<SolicitudPublica[]> {
+    const asignaciones = await this.asignacionesRepository.find({
+      where: {
+        usuarioId: usuario.id,
+        tipoAsignacion: TipoAsignacion.SUPERVISOR,
+      },
+      relations: { bodega: true },
+    });
+
+    const areas = asignaciones
+      .filter((asignacion) =>
+        asignacion.bodega.tipo === TipoBodega.PRINCIPAL &&
+        asignacion.bodega.estado === EstadoBodega.ACTIVA,
+      )
+      .map((asignacion) => asignacion.bodegaId);
+
+    if (areas.length === 0) return [];
+
+    const solicitudes = await this.crearConsultaBase()
+      .where("usuarioSolicitante.rol = :rolSolicitante", {
+        rolSolicitante: RolUsuario.RESPONSABLE,
+      })
+      .andWhere("bodegaSolicitante.bodegaPadreId IN (:...areas)", { areas })
+      .orderBy("solicitud.createdAt", "DESC")
+      .addOrderBy("detalle.id", "ASC")
+      .getMany();
+
+    return solicitudes.map((solicitud) => this.convertirAPublica(solicitud));
+  }
+
   async buscarPorId(
     id: string,
     usuario: UsuarioAutenticado,
@@ -529,10 +672,26 @@ export class SolicitudesService {
       );
     }
 
-    if (
-      usuario.rol !== RolUsuario.ADMINISTRADOR &&
-      solicitud.usuarioSolicitanteId !== usuario.id
-    ) {
+    if (usuario.rol === RolUsuario.ADMINISTRADOR) {
+      if (solicitud.usuarioSolicitante.rol !== RolUsuario.SUPERVISOR) {
+        throw new ForbiddenException(
+          "No tienes acceso a esta solicitud.",
+        );
+      }
+    } else if (usuario.rol === RolUsuario.SUPERVISOR) {
+      const esSolicitudPropia =
+        solicitud.usuarioSolicitanteId === usuario.id;
+      const esRecibida = await this.perteneceSolicitudRecibida(
+        solicitud,
+        usuario,
+      );
+
+      if (!esSolicitudPropia && !esRecibida) {
+        throw new ForbiddenException(
+          "No tienes acceso a esta solicitud.",
+        );
+      }
+    } else if (solicitud.usuarioSolicitanteId !== usuario.id) {
       throw new ForbiddenException(
         "No tienes acceso a esta solicitud.",
       );
@@ -624,6 +783,7 @@ export class SolicitudesService {
 
     const solicitud = await repositorio
       .createQueryBuilder("solicitud")
+      .innerJoinAndSelect("solicitud.usuarioSolicitante", "usuarioSolicitante")
       .innerJoinAndSelect(
         "solicitud.bodegaSolicitante",
         "bodegaSolicitante",
@@ -640,6 +800,92 @@ export class SolicitudesService {
     }
 
     return solicitud;
+  }
+
+  private async validarAtencionSegunUsuario(
+    administrador: EntityManager,
+    solicitud: Solicitud,
+    usuario: UsuarioAutenticado,
+  ): Promise<void> {
+    await this.resolverContextoAtencionSolicitud(
+      administrador,
+      solicitud,
+      usuario,
+    );
+  }
+
+  private validarSolicitudAdministrativa(solicitud: Solicitud): void {
+    if (solicitud.usuarioSolicitante.rol !== RolUsuario.SUPERVISOR) {
+      throw new ForbiddenException(
+        "Esta solicitud pertenece al flujo Responsable → Supervisor.",
+      );
+    }
+  }
+
+  private async perteneceSolicitudRecibida(
+    solicitud: Solicitud,
+    usuario: UsuarioAutenticado,
+  ): Promise<boolean> {
+    if (
+      usuario.rol !== RolUsuario.SUPERVISOR ||
+      solicitud.usuarioSolicitante.rol !== RolUsuario.RESPONSABLE ||
+      solicitud.bodegaSolicitante.tipo !== TipoBodega.SUCURSAL ||
+      !solicitud.bodegaSolicitante.bodegaPadreId
+    ) {
+      return false;
+    }
+
+    const asignacion = await this.asignacionesRepository.findOne({
+      where: {
+        usuarioId: usuario.id,
+        bodegaId: solicitud.bodegaSolicitante.bodegaPadreId,
+        tipoAsignacion: TipoAsignacion.SUPERVISOR,
+      },
+      relations: {
+        bodega: true,
+      },
+    });
+
+    return Boolean(
+      asignacion && asignacion.bodega.estado === EstadoBodega.ACTIVA,
+    );
+  }
+
+  private async validarSupervisorReceptor(bodega: Bodega): Promise<void> {
+    if (!bodega.bodegaPadreId) {
+      throw new ConflictException(
+        "La sucursal no tiene una bodega principal asociada.",
+      );
+    }
+
+    const asignaciones = await this.asignacionesRepository.find({
+      where: {
+        bodegaId: bodega.bodegaPadreId,
+        tipoAsignacion: TipoAsignacion.SUPERVISOR,
+      },
+      relations: { usuario: true, bodega: true },
+    });
+
+    const supervisoresActivos = new Set(
+      asignaciones
+        .filter((asignacion) =>
+          asignacion.usuario.rol === RolUsuario.SUPERVISOR &&
+          asignacion.usuario.estado === EstadoUsuario.ACTIVO &&
+          asignacion.bodega.estado === EstadoBodega.ACTIVA,
+        )
+        .map((asignacion) => asignacion.usuarioId),
+    );
+
+    if (supervisoresActivos.size === 0) {
+      throw new ConflictException(
+        "No hay un Supervisor activo asignado a la bodega principal de esta sucursal.",
+      );
+    }
+    if (supervisoresActivos.size > 1) {
+      throw new ConflictException(
+        "Hay varios Supervisores asignados a esta bodega. Es necesario seleccionar el destinatario antes de enviar solicitudes.",
+      );
+    }
   }
 
   private validarSolicitudAbierta(solicitud: Solicitud): void {
@@ -663,7 +909,42 @@ export class SolicitudesService {
     }
   }
 
-  private async resolverRutaAtencionSolicitud(
+  private async resolverContextoAtencionSolicitud(
+    administrador: EntityManager,
+    solicitud: Solicitud,
+    usuario: UsuarioAutenticado,
+  ): Promise<{
+    origen: Bodega;
+    destinoStock: Bodega;
+    area: Bodega;
+  }> {
+    if (
+      usuario.rol === RolUsuario.ADMINISTRADOR &&
+      solicitud.usuarioSolicitante.rol === RolUsuario.SUPERVISOR
+    ) {
+      return this.resolverRutaAtencionAdministrador(
+        administrador,
+        solicitud.bodegaSolicitante,
+      );
+    }
+
+    if (
+      usuario.rol === RolUsuario.SUPERVISOR &&
+      solicitud.usuarioSolicitante.rol === RolUsuario.RESPONSABLE
+    ) {
+      return this.resolverRutaAtencionSupervisor(
+        administrador,
+        solicitud.bodegaSolicitante,
+        usuario,
+      );
+    }
+
+    throw new ForbiddenException(
+      'No tienes permiso para atender esta solicitud.',
+    );
+  }
+
+  private async resolverRutaAtencionAdministrador(
     administrador: EntityManager,
     bodegaSolicitante: Bodega,
   ): Promise<{
@@ -682,58 +963,31 @@ export class SolicitudesService {
 
     if (!origen) {
       throw new NotFoundException(
-        "No se encontró el Inventario General activo.",
+        'No se encontró el Inventario General activo.',
       );
     }
 
-    let area = bodegaSolicitante;
-
-    if (bodegaSolicitante.tipo === TipoBodega.SUCURSAL) {
-      if (!bodegaSolicitante.bodegaPadreId) {
-        throw new ConflictException(
-          "La sucursal solicitante no tiene una bodega principal asociada.",
-        );
-      }
-
-      const bodegaPadre = await repositorio.findOne({
-        where: {
-          id: bodegaSolicitante.bodegaPadreId,
-        },
-      });
-
-      if (!bodegaPadre) {
-        throw new NotFoundException(
-          "No se encontró la bodega principal de la sucursal.",
-        );
-      }
-
-      area = bodegaPadre;
-    }
-
-    if (area.tipo !== TipoBodega.PRINCIPAL) {
-      throw new ConflictException(
-        "La solicitud debe pertenecer a una bodega principal o a una de sus sucursales.",
-      );
-    }
-
-    this.validarBodegaActiva(area);
+    const area = await this.obtenerAreaSolicitud(
+      administrador,
+      bodegaSolicitante,
+    );
 
     const stocks = await repositorio
-      .createQueryBuilder("stock")
-      .innerJoinAndSelect("stock.supervisor", "supervisor")
-      .where("stock.tipo = :tipoStock", {
+      .createQueryBuilder('stock')
+      .innerJoinAndSelect('stock.supervisor', 'supervisor')
+      .where('stock.tipo = :tipoStock', {
         tipoStock: TipoBodega.STOCK_SUPERVISOR,
       })
-      .andWhere("stock.estado = :estadoStock", {
+      .andWhere('stock.estado = :estadoStock', {
         estadoStock: EstadoBodega.ACTIVA,
       })
-      .andWhere("stock.bodegaPadreId = :areaId", {
+      .andWhere('stock.bodegaPadreId = :areaId', {
         areaId: area.id,
       })
-      .andWhere("supervisor.rol = :rolSupervisor", {
+      .andWhere('supervisor.rol = :rolSupervisor', {
         rolSupervisor: RolUsuario.SUPERVISOR,
       })
-      .andWhere("supervisor.estado = :estadoSupervisor", {
+      .andWhere('supervisor.estado = :estadoSupervisor', {
         estadoSupervisor: EstadoUsuario.ACTIVO,
       })
       .getMany();
@@ -755,6 +1009,107 @@ export class SolicitudesService {
       destinoStock: stocks[0],
       area,
     };
+  }
+
+  private async resolverRutaAtencionSupervisor(
+    administrador: EntityManager,
+    bodegaSolicitante: Bodega,
+    usuario: UsuarioAutenticado,
+  ): Promise<{
+    origen: Bodega;
+    destinoStock: Bodega;
+    area: Bodega;
+  }> {
+    if (bodegaSolicitante.tipo !== TipoBodega.SUCURSAL) {
+      throw new ConflictException(
+        'Las solicitudes de Responsable deben pertenecer a una sucursal activa.',
+      );
+    }
+
+    const area = await this.obtenerAreaSolicitud(
+      administrador,
+      bodegaSolicitante,
+    );
+
+    const asignacion = await administrador
+      .getRepository(UsuarioBodega)
+      .findOne({
+        where: {
+          usuarioId: usuario.id,
+          bodegaId: area.id,
+          tipoAsignacion: TipoAsignacion.SUPERVISOR,
+        },
+      });
+
+    if (!asignacion) {
+      throw new ForbiddenException(
+        'No tienes asignada la bodega principal de esta solicitud.',
+      );
+    }
+
+    const stockSupervisor = await administrador
+      .getRepository(Bodega)
+      .findOne({
+        where: {
+          tipo: TipoBodega.STOCK_SUPERVISOR,
+          estado: EstadoBodega.ACTIVA,
+          supervisorId: usuario.id,
+          bodegaPadreId: area.id,
+        },
+      });
+
+    if (!stockSupervisor) {
+      throw new ConflictException(
+        `No existe un stock de Supervisor activo para "${area.nombre}".`,
+      );
+    }
+
+    return {
+      origen: stockSupervisor,
+      destinoStock: bodegaSolicitante,
+      area,
+    };
+  }
+
+  private async obtenerAreaSolicitud(
+    administrador: EntityManager,
+    bodegaSolicitante: Bodega,
+  ): Promise<Bodega> {
+    const repositorio = administrador.getRepository(Bodega);
+
+    let area = bodegaSolicitante;
+
+    if (bodegaSolicitante.tipo === TipoBodega.SUCURSAL) {
+      if (!bodegaSolicitante.bodegaPadreId) {
+        throw new ConflictException(
+          'La sucursal solicitante no tiene una bodega principal asociada.',
+        );
+      }
+
+      const bodegaPadre = await repositorio.findOne({
+        where: {
+          id: bodegaSolicitante.bodegaPadreId,
+        },
+      });
+
+      if (!bodegaPadre) {
+        throw new NotFoundException(
+          'No se encontró la bodega principal de la sucursal.',
+        );
+      }
+
+      area = bodegaPadre;
+    }
+
+    if (area.tipo !== TipoBodega.PRINCIPAL) {
+      throw new ConflictException(
+        'La solicitud debe pertenecer a una bodega principal o a una de sus sucursales.',
+      );
+    }
+
+    this.validarBodegaActiva(area);
+
+    return area;
   }
 
   private async transferirPorSolicitud(
@@ -1090,6 +1445,7 @@ export class SolicitudesService {
       estado: solicitud.estado,
       observacionSolicitante:
         solicitud.observacionSolicitante,
+      solicitudOrigenId: solicitud.solicitudOrigenId,
       observacionAtencion: solicitud.observacionAtencion,
       createdAt: solicitud.createdAt,
       updatedAt: solicitud.updatedAt,

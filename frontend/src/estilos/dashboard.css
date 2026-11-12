@@ -8155,3 +8155,340 @@ textarea,
     width: min(310px, calc(100vw - 48px));
   }
 }
+
+/* ========================= */
+/* SOLICITUDES SUPERVISOR 5A */
+/* ========================= */
+
+.solicitudes-bandeja-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.boton-filtro-tab-alerta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.boton-filtro-alerta {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.solicitudes-recibidas-filtros {
+  align-items: stretch;
+}
+
+.solicitudes-recibidas-filtros .campo-desplegable,
+.solicitudes-recibidas-filtros .responsable-buscador,
+.solicitudes-recibidas-filtros .boton-filtro-icono {
+  min-height: 44px;
+}
+
+.modal-solicitud-recibida-supervisor {
+  max-width: 1120px;
+}
+
+.detalle-solicitud-grid-gestion {
+  margin-bottom: 12px;
+}
+
+.tabla-solicitud-revision-supervisor .tabla-contenedor {
+  max-height: 360px;
+  overflow: auto;
+}
+
+.tabla-solicitud-revision-supervisor th:nth-child(1),
+.tabla-solicitud-revision-supervisor td:nth-child(1) {
+  min-width: 210px;
+}
+
+.tabla-solicitud-revision-supervisor th:nth-child(4),
+.tabla-solicitud-revision-supervisor td:nth-child(4),
+.tabla-solicitud-revision-supervisor th:nth-child(5),
+.tabla-solicitud-revision-supervisor td:nth-child(5) {
+  min-width: 110px;
+}
+
+.modal-acciones-responsable-recibida {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+@media (max-width: 860px) {
+  .modal-solicitud-recibida-supervisor {
+    max-width: calc(100vw - 24px);
+  }
+
+  .modal-acciones-responsable-recibida {
+    flex-direction: column;
+  }
+
+  .modal-acciones-responsable-recibida button {
+    width: 100%;
+  }
+}
+
+.boton-icono-exito:hover {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+
+/* Etapa 5A — Solicitudes del Supervisor, estilos aislados para no alterar
+   los filtros ni las dimensiones de los otros módulos. */
+.pagina-responsable .solicitudes-rol-filtros {
+  display: grid !important;
+  grid-template-columns: minmax(220px, 1.3fr) minmax(160px, .82fr) minmax(185px, 1fr) minmax(145px, .75fr) 48px 48px !important;
+  gap: 10px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  align-items: center !important;
+  margin: 0 0 18px !important;
+}
+.pagina-responsable .solicitudes-rol-filtros > * {
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+}
+.pagina-responsable .solicitudes-rol-filtros .solicitudes-rol-buscador {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  height: 48px !important;
+  min-height: 48px !important;
+  padding: 0 14px !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 11px !important;
+  background: #fff !important;
+  flex: initial !important;
+}
+.pagina-responsable .solicitudes-rol-filtros .solicitudes-rol-buscador input {
+  flex: 1 1 auto !important;
+  display: block !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0 !important;
+  border: 0 !important;
+  outline: none !important;
+  background: transparent !important;
+  font-size: 14px !important;
+}
+.pagina-responsable .solicitudes-rol-filtros .solicitudes-rol-buscador svg {
+  flex-shrink: 0;
+}
+.pagina-responsable .solicitudes-rol-filtros .campo-desplegable {
+  min-width: 0 !important;
+  flex: initial !important;
+}
+.pagina-responsable .solicitudes-rol-filtros .campo-desplegable__boton,
+.pagina-responsable .solicitudes-rol-filtros .boton-filtro-icono {
+  height: 48px !important;
+  min-height: 48px !important;
+  max-height: 48px !important;
+}
+.pagina-responsable .solicitudes-rol-filtros .boton-filtro-icono {
+  width: 48px !important;
+  min-width: 48px !important;
+  max-width: 48px !important;
+  flex: initial !important;
+  padding: 0 !important;
+}
+.solicitudes-bandeja-tabs .boton-filtro-alerta,
+.sidebar-alerta-solicitudes-supervisor {
+  background: #fee2e2 !important;
+  color: #b91c1c !important;
+  border: 1px solid #fecaca;
+}
+.sidebar-link.activo .sidebar-alerta-solicitudes-supervisor {
+  background: #fee2e2 !important;
+  color: #b91c1c !important;
+}
+.modal-solicitud-recibida-supervisor {
+  max-width: 1140px;
+}
+.modal-solicitud-recibida-supervisor .tabla-solicitud-atencion {
+  margin: 0 28px 16px !important;
+}
+.modal-solicitud-recibida-supervisor .tabla-solicitud-atencion .tabla-contenedor {
+  max-height: 340px;
+  overflow: auto;
+}
+.modal-solicitud-recibida-supervisor .tabla-solicitud-atencion th,
+.modal-solicitud-recibida-supervisor .tabla-solicitud-atencion td {
+  white-space: nowrap;
+  padding: 13px 12px;
+}
+.modal-solicitud-recibida-supervisor .input-cantidad-tabla {
+  width: 78px;
+  min-width: 65px;
+  height: 38px;
+  text-align: center;
+}
+@media (max-width: 1300px) {
+  .pagina-responsable .solicitudes-rol-filtros {
+    grid-template-columns: minmax(180px, 1.3fr) repeat(3, minmax(120px, 1fr)) 48px 48px !important;
+  }
+}
+@media (max-width: 1080px) {
+  .pagina-responsable .solicitudes-rol-filtros {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+  .pagina-responsable .solicitudes-rol-filtros .solicitudes-rol-buscador {
+    grid-column: span 2;
+  }
+  .pagina-responsable .solicitudes-rol-filtros .boton-filtro-icono {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+@media (max-width: 680px) {
+  .pagina-responsable .solicitudes-rol-filtros {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .pagina-responsable .solicitudes-rol-filtros .solicitudes-rol-buscador {
+    grid-column: span 2;
+  }
+}
+
+
+/* 5A: filtro de fecha institucional de Solicitudes (Supervisor y Responsable). */
+.pagina-responsable .solicitudes-rol-filtros .solicitudes-rol-fecha-selector {
+  position: relative;
+  z-index: 12;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+.pagina-responsable .solicitudes-rol-filtros .solicitudes-rol-fecha-selector .movimientos-fecha-filtro {
+  width: 100% !important;
+  min-height: 48px !important;
+  height: 48px !important;
+  max-height: 48px !important;
+  box-sizing: border-box;
+}
+.pagina-responsable .solicitudes-rol-filtros .solicitudes-rol-fecha-selector .movimientos-fecha-filtro input {
+  min-width: 0;
+}
+.pagina-responsable .solicitudes-rol-filtros .solicitudes-rol-fecha-selector .movimientos-calendario {
+  z-index: 80;
+}
+/* El icono CalendarDays del filtro por día ahora coincide con el de Reportes (mes/año). */
+.movimientos-fecha-filtro__calendario > svg {
+  color: #64748b;
+  stroke: currentColor;
+  flex: 0 0 auto;
+}
+
+/* Etapa 5A.4: abastecimiento solicitado desde una petición recibida. */
+.modal-solicitud-abastecimiento {
+  max-width: 980px;
+}
+.modal-solicitud-abastecimiento .tabla-card {
+  margin: 18px 24px;
+}
+.modal-solicitud-abastecimiento .tabla-contenedor {
+  overflow-x: auto;
+}
+.modal-solicitud-abastecimiento .tabla-solicitud-atencion th,
+.modal-solicitud-abastecimiento .tabla-solicitud-atencion td {
+  min-width: 130px;
+}
+.modal-solicitud-abastecimiento .tabla-solicitud-atencion th:first-child,
+.modal-solicitud-abastecimiento .tabla-solicitud-atencion td:first-child {
+  min-width: 190px;
+}
+.modal-solicitud-abastecimiento .abastecimiento-observacion {
+  padding: 0 24px 16px;
+}
+.modal-solicitud-abastecimiento .abastecimiento-observacion textarea {
+  min-height: 72px;
+}
+.modal-solicitud-abastecimiento .modal-acciones {
+  padding: 16px 24px 24px;
+}
+.abastecimiento-vinculado-resumen {
+  margin: 12px 24px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* 5A.4 — Mensaje claro y alineado inmediatamente debajo de la tabla. */
+.modal-solicitud-recibida-supervisor .tabla-solicitud-atencion {
+  margin-bottom: 0 !important;
+}
+.modal-solicitud-recibida-supervisor .abastecimiento-vinculado-resumen {
+  margin: 5px 28px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* 5A.4 — Avisos de stock bajo la tabla, separados de Observación. */
+.modal-solicitud-recibida-supervisor .solicitud-stock-aviso {
+  margin: 8px 28px 0;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+.modal-solicitud-recibida-supervisor .solicitud-stock-aviso-suficiente {
+  color: #15803d;
+}
+.modal-solicitud-recibida-supervisor .solicitud-stock-aviso-insuficiente {
+  color: #111827;
+}
+.modal-solicitud-recibida-supervisor .solicitud-stock-aviso-sin {
+  color: #b91c1c;
+}
+.modal-solicitud-recibida-supervisor .abastecimiento-vinculado-resumen {
+  margin: 5px 28px 0;
+}
+.modal-solicitud-recibida-supervisor .bloque-observacion-admin-solicitud {
+  margin-top: 20px !important;
+}
+/* La etiqueta de revisión «Stock insuficiente» conserva el rojo de alerta.
+   El color negro se aplica únicamente al texto del aviso debajo de la tabla. */
+.modal-solicitud-recibida-supervisor .estado-entrega-item.sin-stock {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+/* 5A.4 — Un único aviso contextual y reversa de solicitud recibida. */
+.modal-solicitud-recibida-supervisor .solicitud-stock-aviso {
+  margin: 12px 28px 0;
+  max-width: calc(100% - 56px);
+}
+.modal-confirmacion-solicitud .solicitud-reversa-motivo {
+  padding: 12px 28px;
+}
+.modal-confirmacion-solicitud .solicitud-reversa-motivo textarea {
+  width: 100%;
+  min-height: 74px;
+  box-sizing: border-box;
+}

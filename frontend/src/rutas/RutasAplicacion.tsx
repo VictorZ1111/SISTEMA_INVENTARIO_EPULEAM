@@ -19,6 +19,7 @@ import ConfiguracionAdmin from "../paginas/admin/ConfiguracionAdmin";
 import PanelResponsable from "../paginas/responsable/PanelResponsable";
 import MiBodegaResponsable from "../paginas/responsable/MiBodegaResponsable";
 import MovimientosResponsable from "../paginas/responsable/MovimientosResponsable";
+import SolicitudesResponsable from "../paginas/responsable/SolicitudesResponsable";
 
 import PanelSupervisor from "../paginas/supervisor/PanelSupervisor";
 import BodegasSupervisor from "../paginas/supervisor/BodegasSupervisor";
@@ -196,7 +197,13 @@ function RutasAplicacion() {
 
       <Route
         path="/responsable/solicitudes"
-        element={<Navigate to="/responsable" replace />}
+        element={
+          <RutaProtegida rolesPermitidos={["responsable"]}>
+            <LayoutPrincipal>
+              <SolicitudesResponsable />
+            </LayoutPrincipal>
+          </RutaProtegida>
+        }
       />
 
       <Route

@@ -20,6 +20,7 @@ import { CrearSolicitudDto } from "./dto/crear-solicitud.dto";
 import { FiltrarSolicitudesDto } from "./dto/filtrar-solicitudes.dto";
 import { RechazarSolicitudDto } from "./dto/rechazar-solicitud.dto";
 import { RevertirSolicitudDto } from "./dto/revertir-solicitud.dto";
+import { SolicitarAbastecimientoDto } from "./dto/solicitar-abastecimiento.dto";
 import {
   SolicitudesService,
   type SolicitudPublica,
@@ -52,6 +53,14 @@ export class SolicitudesController {
     return this.solicitudesService.listarMias(usuario);
   }
 
+  @Get("recibidas")
+  @Roles(RolUsuario.SUPERVISOR)
+  listarRecibidas(
+    @UsuarioActual() usuario: UsuarioAutenticado,
+  ): Promise<SolicitudPublica[]> {
+    return this.solicitudesService.listarRecibidas(usuario);
+  }
+
   @Get(":id")
   @Roles(
     RolUsuario.ADMINISTRADOR,
@@ -80,8 +89,27 @@ export class SolicitudesController {
     return this.solicitudesService.crear(dto, usuario);
   }
 
+  @Get(":id/abastecimientos")
+  @Roles(RolUsuario.SUPERVISOR)
+  listarAbastecimientos(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @UsuarioActual() usuario: UsuarioAutenticado,
+  ): Promise<SolicitudPublica[]> {
+    return this.solicitudesService.listarAbastecimientos(id, usuario);
+  }
+
+  @Post(":id/abastecer")
+  @Roles(RolUsuario.SUPERVISOR)
+  solicitarAbastecimiento(
+    @Param("id", new ParseUUIDPipe()) id: string,
+    @Body() dto: SolicitarAbastecimientoDto,
+    @UsuarioActual() usuario: UsuarioAutenticado,
+  ): Promise<SolicitudPublica> {
+    return this.solicitudesService.solicitarAbastecimiento(id, dto, usuario);
+  }
+
   @Post(":id/atender")
-  @Roles(RolUsuario.ADMINISTRADOR)
+  @Roles(RolUsuario.ADMINISTRADOR, RolUsuario.SUPERVISOR)
   atender(
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() dto: AtenderSolicitudDto,
@@ -109,7 +137,7 @@ export class SolicitudesController {
   }
 
   @Post(":id/rechazar")
-  @Roles(RolUsuario.ADMINISTRADOR)
+  @Roles(RolUsuario.ADMINISTRADOR, RolUsuario.SUPERVISOR)
   rechazar(
     @Param("id", new ParseUUIDPipe()) id: string,
     @Body() dto: RechazarSolicitudDto,

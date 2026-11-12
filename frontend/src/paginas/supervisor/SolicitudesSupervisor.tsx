@@ -1,23 +1,36 @@
+import axios from "axios";
 import {
   ArrowDownAZ,
   ArrowUpAZ,
+  Check,
   Paintbrush,
   Plus,
   Search,
   Trash2,
   X,
 } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import CampoDesplegable from "../../componentes/CampoDesplegable";
+import SelectorFechaFiltro from "../../componentes/SelectorFechaFiltro";
+import {
+  atenderSolicitudApi,
+  obtenerSolicitudesRecibidasApi,
+  obtenerAbastecimientosApi,
+  solicitarAbastecimientoApi,
+  type SolicitudBackend,
+} from "../../api/solicitudesApi";
+import {
+  obtenerMiStockSupervisorApi,
+  type StockSupervisorItemApi,
+} from "../../api/stockSupervisorApi";
 import EncabezadoPagina from "../../componentes/EncabezadoPagina";
 import TablaBase from "../../componentes/TablaBase";
-
 import { useAuth } from "../../contexto/AuthContext";
-import { obtenerBodegasOperativasUsuario } from "../../dominio/bodegas";
 import { useInventario } from "../../contexto/InventarioContext";
-import type { EstadoSolicitud, ItemSolicitud, Solicitud } from "../../tipos/solicitud";
+import { obtenerBodegasOperativasUsuario } from "../../dominio/bodegas";
 import type { Producto } from "../../tipos/producto";
+import type { EstadoSolicitud, ItemSolicitud, Solicitud } from "../../tipos/solicitud";
 
 type FiltroEstado = "todos" | "pendiente" | "parcial" | "atendida" | "rechazada";
 type OrdenSolicitudes = "asc" | "desc";
@@ -27,6 +40,18 @@ interface ItemFormularioSolicitud {
   productoId: string | number;
   productoSolicitado: string;
   cantidad: number;
+}
+
+interface ItemRevisionRecibida {
+  detalleId: string;
+  productoId: string;
+  productoSolicitado: string;
+  cantidadSolicitada: number;
+  pendienteOriginal: number;
+  cantidadEntregada: number;
+  cantidadRechazada: number;
+  cantidadPendiente: number;
+  disponible: number;
 }
 
 interface MensajeSistema {
@@ -46,7 +71,6 @@ function normalizarTexto(texto: string) {
 function limpiarNombreBodega(bodega: string) {
   return bodega.replace(/^Bodega\s+/i, "");
 }
-
 
 function limpiarTextoSolicitud(texto: string) {
   const textoLimpio = texto.trim();
@@ -74,7 +98,7 @@ function obtenerDiaOrden(fecha: string) {
   return Date.UTC(
     fechaConvertida.getFullYear(),
     fechaConvertida.getMonth(),
-    fechaConvertida.getDate()
+    fechaConvertida.getDate(),
   );
 }
 
@@ -104,7 +128,7 @@ function obtenerItemsSolicitud(solicitud: Solicitud): ItemSolicitud[] {
   ];
 }
 
-function obtenerTextoEstado(estado: EstadoSolicitud) {
+function obtenerTextoEstado(estado: EstadoSolicitud | SolicitudBackend["estado"]) {
   if (estado === "parcial") return "Parcial";
   if (estado === "atendida") return "Atendida";
   if (estado === "rechazada") return "Rechazada";
@@ -115,15 +139,6 @@ function obtenerTextoEstado(estado: EstadoSolicitud) {
 function obtenerClaseEstado(estado: EstadoSolicitud) {
   if (estado === "aprobada") return "atendida";
   return estado;
-}
-
-function obtenerAnioDesdeFecha(fecha: string) {
-  const coincidencia = fecha.match(/^(\d{4})/);
-  if (coincidencia) return coincidencia[1];
-
-  const fechaConvertida = new Date(fecha);
-  if (Number.isNaN(fechaConvertida.getTime())) return "";
-  return String(fechaConvertida.getFullYear());
 }
 
 function obtenerProductoDisponible(productos: Producto[]) {
@@ -143,22 +158,65 @@ function debeMostrarObservacionAdmin(solicitud: Solicitud) {
   );
 }
 
-function SolicitudesSupervisor() {
+function obtenerDisponibilidadSupervisor(
+  stockSupervisor: StockSupervisorItemApi[],
+  solicitud: SolicitudBackend,
+  productoId: string,
+) {
+  return stockSupervisor
+    .filter(
+      (item) =>
+        item.productoId === productoId &&
+        item.destinos.some((destino) => destino.id === solicitud.bodegaSolicitante.id),
+    )
+    .reduce((total, item) => total + item.cantidad, 0);
+}
+
+function SolicitudesSupervisor({ modo = "supervisor" }: { modo?: "supervisor" | "responsable" }) {
   const { usuarioActual } = useAuth();
-  const { solicitudes, productos, agregarSolicitud } = useInventario();
+  const { solicitudes, productos, agregarSolicitud, recargarDatosInventario } = useInventario();
 
   const bodegasUsuario = useMemo(
     () => obtenerBodegasOperativasUsuario(usuarioActual),
-    [usuarioActual]
+    [usuarioActual],
   );
 
+  const [bandeja, setBandeja] = useState<"mias" | "recibidas">("mias");
+  const [recibidas, setRecibidas] = useState<SolicitudBackend[]>([]);
+  const [stockSupervisor, setStockSupervisor] = useState<StockSupervisorItemApi[]>([]);
+  const [cargandoRecibidas, setCargandoRecibidas] = useState(false);
+  const [errorRecibidas, setErrorRecibidas] = useState("");
+
   const [busqueda, setBusqueda] = useState("");
-  const [estadoFiltro, setEstadoFiltro] = useState<FiltroEstado>("todos");
+  const [estadoFiltro, setEstadoFiltro] = useState<FiltroEstado>("pendiente");
   const [bodegaFiltro, setBodegaFiltro] = useState("todas");
-  const [anioFiltro, setAnioFiltro] = useState("todos");
+  const [fechaFiltro, setFechaFiltro] = useState("");
   const [orden, setOrden] = useState<OrdenSolicitudes>("asc");
+
+  const [busquedaRecibidas, setBusquedaRecibidas] = useState("");
+  const [estadoFiltroRecibidas, setEstadoFiltroRecibidas] = useState<FiltroEstado>("pendiente");
+  const [sucursalFiltroRecibidas, setSucursalFiltroRecibidas] = useState("todas");
+  const [fechaFiltroRecibidas, setFechaFiltroRecibidas] = useState("");
+  const [ordenRecibidas, setOrdenRecibidas] = useState<OrdenSolicitudes>("asc");
+
   const [modalNuevaSolicitud, setModalNuevaSolicitud] = useState(false);
   const [modalDetalle, setModalDetalle] = useState<Solicitud | null>(null);
+  const [detalleRecibida, setDetalleRecibida] = useState<SolicitudBackend | null>(null);
+  const [solicitudGestion, setSolicitudGestion] = useState<SolicitudBackend | null>(null);
+  const [itemsRevision, setItemsRevision] = useState<ItemRevisionRecibida[]>([]);
+  // Permite dejar el campo temporalmente vacío al borrar el 0 para escribir otra cantidad.
+  const [borradoresCantidades, setBorradoresCantidades] = useState<Record<string, string>>({});
+  const [observacionAtencion, setObservacionAtencion] = useState("");
+  const [guardandoAtencion, setGuardandoAtencion] = useState(false);
+  const [mostrarObservacionRespuesta, setMostrarObservacionRespuesta] = useState(false);
+  const [confirmacionAtencion, setConfirmacionAtencion] = useState<"atender" | "rechazar" | null>(null);
+  const [modalAbastecimiento, setModalAbastecimiento] = useState(false);
+  const [cantidadesAbastecimiento, setCantidadesAbastecimiento] = useState<Record<string, string>>({});
+  const [observacionAbastecimiento, setObservacionAbastecimiento] = useState("");
+  const [abastecimientosVinculados, setAbastecimientosVinculados] = useState<SolicitudBackend[]>([]);
+  const [consultandoAbastecimientos, setConsultandoAbastecimientos] = useState(false);
+  const [guardandoAbastecimiento, setGuardandoAbastecimiento] = useState(false);
+
   const [bodegaSolicitud, setBodegaSolicitud] = useState("");
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState("");
   const [tipoBienFiltro, setTipoBienFiltro] = useState<"todos" | "consumible" | "no_consumible">("todos");
@@ -168,24 +226,42 @@ function SolicitudesSupervisor() {
   const [itemsFormulario, setItemsFormulario] = useState<ItemFormularioSolicitud[]>([]);
   const [mensajeSistema, setMensajeSistema] = useState<MensajeSistema | null>(null);
 
+  const cargarSolicitudesRecibidas = async () => {
+    setCargandoRecibidas(true);
+    try {
+      const [solicitudesRecibidas, stock] = await Promise.all([
+        obtenerSolicitudesRecibidasApi(),
+        obtenerMiStockSupervisorApi(),
+      ]);
+      setRecibidas(solicitudesRecibidas);
+      setStockSupervisor(stock);
+      setErrorRecibidas("");
+    } catch {
+      setErrorRecibidas("No se pudieron cargar las solicitudes recibidas.");
+    } finally {
+      setCargandoRecibidas(false);
+    }
+  };
+
+  useEffect(() => {
+    if (modo !== "supervisor") return;
+    void cargarSolicitudesRecibidas();
+  }, [modo]);
+
   const solicitudesUsuario = useMemo(() => {
-    return solicitudes.filter((solicitud) => {
-      const coincideSolicitante = solicitud.solicitante === usuarioActual?.nombre;
-      const coincideBodega = bodegasUsuario.includes(solicitud.bodega);
-      return coincideSolicitante || coincideBodega;
-    });
-  }, [solicitudes, usuarioActual?.nombre, bodegasUsuario]);
+    return solicitudes.filter((solicitud) => solicitud.solicitante === usuarioActual?.nombre);
+  }, [solicitudes, usuarioActual?.nombre]);
 
-  const aniosDisponibles = useMemo(() => {
-    const anioActual = String(new Date().getFullYear());
-    const anios = solicitudesUsuario
-      .map((solicitud) => obtenerAnioDesdeFecha(solicitud.fecha))
-      .filter((anio) => anio !== "");
+  const sucursalesRecibidas = useMemo(() => {
+    return Array.from(
+      new Set(recibidas.map((solicitud) => limpiarNombreBodega(solicitud.bodegaSolicitante.nombre))),
+    ).sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }));
+  }, [recibidas]);
 
-    return Array.from(new Set([anioActual, ...anios])).sort(
-      (a, b) => Number(b) - Number(a)
-    );
-  }, [solicitudesUsuario]);
+  const haySolicitudesRecibidasPendientes = useMemo(
+    () => recibidas.some((solicitud) => solicitud.estado === "pendiente" || solicitud.estado === "parcial"),
+    [recibidas],
+  );
 
   const solicitudesFiltradas = useMemo(() => {
     const texto = normalizarTexto(busqueda);
@@ -195,16 +271,15 @@ function SolicitudesSupervisor() {
       const textoSolicitud = normalizarTexto(
         `${solicitud.descripcion} ${solicitud.bodega} ${solicitud.estado} ${items
           .map((item) => item.productoSolicitado)
-          .join(" ")}`
+          .join(" ")}`,
       );
 
       const coincideBusqueda = texto === "" || textoSolicitud.includes(texto);
       const coincideEstado = estadoFiltro === "todos" || solicitud.estado === estadoFiltro;
       const coincideBodega = bodegaFiltro === "todas" || solicitud.bodega === bodegaFiltro;
-      const coincideAnio =
-        anioFiltro === "todos" || obtenerAnioDesdeFecha(solicitud.fecha) === anioFiltro;
+      const coincideFecha = fechaFiltro === "" || solicitud.fecha.slice(0, 10) === fechaFiltro;
 
-      return coincideBusqueda && coincideEstado && coincideBodega && coincideAnio;
+      return coincideBusqueda && coincideEstado && coincideBodega && coincideFecha;
     });
 
     return [...filtradas].sort((a, b) => {
@@ -212,17 +287,63 @@ function SolicitudesSupervisor() {
 
       if (comparacionFecha !== 0) return comparacionFecha;
 
-      const comparacionAlfabetica = formatearTextoSolicitud(
-        a.productoSolicitado
-      ).localeCompare(formatearTextoSolicitud(b.productoSolicitado), "es", {
-        sensitivity: "base",
-      });
+      const comparacionAlfabetica = formatearTextoSolicitud(a.productoSolicitado).localeCompare(
+        formatearTextoSolicitud(b.productoSolicitado),
+        "es",
+        { sensitivity: "base" },
+      );
 
-      return orden === "asc"
-        ? comparacionAlfabetica
-        : comparacionAlfabetica * -1;
+      return orden === "asc" ? comparacionAlfabetica : comparacionAlfabetica * -1;
     });
-  }, [solicitudesUsuario, busqueda, estadoFiltro, bodegaFiltro, anioFiltro, orden]);
+  }, [solicitudesUsuario, busqueda, estadoFiltro, bodegaFiltro, fechaFiltro, orden]);
+
+  const solicitudesRecibidasFiltradas = useMemo(() => {
+    const texto = normalizarTexto(busquedaRecibidas);
+
+    const filtradas = recibidas.filter((solicitud) => {
+      const productosTexto = solicitud.detalles
+        .map((detalle) => `${detalle.producto.nombre} ${detalle.producto.codigo}`)
+        .join(" ");
+      const textoSolicitud = normalizarTexto(
+        `${solicitud.codigo} ${solicitud.usuarioSolicitante.nombre} ${solicitud.bodegaSolicitante.nombre} ${solicitud.estado} ${productosTexto} ${solicitud.observacionSolicitante || ""}`,
+      );
+
+      const sucursal = limpiarNombreBodega(solicitud.bodegaSolicitante.nombre);
+      const coincideBusqueda = texto === "" || textoSolicitud.includes(texto);
+      const coincideEstado = estadoFiltroRecibidas === "todos" || solicitud.estado === estadoFiltroRecibidas;
+      const coincideSucursal =
+        sucursalFiltroRecibidas === "todas" || sucursal === sucursalFiltroRecibidas;
+      const coincideFecha =
+        fechaFiltroRecibidas === "" ||
+        solicitud.createdAt.slice(0, 10) === fechaFiltroRecibidas;
+
+      return coincideBusqueda && coincideEstado && coincideSucursal && coincideFecha;
+    });
+
+    return [...filtradas].sort((a, b) => {
+      const comparacionFecha = obtenerDiaOrden(b.createdAt.slice(0, 10)) - obtenerDiaOrden(a.createdAt.slice(0, 10));
+      if (comparacionFecha !== 0) return comparacionFecha;
+
+      const nombreBien = (solicitud: SolicitudBackend) =>
+        solicitud.detalles.length === 1
+          ? solicitud.detalles[0].producto.nombre
+          : `${solicitud.detalles.length} bienes solicitados`;
+      const comparacionAlfabetica = nombreBien(a).localeCompare(
+        nombreBien(b),
+        "es",
+        { sensitivity: "base" },
+      );
+
+      return ordenRecibidas === "asc" ? comparacionAlfabetica : comparacionAlfabetica * -1;
+    });
+  }, [
+    recibidas,
+    busquedaRecibidas,
+    estadoFiltroRecibidas,
+    sucursalFiltroRecibidas,
+    fechaFiltroRecibidas,
+    ordenRecibidas,
+  ]);
 
   const categoriasDisponibles = useMemo(() => {
     const categorias = obtenerProductoDisponible(productos)
@@ -230,7 +351,7 @@ function SolicitudesSupervisor() {
       .filter((categoria) => categoria && categoria.trim() !== "");
 
     return Array.from(new Set(categorias)).sort((a, b) =>
-      a.localeCompare(b, "es", { sensitivity: "base" })
+      a.localeCompare(b, "es", { sensitivity: "base" }),
     );
   }, [productos]);
 
@@ -238,11 +359,8 @@ function SolicitudesSupervisor() {
     const idsSeleccionados = new Set(itemsFormulario.map((item) => item.productoId));
 
     return obtenerProductoDisponible(productos).filter((producto) => {
-      const coincideCategoria = categoriaSeleccionada
-        ? producto.categoria === categoriaSeleccionada
-        : false;
-      const coincideTipo =
-        tipoBienFiltro === "todos" || producto.tipoProducto === tipoBienFiltro;
+      const coincideCategoria = categoriaSeleccionada ? producto.categoria === categoriaSeleccionada : false;
+      const coincideTipo = tipoBienFiltro === "todos" || producto.tipoProducto === tipoBienFiltro;
 
       return coincideCategoria && coincideTipo && !idsSeleccionados.has(producto.id);
     });
@@ -250,7 +368,7 @@ function SolicitudesSupervisor() {
 
   const mostrarMensaje = (tipo: MensajeSistema["tipo"], texto: string) => {
     setMensajeSistema({ tipo, texto });
-    window.setTimeout(() => setMensajeSistema(null), 3000);
+    window.setTimeout(() => setMensajeSistema(null), 3200);
   };
 
   const abrirNuevaSolicitud = () => {
@@ -288,8 +406,8 @@ function SolicitudesSupervisor() {
       return;
     }
 
-    if (!Number.isFinite(cantidad) || cantidad <= 0) {
-      mostrarMensaje("error", "La cantidad solicitada debe ser mayor a cero.");
+    if (!Number.isSafeInteger(cantidad) || cantidad <= 0) {
+      mostrarMensaje("error", "La cantidad solicitada debe ser un número entero mayor a cero.");
       return;
     }
 
@@ -321,15 +439,13 @@ function SolicitudesSupervisor() {
               ...item,
               cantidad: Number.isFinite(cantidad) && cantidad > 0 ? cantidad : 1,
             }
-          : item
-      )
+          : item,
+      ),
     );
   };
 
   const quitarItemSolicitud = (id: string) => {
-    setItemsFormulario((itemsActuales) =>
-      itemsActuales.filter((item) => item.id !== id)
-    );
+    setItemsFormulario((itemsActuales) => itemsActuales.filter((item) => item.id !== id));
   };
 
   const guardarSolicitud = async (event: FormEvent<HTMLFormElement>) => {
@@ -347,10 +463,7 @@ function SolicitudesSupervisor() {
       return;
     }
 
-    const cantidadTotal = itemsFormulario.reduce(
-      (total, item) => total + item.cantidad,
-      0
-    );
+    const cantidadTotal = itemsFormulario.reduce((total, item) => total + item.cantidad, 0);
 
     const resultado = await agregarSolicitud({
       tipo: "producto",
@@ -363,9 +476,7 @@ function SolicitudesSupervisor() {
       cantidad: cantidadTotal,
       cantidadEntregada: 0,
       unidad: "",
-      descripcion:
-        observacion.trim() ||
-        `Solicitud para ${limpiarNombreBodega(bodegaSolicitud)}.`,
+      descripcion: observacion.trim() || `Solicitud para ${limpiarNombreBodega(bodegaSolicitud)}.`,
       estado: "pendiente",
       items: itemsFormulario.map((item) => ({
         productoId: item.productoId,
@@ -386,24 +497,317 @@ function SolicitudesSupervisor() {
 
   const limpiarFiltros = () => {
     setBusqueda("");
-    setEstadoFiltro("todos");
+    setEstadoFiltro("pendiente");
     setBodegaFiltro("todas");
-    setAnioFiltro("todos");
+    setFechaFiltro("");
     setOrden("asc");
+  };
+
+  const limpiarFiltrosRecibidas = () => {
+    setBusquedaRecibidas("");
+    setEstadoFiltroRecibidas("pendiente");
+    setSucursalFiltroRecibidas("todas");
+    setFechaFiltroRecibidas("");
+    setOrdenRecibidas("asc");
   };
 
   const filtrosActivos =
     busqueda.trim() !== "" ||
-    estadoFiltro !== "todos" ||
+    estadoFiltro !== "pendiente" ||
     bodegaFiltro !== "todas" ||
-    anioFiltro !== "todos" ||
+    fechaFiltro !== "" ||
     orden !== "asc";
+
+  const filtrosRecibidasActivos =
+    busquedaRecibidas.trim() !== "" ||
+    estadoFiltroRecibidas !== "pendiente" ||
+    sucursalFiltroRecibidas !== "todas" ||
+    fechaFiltroRecibidas !== "" ||
+    ordenRecibidas !== "asc";
+
+  const cargarAbastecimientos = async (id: string) => {
+    setConsultandoAbastecimientos(true);
+    try {
+      const resultados = await obtenerAbastecimientosApi(id);
+      setAbastecimientosVinculados(resultados);
+    } catch {
+      mostrarMensaje("error", "No se pudo verificar el historial de abastecimiento de esta solicitud.");
+      setAbastecimientosVinculados([]);
+    } finally {
+      setConsultandoAbastecimientos(false);
+    }
+  };
+
+  const abrirGestionSolicitud = (solicitud: SolicitudBackend) => {
+    setAbastecimientosVinculados([]);
+    void cargarAbastecimientos(solicitud.id);
+    setSolicitudGestion(solicitud);
+    setBorradoresCantidades({});
+    setDetalleRecibida(null);
+    setObservacionAtencion("");
+    setMostrarObservacionRespuesta(false);
+    setConfirmacionAtencion(null);
+    setModalAbastecimiento(false);
+    setItemsRevision(
+      solicitud.detalles.map((detalle) => ({
+        detalleId: detalle.id,
+        productoId: detalle.producto.id,
+        productoSolicitado: detalle.producto.nombre,
+        cantidadSolicitada: detalle.cantidadSolicitada,
+        pendienteOriginal: detalle.cantidadPendiente,
+        cantidadEntregada: 0,
+        cantidadRechazada: 0,
+        cantidadPendiente: detalle.cantidadPendiente,
+        disponible: obtenerDisponibilidadSupervisor(stockSupervisor, solicitud, detalle.producto.id),
+      })),
+    );
+  };
+
+  const cerrarGestionSolicitud = () => {
+    setSolicitudGestion(null);
+    setItemsRevision([]);
+    setBorradoresCantidades({});
+    setObservacionAtencion("");
+    setGuardandoAtencion(false);
+    setMostrarObservacionRespuesta(false);
+    setConfirmacionAtencion(null);
+    setModalAbastecimiento(false);
+    setAbastecimientosVinculados([]);
+  };
+
+  const abrirModalAbastecimiento = () => {
+    if (!solicitudGestion || consultandoAbastecimientos) return;
+    if (abastecimientosVinculados.some((item) => item.estado === "pendiente" || item.estado === "parcial")) {
+      mostrarMensaje("error", "Ya existe un abastecimiento sin finalizar para esta solicitud.");
+      return;
+    }
+
+    setCantidadesAbastecimiento(Object.fromEntries(
+      itemsRevision.filter((item) => item.pendienteOriginal > 0).map((item) => [
+        item.detalleId,
+        String(Math.max(0, item.pendienteOriginal - item.disponible) || item.pendienteOriginal),
+      ]),
+    ));
+    setObservacionAbastecimiento("");
+    setModalAbastecimiento(true);
+  };
+
+  const enviarAbastecimiento = async () => {
+    if (!solicitudGestion || guardandoAbastecimiento) return;
+    const detalles = itemsRevision
+      .filter((item) => item.pendienteOriginal > 0)
+      .map((item) => ({
+        detalleId: item.detalleId,
+        cantidadSolicitada: Number(cantidadesAbastecimiento[item.detalleId] || 0),
+      }))
+      .filter((item) => item.cantidadSolicitada > 0);
+
+    if (!detalles.length || detalles.some((item) => !Number.isSafeInteger(item.cantidadSolicitada))) {
+      mostrarMensaje("error", "Selecciona cantidades enteras mayores que cero para solicitar abastecimiento.");
+      return;
+    }
+    setGuardandoAbastecimiento(true);
+    try {
+      await solicitarAbastecimientoApi(solicitudGestion.id, {
+        detalles,
+        observacionSolicitante: observacionAbastecimiento.trim() || undefined,
+      });
+      await Promise.all([recargarDatosInventario(), cargarAbastecimientos(solicitudGestion.id)]);
+      setModalAbastecimiento(false);
+      mostrarMensaje("exito", "Abastecimiento enviado al Administrador. Puedes consultarlo en Mis solicitudes.");
+    } catch (error) {
+      let mensaje = "No se pudo solicitar abastecimiento.";
+      if (axios.isAxiosError(error)) {
+        const data = error.response?.data as { message?: string | string[] } | undefined;
+        if (typeof data?.message === "string") mensaje = data.message;
+        if (Array.isArray(data?.message)) mensaje = data.message.join(" ");
+      }
+      mostrarMensaje("error", mensaje);
+    } finally {
+      setGuardandoAbastecimiento(false);
+    }
+  };
+
+  const actualizarRevision = (
+    detalleId: string,
+    campo: "cantidadEntregada" | "cantidadRechazada",
+    valor: string,
+  ) => {
+    const numero = Math.max(0, Number(valor) || 0);
+
+    setItemsRevision((itemsActuales) =>
+      itemsActuales.map((item) => {
+        if (item.detalleId !== detalleId) return item;
+
+        const siguiente = { ...item, [campo]: numero };
+        const total = siguiente.cantidadEntregada + siguiente.cantidadRechazada;
+
+        if (total > item.pendienteOriginal) {
+          if (campo === "cantidadEntregada") {
+            siguiente.cantidadEntregada = Math.max(0, item.pendienteOriginal - siguiente.cantidadRechazada);
+          } else {
+            siguiente.cantidadRechazada = Math.max(0, item.pendienteOriginal - siguiente.cantidadEntregada);
+          }
+        }
+
+        if (siguiente.cantidadEntregada > Math.min(item.disponible, item.pendienteOriginal)) {
+          siguiente.cantidadEntregada = Math.min(item.disponible, item.pendienteOriginal);
+        }
+
+        siguiente.cantidadPendiente = Math.max(
+          0,
+          item.pendienteOriginal - siguiente.cantidadEntregada - siguiente.cantidadRechazada,
+        );
+
+        return siguiente;
+      }),
+    );
+  };
+
+  const cambiarCantidadRevision = (
+    detalleId: string,
+    campo: "cantidadEntregada" | "cantidadRechazada",
+    valor: string,
+  ) => {
+    const item = itemsRevision.find((revision) => revision.detalleId === detalleId);
+    if (!item || (valor !== "" && !/^\d+$/.test(valor))) return;
+
+    const numero = valor === "" ? 0 : Number(valor);
+    if (!Number.isSafeInteger(numero)) return;
+
+    const maximo = campo === "cantidadEntregada"
+      ? Math.max(0, Math.min(item.disponible, item.pendienteOriginal - item.cantidadRechazada))
+      : Math.max(0, item.pendienteOriginal - item.cantidadEntregada);
+    const cantidad = Math.min(numero, maximo);
+    const clave = `${detalleId}:${campo}`;
+
+    // Mientras edita, el campo puede quedar vacío; al guardar se usa la cantidad validada.
+    setBorradoresCantidades((actual) => ({
+      ...actual,
+      [clave]: valor === "" ? "" : String(cantidad),
+    }));
+    actualizarRevision(detalleId, campo, String(cantidad));
+  };
+
+  const terminarEdicionCantidad = (
+    detalleId: string,
+    campo: "cantidadEntregada" | "cantidadRechazada",
+  ) => {
+    const clave = `${detalleId}:${campo}`;
+    setBorradoresCantidades((actual) => {
+      const siguiente = { ...actual };
+      delete siguiente[clave];
+      return siguiente;
+    });
+  };
+
+  const prepararRechazoRecibida = () => {
+    setConfirmacionAtencion("rechazar");
+  };
+
+  const prepararAtencionRecibida = () => {
+    if (!itemsRevision.some((item) => item.cantidadEntregada + item.cantidadRechazada > 0)) {
+      mostrarMensaje("error", "Indica una cantidad a entregar o rechazar.");
+      return;
+    }
+    setConfirmacionAtencion("atender");
+  };
+
+  const guardarAtencionRecibida = async () => {
+    if (!solicitudGestion || !confirmacionAtencion) return;
+
+    const detalles = itemsRevision
+      .map((item) => ({
+        detalleId: item.detalleId,
+        cantidadEntregada: confirmacionAtencion === "rechazar" ? 0 : item.cantidadEntregada,
+        cantidadRechazada: confirmacionAtencion === "rechazar"
+          ? item.pendienteOriginal
+          : item.cantidadRechazada,
+      }))
+      .filter((item) => item.cantidadEntregada + item.cantidadRechazada > 0);
+
+    if (detalles.length === 0) {
+      mostrarMensaje("error", "Indica al menos una cantidad a entregar o rechazar.");
+      return;
+    }
+
+    const errorDisponibilidad = itemsRevision.find(
+      (item) => item.cantidadEntregada > item.disponible,
+    );
+    if (errorDisponibilidad) {
+      mostrarMensaje(
+        "error",
+        `No hay stock suficiente de "${errorDisponibilidad.productoSolicitado}" para entregar esa cantidad.`,
+      );
+      return;
+    }
+
+    setGuardandoAtencion(true);
+    try {
+      await atenderSolicitudApi(solicitudGestion.id, {
+        detalles,
+        observacionAtencion: observacionAtencion.trim() || undefined,
+      });
+      await Promise.all([recargarDatosInventario(), cargarSolicitudesRecibidas()]);
+      cerrarGestionSolicitud();
+      window.dispatchEvent(new Event("epuleam:solicitudes-actualizadas"));
+      mostrarMensaje("exito", "La solicitud del Responsable fue actualizada correctamente.");
+    } catch (error) {
+      let mensajeApi: string | null = null;
+
+      if (axios.isAxiosError(error)) {
+        const respuesta = error.response?.data as { message?: string | string[] } | undefined;
+        if (Array.isArray(respuesta?.message)) {
+          mensajeApi = respuesta.message.join(" ");
+        } else if (typeof respuesta?.message === "string") {
+          mensajeApi = respuesta.message;
+        }
+      }
+
+      mostrarMensaje(
+        "error",
+        typeof mensajeApi === "string" && mensajeApi.trim()
+          ? mensajeApi
+          : error instanceof Error
+            ? error.message
+            : "No se pudo guardar la atención.",
+      );
+    } finally {
+      setGuardandoAtencion(false);
+    }
+  };
+
+  const botonesBandeja = modo === "supervisor" && (
+    <div className="responsable-filtros solicitudes-bandeja-tabs" style={{ marginBottom: 16 }}>
+      <button
+        type="button"
+        className="boton-filtro"
+        onClick={() => setBandeja("mias")}
+        aria-pressed={bandeja === "mias"}
+      >
+        Mis solicitudes
+      </button>
+      <button
+        type="button"
+        className="boton-filtro boton-filtro-tab-alerta"
+        onClick={() => setBandeja("recibidas")}
+        aria-pressed={bandeja === "recibidas"}
+      >
+        <span>Solicitudes recibidas</span>
+        {haySolicitudesRecibidasPendientes ? <span className="boton-filtro-alerta">!</span> : null}
+      </button>
+    </div>
+  );
 
   return (
     <div className="pagina-admin pagina-responsable">
       <EncabezadoPagina
         titulo="Solicitudes"
-        descripcion="Crea solicitudes para tus bodegas asignadas y revisa su estado."
+        descripcion={
+          modo === "responsable"
+            ? "Solicita bienes al Supervisor de tu sucursal y consulta el estado de tus pedidos."
+            : "Crea solicitudes para tus bodegas asignadas, revisa el estado de tus pedidos y atiende las solicitudes de Responsables."
+        }
       />
 
       {mensajeSistema && (
@@ -412,366 +816,619 @@ function SolicitudesSupervisor() {
         </div>
       )}
 
-      <section className="seccion-dashboard">
-        <div className="seccion-dashboard-header solicitudes-header-simple">
-          <div>
-            <h2>Mis solicitudes</h2>
-            <p>Consulta pendientes, parciales, atendidas o rechazadas.</p>
+      {botonesBandeja}
+
+      {modo === "supervisor" && bandeja === "recibidas" && (
+        <section className="seccion-dashboard">
+          <div className="seccion-dashboard-header solicitudes-header-simple">
+            <div>
+              <h2>Solicitudes recibidas</h2>
+              <p>Pedidos enviados por Responsables de tus sucursales asignadas.</p>
+            </div>
+
           </div>
 
-          <button
-            className="boton-principal"
-            type="button"
-            onClick={abrirNuevaSolicitud}
-            disabled={bodegasUsuario.length === 0}
-          >
-            <Plus size={18} />
-            Nueva solicitud
-          </button>
-        </div>
+          <div className="solicitudes-rol-filtros">
+            <div className="buscador-input-contenedor solicitudes-rol-buscador">
+              <Search size={18} />
+              <input
+                value={busquedaRecibidas}
+                onChange={(e) => setBusquedaRecibidas(e.target.value)}
+                placeholder="Buscar solicitud recibida..."
+              />
+            </div>
 
-        <div className="responsable-filtros">
-          <div className="buscador-input-contenedor responsable-buscador">
-            <Search size={18} />
-            <input
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Buscar solicitud..."
+            <CampoDesplegable
+              valor={estadoFiltroRecibidas}
+              alCambiar={(valor) => setEstadoFiltroRecibidas(valor as FiltroEstado)}
+              ariaLabel="Filtrar solicitudes recibidas por estado"
+              opciones={[
+                { valor: "pendiente", texto: "Pendientes", alerta: recibidas.some((item) => item.estado === "pendiente") },
+                { valor: "parcial", texto: "Parciales", alerta: recibidas.some((item) => item.estado === "parcial") },
+                { valor: "atendida", texto: "Atendidas" },
+                { valor: "rechazada", texto: "Rechazadas" },
+                { valor: "todos", texto: "Todas" },
+              ]}
+              anchoMinimo={190}
             />
+
+            <CampoDesplegable
+              valor={sucursalFiltroRecibidas}
+              alCambiar={setSucursalFiltroRecibidas}
+              ariaLabel="Filtrar solicitudes recibidas por sucursal"
+              opciones={[
+                { valor: "todas", texto: "Todas las sucursales" },
+                ...sucursalesRecibidas.map((sucursal) => ({ valor: sucursal, texto: sucursal })),
+              ]}
+              anchoMinimo={220}
+            />
+
+            <SelectorFechaFiltro
+              valor={fechaFiltroRecibidas}
+              alCambiar={setFechaFiltroRecibidas}
+              ariaLabel="Filtrar solicitudes recibidas por fecha"
+              className="solicitudes-rol-fecha-selector"
+            />
+
+            <button
+              className="boton-filtro boton-filtro-icono"
+              type="button"
+              title={
+                ordenRecibidas === "asc" ? "Orden A-Z dentro de cada fecha" : "Orden Z-A dentro de cada fecha"
+              }
+              onClick={() => setOrdenRecibidas((actual) => (actual === "asc" ? "desc" : "asc"))}
+            >
+              {ordenRecibidas === "asc" ? <ArrowDownAZ size={18} /> : <ArrowUpAZ size={18} />}
+            </button>
+
+            <button
+              className="boton-filtro boton-filtro-icono"
+              type="button"
+              title="Limpiar filtros"
+              disabled={!filtrosRecibidasActivos}
+              onClick={limpiarFiltrosRecibidas}
+            >
+              <Paintbrush size={18} />
+            </button>
           </div>
 
-          <CampoDesplegable
-            valor={estadoFiltro}
-            alCambiar={(valor) => setEstadoFiltro(valor as FiltroEstado)}
-            ariaLabel="Filtrar por estado"
-            opciones={[
-              { valor: "todos", texto: "Todos los estados" },
-              { valor: "pendiente", texto: "Pendientes" },
-              { valor: "parcial", texto: "Parciales" },
-              { valor: "atendida", texto: "Atendidas" },
-              { valor: "rechazada", texto: "Rechazadas" },
-            ]}
-            anchoMinimo={215}
-          />
+          {errorRecibidas ? <p role="alert">{errorRecibidas}</p> : null}
 
-          <CampoDesplegable
-            valor={bodegaFiltro}
-            alCambiar={setBodegaFiltro}
-            ariaLabel="Filtrar por bodega"
-            opciones={[
-              { valor: "todas", texto: "Todas mis bodegas" },
-              ...bodegasUsuario.map((bodega) => ({
-                valor: bodega,
-                texto: limpiarNombreBodega(bodega),
-              })),
-            ]}
-            anchoMinimo={230}
-          />
+          <div className="responsable-tabla-scroll solicitudes-rol-tabla-scroll">
+            <TablaBase
+              columnas={[
+                "Bien solicitado",
+                "Cantidad",
+                "Entregado",
+                "Solicitante",
+                "Sucursal",
+                "Fecha",
+                "Estado",
+                "Acciones",
+              ]}
+              mensajeVacio={cargandoRecibidas ? "Cargando solicitudes..." : "No tienes solicitudes recibidas"}
+            >
+              {solicitudesRecibidasFiltradas.map((solicitud) => (
+                <tr key={solicitud.id}>
+                  <td>
+                    <strong>
+                      {solicitud.detalles.length === 1
+                        ? solicitud.detalles[0].producto.nombre
+                        : `${solicitud.detalles.length} bienes solicitados`}
+                    </strong>
+                  </td>
+                  <td>{solicitud.detalles.reduce((total, detalle) => total + detalle.cantidadSolicitada, 0)}</td>
+                  <td>{solicitud.detalles.reduce((total, detalle) => total + detalle.cantidadEntregada, 0)}</td>
+                  <td>{solicitud.usuarioSolicitante.nombre}</td>
+                  <td>{limpiarNombreBodega(solicitud.bodegaSolicitante.nombre)}</td>
+                  <td>{solicitud.createdAt.slice(0, 10)}</td>
+                  <td>
+                    <span className={`badge-solicitud badge-solicitud-${solicitud.estado}`}>
+                      {obtenerTextoEstado(solicitud.estado)}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="acciones-tabla acciones-solicitudes">
+                      <button
+                        className="boton-icono-tabla boton-icono-alerta"
+                        type="button"
+                        title="Ver solicitud y gestionar su atención"
+                        aria-label={`Ver solicitud ${solicitud.codigo}`}
+                        onClick={() => {
+                          if (solicitud.estado === "pendiente" || solicitud.estado === "parcial") {
+                            abrirGestionSolicitud(solicitud);
+                          } else {
+                            setDetalleRecibida(solicitud);
+                          }
+                        }}
+                      >
+                        !
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </TablaBase>
+          </div>
+        </section>
+      )}
 
-          <CampoDesplegable
-            valor={anioFiltro}
-            alCambiar={setAnioFiltro}
-            ariaLabel="Filtrar por año"
-            opciones={[
-              { valor: "todos", texto: "Todos los años" },
-              ...aniosDisponibles.map((anio) => ({ valor: anio, texto: anio })),
-            ]}
-            anchoMinimo={190}
-          />
-
-          <button
-            className="boton-filtro boton-filtro-icono"
-            type="button"
-            title={orden === "asc" ? "Orden A-Z dentro de cada fecha" : "Orden Z-A dentro de cada fecha"}
-            onClick={() => setOrden((actual) => (actual === "asc" ? "desc" : "asc"))}
-          >
-            {orden === "asc" ? <ArrowDownAZ size={18} /> : <ArrowUpAZ size={18} />}
-          </button>
-
-          <button
-            className="boton-filtro boton-filtro-icono"
-            type="button"
-            title="Limpiar filtros"
-            disabled={!filtrosActivos}
-            onClick={limpiarFiltros}
-          >
-            <Paintbrush size={18} />
-          </button>
-        </div>
-
-        <div className="responsable-tabla-scroll solicitudes-rol-tabla-scroll">
-          <TablaBase
-            columnas={["Bien solicitado", "Cantidad", "Entregado", "Bodega", "Fecha", "Estado", "Acciones"]}
-            mensajeVacio="No tienes solicitudes registradas"
-          >
-            {solicitudesFiltradas.length > 0
-              ? solicitudesFiltradas.map((solicitud) => {
-                  const items = obtenerItemsSolicitud(solicitud);
-                  const cantidadTotal = items.reduce((total, item) => total + item.cantidad, 0);
-                  const cantidadEntregada = items.reduce(
-                    (total, item) => total + (item.cantidadEntregada || 0),
-                    0
-                  );
-
-                  return (
-                    <tr key={solicitud.id}>
-                      <td>
-                        <div className="celda-producto">
-                          <strong>
-                            {items.length === 1
-                              ? items[0].productoSolicitado
-                              : `${items.length} bienes solicitados`}
-                          </strong>
-                          <span>{solicitud.descripcion}</span>
-                        </div>
-                      </td>
-                      <td>{cantidadTotal}</td>
-                      <td>{cantidadEntregada}</td>
-                      <td>{limpiarNombreBodega(solicitud.bodega)}</td>
-                      <td>{solicitud.fecha}</td>
-                      <td>
-                        <span className={`badge-solicitud badge-solicitud-${obtenerClaseEstado(solicitud.estado)}`}>
-                          {obtenerTextoEstado(solicitud.estado)}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="acciones-tabla acciones-solicitudes">
-                          <button
-                            className="boton-icono-tabla boton-icono-alerta"
-                            type="button"
-                            title="Ver detalle"
-                            onClick={() => setModalDetalle(solicitud)}
-                          >
-                            !
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              : null}
-          </TablaBase>
-        </div>
-      </section>
-
-      {modalNuevaSolicitud && (
-        <div className="modal-fondo">
-          <div className="modal-contenedor modal-responsable-solicitud modal-responsable-solicitud-amplio">
-            <div className="modal-header">
+      {(modo === "responsable" || bandeja === "mias") && (
+        <>
+          <section className="seccion-dashboard">
+            <div className="seccion-dashboard-header solicitudes-header-simple">
               <div>
-                <h2>Nueva solicitud</h2>
-                <p>Selecciona una bodega y agrega los bienes que necesitas.</p>
+                <h2>Mis solicitudes</h2>
+                <p>
+                  {modo === "responsable"
+                    ? "Solicitudes enviadas al Supervisor de tu sucursal."
+                    : "Consulta pendientes, parciales, atendidas o rechazadas."}
+                </p>
               </div>
-              <button className="modal-cerrar" type="button" onClick={cerrarNuevaSolicitud}>
-                <X size={20} />
+
+              <button className="boton-principal" type="button" onClick={abrirNuevaSolicitud}>
+                <Plus size={18} /> Nueva solicitud
               </button>
             </div>
 
-            <form className="formulario-modal" onSubmit={guardarSolicitud}>
-              <div className="grid-formulario grid-formulario-responsable">
-                <div className="campo-formulario">
-                  <label>Bodega solicitante *</label>
-                  <CampoDesplegable
-                    valor={bodegaSolicitud}
-                    alCambiar={setBodegaSolicitud}
-                    ariaLabel="Seleccionar bodega solicitante"
-                    opciones={bodegasUsuario.map((bodega) => ({
-                      valor: bodega,
-                      texto: limpiarNombreBodega(bodega),
-                    }))}
-                    mostrarIconoFiltro={false}
-                    anchoMinimo={260}
-                  />
-                </div>
-
-                <div className="campo-formulario">
-                  <label>Categoría</label>
-                  <CampoDesplegable
-                    valor={categoriaSeleccionada}
-                    alCambiar={(valor) => {
-                      setCategoriaSeleccionada(valor);
-                      setProductoSeleccionado("");
-                    }}
-                    placeholder="Selecciona una categoría"
-                    ariaLabel="Seleccionar categoría"
-                    opciones={[
-                      { valor: "", texto: "Selecciona una categoría" },
-                      ...categoriasDisponibles.map((categoria) => ({
-                        valor: categoria,
-                        texto: categoria,
-                      })),
-                    ]}
-                    mostrarIconoFiltro={false}
-                    anchoMinimo={230}
-                  />
-                </div>
-              </div>
-
-              <div className="solicitud-selector-bienes solicitud-selector-bienes-categoria">
-                <div className="campo-formulario">
-                  <label>Tipo de bien</label>
-                  <CampoDesplegable
-                    valor={tipoBienFiltro}
-                    alCambiar={(valor) => {
-                      setTipoBienFiltro(valor as "todos" | "consumible" | "no_consumible");
-                      setProductoSeleccionado("");
-                    }}
-                    ariaLabel="Filtrar por tipo de bien"
-                    opciones={[
-                      { valor: "todos", texto: "Todos" },
-                      { valor: "consumible", texto: "Consumible" },
-                      { valor: "no_consumible", texto: "No consumible" },
-                    ]}
-                    mostrarIconoFiltro={false}
-                    anchoMinimo={210}
-                  />
-                </div>
-
-                <div className="campo-formulario">
-                  <label>Bien a solicitar</label>
-                  <CampoDesplegable
-                    valor={productoSeleccionado}
-                    alCambiar={setProductoSeleccionado}
-                    placeholder={categoriaSeleccionada ? "Selecciona un bien" : "Primero selecciona una categoría"}
-                    ariaLabel="Seleccionar bien"
-                    opciones={[
-                      {
-                        valor: "",
-                        texto: categoriaSeleccionada
-                          ? "Selecciona un bien"
-                          : "Primero selecciona una categoría",
-                      },
-                      ...productosDisponibles.map((producto) => ({
-                        valor: String(producto.id),
-                        texto: `${producto.descripcion} · ${
-                          producto.tipoProducto === "no_consumible"
-                            ? producto.empresa || "Sin atributo"
-                            : "Consumible"
-                        }`,
-                      })),
-                    ]}
-                    mostrarIconoFiltro={false}
-                    deshabilitado={!categoriaSeleccionada}
-                    anchoMinimo={260}
-                  />
-                </div>
-
-                <div className="campo-formulario">
-                  <label>Cantidad</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={cantidadSeleccionada}
-                    onChange={(e) => setCantidadSeleccionada(e.target.value)}
-                  />
-                </div>
-
-                <button
-                  className="boton-principal boton-agregar-solo"
-                  type="button"
-                  onClick={agregarItemSolicitud}
-                  title="Agregar bien"
-                  aria-label="Agregar bien"
-                >
-                  <Plus size={20} />
-                </button>
-              </div>
-
-              <div className="tabla-card tabla-solicitud-items">
-                <div className="tabla-contenedor">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Código</th>
-                        <th>Bien</th>
-                        <th>Atributo</th>
-                        <th>Cantidad</th>
-                        <th>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {itemsFormulario.length > 0 ? (
-                        itemsFormulario.map((item) => (
-                          <tr key={item.id}>
-                            <td>
-                              {productos.find((producto) => producto.id === item.productoId)?.codigo || "S/C"}
-                            </td>
-                            <td>{item.productoSolicitado}</td>
-                            <td>
-                              {productos.find((producto) => producto.id === item.productoId)
-                                ?.tipoProducto === "no_consumible"
-                                ? productos.find((producto) => producto.id === item.productoId)
-                                    ?.empresa || "No registrado"
-                                : "No aplica"}
-                            </td>
-                            <td>
-                              <input
-                                className="input-cantidad-tabla"
-                                type="number"
-                                min="1"
-                                value={item.cantidad}
-                                onChange={(e) => actualizarCantidadItem(item.id, e.target.value)}
-                              />
-                            </td>
-                            <td>
-                              <button
-                                className="boton-icono-tabla boton-icono-peligro"
-                                type="button"
-                                onClick={() => quitarItemSolicitud(item.id)}
-                                title="Quitar bien"
-                              >
-                                <Trash2 size={17} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={4} className="tabla-vacia">
-                            Agrega bienes para enviar la solicitud
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div className="campo-formulario campo-completo solicitud-observacion-final">
-                <label>Observación</label>
-                <textarea
-                  value={observacion}
-                  onChange={(e) => setObservacion(e.target.value)}
-                  placeholder="Detalle el motivo de la solicitud"
+            <div className="solicitudes-rol-filtros">
+              <div className="buscador-input-contenedor solicitudes-rol-buscador">
+                <Search size={18} />
+                <input
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  placeholder="Buscar solicitud..."
                 />
               </div>
 
-              <div className="modal-acciones">
-                <button className="boton-secundario" type="button" onClick={cerrarNuevaSolicitud}>
-                  Cancelar
-                </button>
-                <button className="boton-principal" type="submit">
-                  Enviar solicitud
-                </button>
+              <CampoDesplegable
+                valor={estadoFiltro}
+                alCambiar={(valor) => setEstadoFiltro(valor as FiltroEstado)}
+                ariaLabel="Filtrar por estado"
+                opciones={[
+                  { valor: "pendiente", texto: "Pendientes" },
+                  { valor: "parcial", texto: "Parciales" },
+                  { valor: "atendida", texto: "Atendidas" },
+                  { valor: "rechazada", texto: "Rechazadas" },
+                  { valor: "todos", texto: "Todas" },
+                ]}
+                anchoMinimo={210}
+              />
+
+              <CampoDesplegable
+                valor={bodegaFiltro}
+                alCambiar={setBodegaFiltro}
+                ariaLabel="Filtrar por bodega"
+                opciones={[
+                  { valor: "todas", texto: "Todas mis bodegas" },
+                  ...bodegasUsuario.map((bodega) => ({
+                    valor: bodega,
+                    texto: limpiarNombreBodega(bodega),
+                  })),
+                ]}
+                anchoMinimo={220}
+              />
+
+              <SelectorFechaFiltro
+                valor={fechaFiltro}
+                alCambiar={setFechaFiltro}
+                ariaLabel="Filtrar solicitudes por fecha"
+                className="solicitudes-rol-fecha-selector"
+              />
+
+              <button
+                className="boton-filtro boton-filtro-icono"
+                type="button"
+                title={orden === "asc" ? "Orden A-Z dentro de cada fecha" : "Orden Z-A dentro de cada fecha"}
+                onClick={() => setOrden((actual) => (actual === "asc" ? "desc" : "asc"))}
+              >
+                {orden === "asc" ? <ArrowDownAZ size={18} /> : <ArrowUpAZ size={18} />}
+              </button>
+
+              <button
+                className="boton-filtro boton-filtro-icono"
+                type="button"
+                title="Limpiar filtros"
+                disabled={!filtrosActivos}
+                onClick={limpiarFiltros}
+              >
+                <Paintbrush size={18} />
+              </button>
+            </div>
+
+            <div className="responsable-tabla-scroll solicitudes-rol-tabla-scroll">
+              <TablaBase
+                columnas={["Bien solicitado", "Cantidad", "Entregado", "Bodega", "Fecha", "Estado", "Acciones"]}
+                mensajeVacio="No tienes solicitudes registradas"
+              >
+                {solicitudesFiltradas.length > 0
+                  ? solicitudesFiltradas.map((solicitud) => {
+                      const items = obtenerItemsSolicitud(solicitud);
+                      const cantidadTotal = items.reduce((total, item) => total + item.cantidad, 0);
+                      const cantidadEntregada = items.reduce(
+                        (total, item) => total + (item.cantidadEntregada || 0),
+                        0,
+                      );
+
+                      return (
+                        <tr key={solicitud.id}>
+                          <td>
+                            <div className="celda-producto">
+                              <strong>
+                                {items.length === 1 ? items[0].productoSolicitado : `${items.length} bienes solicitados`}
+                              </strong>
+                              <span>{solicitud.descripcion}</span>
+                            </div>
+                          </td>
+                          <td>{cantidadTotal}</td>
+                          <td>{cantidadEntregada}</td>
+                          <td>{limpiarNombreBodega(solicitud.bodega)}</td>
+                          <td>{solicitud.fecha}</td>
+                          <td>
+                            <span className={`badge-solicitud badge-solicitud-${obtenerClaseEstado(solicitud.estado)}`}>
+                              {obtenerTextoEstado(solicitud.estado)}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="acciones-tabla acciones-solicitudes">
+                              <button
+                                className="boton-icono-tabla boton-icono-alerta"
+                                type="button"
+                                title="Ver detalle"
+                                onClick={() => setModalDetalle(solicitud)}
+                              >
+                                !
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  : null}
+              </TablaBase>
+            </div>
+          </section>
+
+          {modalNuevaSolicitud && (
+            <div className="modal-fondo">
+              <div className="modal-contenedor modal-responsable-solicitud modal-responsable-solicitud-amplio">
+                <div className="modal-header">
+                  <div>
+                    <h2>Nueva solicitud</h2>
+                    <p>
+                      {modo === "responsable"
+                        ? "Selecciona tu sucursal y los bienes que solicitarás al Supervisor."
+                        : "Selecciona una bodega y agrega los bienes que necesitas."}
+                    </p>
+                  </div>
+                  <button className="modal-cerrar" type="button" onClick={cerrarNuevaSolicitud}>
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <form className="formulario-modal" onSubmit={guardarSolicitud}>
+                  <div className="grid-formulario grid-formulario-responsable">
+                    <div className="campo-formulario">
+                      <label>Bodega solicitante *</label>
+                      <CampoDesplegable
+                        valor={bodegaSolicitud}
+                        alCambiar={setBodegaSolicitud}
+                        ariaLabel="Seleccionar bodega solicitante"
+                        opciones={bodegasUsuario.map((bodega) => ({
+                          valor: bodega,
+                          texto: limpiarNombreBodega(bodega),
+                        }))}
+                        mostrarIconoFiltro={false}
+                        anchoMinimo={260}
+                      />
+                    </div>
+
+                    <div className="campo-formulario">
+                      <label>Categoría</label>
+                      <CampoDesplegable
+                        valor={categoriaSeleccionada}
+                        alCambiar={(valor) => {
+                          setCategoriaSeleccionada(valor);
+                          setProductoSeleccionado("");
+                        }}
+                        placeholder="Selecciona una categoría"
+                        ariaLabel="Seleccionar categoría"
+                        opciones={[
+                          { valor: "", texto: "Selecciona una categoría" },
+                          ...categoriasDisponibles.map((categoria) => ({
+                            valor: categoria,
+                            texto: categoria,
+                          })),
+                        ]}
+                        mostrarIconoFiltro={false}
+                        anchoMinimo={230}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="solicitud-selector-bienes solicitud-selector-bienes-categoria">
+                    <div className="campo-formulario">
+                      <label>Tipo de bien</label>
+                      <CampoDesplegable
+                        valor={tipoBienFiltro}
+                        alCambiar={(valor) => {
+                          setTipoBienFiltro(valor as "todos" | "consumible" | "no_consumible");
+                          setProductoSeleccionado("");
+                        }}
+                        ariaLabel="Filtrar por tipo de bien"
+                        opciones={[
+                          { valor: "todos", texto: "Todos" },
+                          { valor: "consumible", texto: "Consumible" },
+                          { valor: "no_consumible", texto: "No consumible" },
+                        ]}
+                        mostrarIconoFiltro={false}
+                        anchoMinimo={210}
+                      />
+                    </div>
+
+                    <div className="campo-formulario">
+                      <label>Bien a solicitar</label>
+                      <CampoDesplegable
+                        valor={productoSeleccionado}
+                        alCambiar={setProductoSeleccionado}
+                        placeholder={categoriaSeleccionada ? "Selecciona un bien" : "Primero selecciona una categoría"}
+                        ariaLabel="Seleccionar bien"
+                        opciones={[
+                          {
+                            valor: "",
+                            texto: categoriaSeleccionada
+                              ? "Selecciona un bien"
+                              : "Primero selecciona una categoría",
+                          },
+                          ...productosDisponibles.map((producto) => ({
+                            valor: String(producto.id),
+                            texto: `${producto.descripcion} · ${
+                              producto.tipoProducto === "no_consumible"
+                                ? producto.empresa || "Sin atributo"
+                                : "Consumible"
+                            }`,
+                          })),
+                        ]}
+                        mostrarIconoFiltro={false}
+                        deshabilitado={!categoriaSeleccionada}
+                        anchoMinimo={260}
+                      />
+                    </div>
+
+                    <div className="campo-formulario">
+                      <label>Cantidad</label>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={cantidadSeleccionada}
+                        onChange={(e) => setCantidadSeleccionada(e.target.value)}
+                      />
+                    </div>
+
+                    <button
+                      className="boton-principal boton-agregar-solo"
+                      type="button"
+                      onClick={agregarItemSolicitud}
+                      title="Agregar bien"
+                      aria-label="Agregar bien"
+                    >
+                      <Plus size={20} />
+                    </button>
+                  </div>
+
+                  <div className="tabla-card tabla-solicitud-items">
+                    <div className="tabla-contenedor">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Código</th>
+                            <th>Bien</th>
+                            <th>Atributo</th>
+                            <th>Cantidad</th>
+                            <th>Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {itemsFormulario.length > 0 ? (
+                            itemsFormulario.map((item) => (
+                              <tr key={item.id}>
+                                <td>{productos.find((producto) => producto.id === item.productoId)?.codigo || "S/C"}</td>
+                                <td>{item.productoSolicitado}</td>
+                                <td>
+                                  {productos.find((producto) => producto.id === item.productoId)?.tipoProducto ===
+                                  "no_consumible"
+                                    ? productos.find((producto) => producto.id === item.productoId)?.empresa ||
+                                      "No registrado"
+                                    : "No aplica"}
+                                </td>
+                                <td>
+                                  <input
+                                    className="input-cantidad-tabla"
+                                    type="number"
+                                    min="1"
+                                    value={item.cantidad}
+                                    onChange={(e) => actualizarCantidadItem(item.id, e.target.value)}
+                                  />
+                                </td>
+                                <td>
+                                  <button
+                                    className="boton-icono-tabla boton-icono-peligro"
+                                    type="button"
+                                    onClick={() => quitarItemSolicitud(item.id)}
+                                    title="Quitar bien"
+                                  >
+                                    <Trash2 size={17} />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={5} className="tabla-vacia">
+                                Agrega bienes para enviar la solicitud
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="campo-formulario campo-completo solicitud-observacion-final">
+                    <label>Observación</label>
+                    <textarea
+                      value={observacion}
+                      onChange={(e) => setObservacion(e.target.value)}
+                      placeholder="Detalle el motivo de la solicitud"
+                    />
+                  </div>
+
+                  <div className="modal-acciones">
+                    <button className="boton-secundario" type="button" onClick={cerrarNuevaSolicitud}>
+                      Cancelar
+                    </button>
+                    <button className="boton-principal" type="submit">
+                      Enviar solicitud
+                    </button>
+                  </div>
+                </form>
               </div>
-            </form>
-          </div>
-        </div>
+            </div>
+          )}
+
+          {modalDetalle && (
+            <div className="modal-fondo">
+              <div className="modal-contenedor modal-responsable-detalle">
+                <div className="modal-header">
+                  <div>
+                    <h2>Detalle de solicitud</h2>
+                    <p>Información del estado y entrega de tu solicitud.</p>
+                  </div>
+                  <div className="modal-solicitud-header-acciones">
+                    <span className={`badge-solicitud badge-solicitud-${obtenerClaseEstado(modalDetalle.estado)}`}>
+                      {obtenerTextoEstado(modalDetalle.estado)}
+                    </span>
+                    <button className="modal-cerrar" type="button" onClick={() => setModalDetalle(null)}>
+                      <X size={20} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="detalle-producto-grid detalle-solicitud-grid-mejorada">
+                  <div>
+                    <span>Bodega</span>
+                    <strong>{limpiarNombreBodega(modalDetalle.bodega)}</strong>
+                  </div>
+                  <div>
+                    <span>Fecha</span>
+                    <strong>{modalDetalle.fecha}</strong>
+                  </div>
+                  <div>
+                    <span>Solicitante</span>
+                    <strong>{modalDetalle.solicitante}</strong>
+                  </div>
+                  <div className="detalle-completo detalle-observacion-solicitud">
+                    <span>Observación</span>
+                    <strong>{modalDetalle.descripcion}</strong>
+                  </div>
+
+                  {debeMostrarObservacionAdmin(modalDetalle) && (
+                    <div className="detalle-completo detalle-observacion-solicitud detalle-observacion-admin">
+                      <span>Respuesta del administrador</span>
+                      <strong>{obtenerObservacionAdmin(modalDetalle)}</strong>
+                    </div>
+                  )}
+                </div>
+
+                <div className="tabla-card tabla-solicitud-atencion tabla-solicitud-items-detalle">
+                  <div className="tabla-contenedor">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Bien solicitado</th>
+                          <th>Atributo</th>
+                          <th>Solicitado</th>
+                          <th>Entregado</th>
+                          <th>Rechazado</th>
+                          <th>Pendiente</th>
+                          <th>Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {obtenerItemsSolicitud(modalDetalle).map((item) => {
+                          const pendiente = Math.max(
+                            0,
+                            item.cantidad - (item.cantidadEntregada || 0) - (item.cantidadRechazada || 0),
+                          );
+                          const cantidadEntregada = item.cantidadEntregada || 0;
+                          const cantidadRechazada = item.cantidadRechazada || 0;
+                          const estadoItem =
+                            pendiente > 0
+                              ? cantidadEntregada > 0
+                                ? "Parcial"
+                                : "Pendiente"
+                              : cantidadRechazada > 0
+                                ? "Rechazado"
+                                : cantidadEntregada > 0
+                                  ? "Entregado"
+                                  : "Cerrado";
+
+                          return (
+                            <tr key={item.id || item.productoSolicitado}>
+                              <td>{item.productoSolicitado}</td>
+                              <td>
+                                {productos.find((producto) => producto.id === item.productoId)?.tipoProducto ===
+                                "no_consumible"
+                                  ? productos.find((producto) => producto.id === item.productoId)?.empresa ||
+                                    "No registrado"
+                                  : "No aplica"}
+                              </td>
+                              <td>{item.cantidad}</td>
+                              <td>{item.cantidadEntregada || 0}</td>
+                              <td>{item.cantidadRechazada || 0}</td>
+                              <td>{pendiente}</td>
+                              <td>
+                                <span
+                                  className={`badge-solicitud badge-solicitud-${
+                                    estadoItem === "Entregado"
+                                      ? "atendida"
+                                      : estadoItem === "Rechazado"
+                                        ? "rechazada"
+                                        : estadoItem === "Parcial"
+                                          ? "parcial"
+                                          : "pendiente"
+                                  }`}
+                                >
+                                  {estadoItem}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
-      {modalDetalle && (
+      {detalleRecibida && (
         <div className="modal-fondo">
           <div className="modal-contenedor modal-responsable-detalle">
             <div className="modal-header">
               <div>
-                <h2>Detalle de solicitud</h2>
-                <p>Información del estado y entrega de tu solicitud.</p>
+                <h2>Detalle de solicitud recibida</h2>
+                <p>Solicitud enviada por el Responsable de una sucursal asignada.</p>
               </div>
               <div className="modal-solicitud-header-acciones">
-                <span className={`badge-solicitud badge-solicitud-${obtenerClaseEstado(modalDetalle.estado)}`}>
-                  {obtenerTextoEstado(modalDetalle.estado)}
+                <span className={`badge-solicitud badge-solicitud-${detalleRecibida.estado}`}>
+                  {obtenerTextoEstado(detalleRecibida.estado)}
                 </span>
-                <button className="modal-cerrar" type="button" onClick={() => setModalDetalle(null)}>
+                <button className="modal-cerrar" type="button" onClick={() => setDetalleRecibida(null)}>
                   <X size={20} />
                 </button>
               </div>
@@ -779,28 +1436,31 @@ function SolicitudesSupervisor() {
 
             <div className="detalle-producto-grid detalle-solicitud-grid-mejorada">
               <div>
-                <span>Bodega</span>
-                <strong>{limpiarNombreBodega(modalDetalle.bodega)}</strong>
+                <span>Código</span>
+                <strong>{detalleRecibida.codigo}</strong>
+              </div>
+              <div>
+                <span>Responsable</span>
+                <strong>{detalleRecibida.usuarioSolicitante.nombre}</strong>
+              </div>
+              <div>
+                <span>Sucursal</span>
+                <strong>{limpiarNombreBodega(detalleRecibida.bodegaSolicitante.nombre)}</strong>
               </div>
               <div>
                 <span>Fecha</span>
-                <strong>{modalDetalle.fecha}</strong>
-              </div>
-              <div>
-                <span>Solicitante</span>
-                <strong>{modalDetalle.solicitante}</strong>
+                <strong>{new Date(detalleRecibida.createdAt).toLocaleDateString("es-EC")}</strong>
               </div>
               <div className="detalle-completo detalle-observacion-solicitud">
-                <span>Observación</span>
-                <strong>{modalDetalle.descripcion}</strong>
+                <span>Observación del Responsable</span>
+                <strong>{detalleRecibida.observacionSolicitante || "Sin observación registrada."}</strong>
               </div>
-
-              {debeMostrarObservacionAdmin(modalDetalle) && (
+              {detalleRecibida.observacionAtencion ? (
                 <div className="detalle-completo detalle-observacion-solicitud detalle-observacion-admin">
-                  <span>Respuesta del administrador</span>
-                  <strong>{obtenerObservacionAdmin(modalDetalle)}</strong>
+                  <span>Respuesta del Supervisor</span>
+                  <strong>{detalleRecibida.observacionAtencion}</strong>
                 </div>
-              )}
+              ) : null}
             </div>
 
             <div className="tabla-card tabla-solicitud-atencion tabla-solicitud-items-detalle">
@@ -809,62 +1469,135 @@ function SolicitudesSupervisor() {
                   <thead>
                     <tr>
                       <th>Bien solicitado</th>
-                      <th>Atributo</th>
                       <th>Solicitado</th>
                       <th>Entregado</th>
                       <th>Rechazado</th>
                       <th>Pendiente</th>
-                      <th>Estado</th>
+                      <th>Disponible</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {obtenerItemsSolicitud(modalDetalle).map((item) => {
-                      const pendiente = Math.max(
-                        0,
-                        item.cantidad -
-                          (item.cantidadEntregada || 0) -
-                          (item.cantidadRechazada || 0)
-                      );
-                      const cantidadEntregada = item.cantidadEntregada || 0;
-                      const cantidadRechazada = item.cantidadRechazada || 0;
-                      const estadoItem =
-                        pendiente > 0
-                          ? cantidadEntregada > 0
-                            ? "Parcial"
-                            : "Pendiente"
-                          : cantidadRechazada > 0
-                            ? "Rechazado"
-                            : cantidadEntregada > 0
-                              ? "Entregado"
-                              : "Cerrado";
+                    {detalleRecibida.detalles.map((item) => (
+                      <tr key={item.id}>
+                        <td>{item.producto.nombre}</td>
+                        <td>{item.cantidadSolicitada}</td>
+                        <td>{item.cantidadEntregada}</td>
+                        <td>{item.cantidadRechazada}</td>
+                        <td>{item.cantidadPendiente}</td>
+                        <td>{obtenerDisponibilidadSupervisor(stockSupervisor, detalleRecibida, item.producto.id)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
+      {solicitudGestion && (
+        <div className="modal-fondo">
+          <div className="modal-contenedor modal-solicitud-detalle modal-solicitud-atencion modal-solicitud-recibida-supervisor">
+            <div className="modal-header">
+              <div>
+                <h2>Solicitud</h2>
+                <p>Atiende los bienes desde tu stock de Supervisor hacia la sucursal solicitante.</p>
+              </div>
+              <div className="modal-solicitud-header-acciones">
+                <span className={`badge-solicitud badge-solicitud-${solicitudGestion.estado}`}>
+                  {obtenerTextoEstado(solicitudGestion.estado)}
+                </span>
+                <button className="modal-cerrar" type="button" onClick={cerrarGestionSolicitud}>
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            <div className="detalle-producto-grid detalle-solicitud-grid detalle-solicitud-grid-mejorada">
+              <div>
+                <span>Solicitante</span>
+                <strong>{solicitudGestion.usuarioSolicitante.nombre}</strong>
+              </div>
+              <div>
+                <span>Bodega destino</span>
+                <strong>{limpiarNombreBodega(solicitudGestion.bodegaSolicitante.nombre)}</strong>
+              </div>
+              <div>
+                <span>Fecha</span>
+                <strong>{new Date(solicitudGestion.createdAt).toLocaleDateString("es-EC")}</strong>
+              </div>
+              <div className="detalle-completo detalle-observacion-solicitud">
+                <span>Observación</span>
+                <strong>{solicitudGestion.observacionSolicitante || "Sin observación registrada."}</strong>
+              </div>
+            </div>
+
+            <div className="tabla-card tabla-solicitud-atencion tabla-solicitud-revision-supervisor">
+              <div className="tabla-contenedor">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Bien solicitado</th>
+                      <th>Solicitado</th>
+                      <th>Entregado</th>
+                      <th>Rechazado</th>
+                      <th>Disponible</th>
+                      <th>A entregar</th>
+                      <th>A rechazar</th>
+                      <th>Revisión</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {itemsRevision.map((item) => {
+                      const disponibleCompleto = item.disponible >= item.pendienteOriginal;
+                      const textoRevision = item.pendienteOriginal === 0
+                        ? "Resuelto"
+                        : disponibleCompleto
+                          ? "Disponible"
+                          : item.disponible > 0
+                            ? "Stock insuficiente"
+                            : "Sin stock";
                       return (
-                        <tr key={item.id || item.productoSolicitado}>
+                        <tr key={item.detalleId}>
                           <td>{item.productoSolicitado}</td>
+                          <td>{item.cantidadSolicitada}</td>
+                          <td>{solicitudGestion.detalles.find((detalle) => detalle.id === item.detalleId)?.cantidadEntregada || 0}</td>
+                          <td>{solicitudGestion.detalles.find((detalle) => detalle.id === item.detalleId)?.cantidadRechazada || 0}</td>
+                          <td>{item.disponible}</td>
                           <td>
-                            {productos.find((producto) => producto.id === item.productoId)
-                              ?.tipoProducto === "no_consumible"
-                              ? productos.find((producto) => producto.id === item.productoId)
-                                  ?.empresa || "No registrado"
-                              : "No aplica"}
+                            <input
+                              className="input-cantidad-tabla"
+                              type="number"
+                              min="0"
+                              step="1"
+                              max={Math.min(item.disponible, item.pendienteOriginal)}
+                              disabled={item.pendienteOriginal === 0}
+                              value={borradoresCantidades[`${item.detalleId}:cantidadEntregada`] ?? item.cantidadEntregada}
+                              aria-label={`Cantidad a entregar de ${item.productoSolicitado}`}
+                              onFocus={(e) => e.currentTarget.select()}
+                              onChange={(e) => cambiarCantidadRevision(item.detalleId, "cantidadEntregada", e.target.value)}
+                              onBlur={() => terminarEdicionCantidad(item.detalleId, "cantidadEntregada")}
+                            />
                           </td>
-                          <td>{item.cantidad}</td>
-                          <td>{item.cantidadEntregada || 0}</td>
-                          <td>{item.cantidadRechazada || 0}</td>
-                          <td>{pendiente}</td>
                           <td>
-                            <span
-                              className={`badge-solicitud badge-solicitud-${
-                                estadoItem === "Entregado"
-                                  ? "atendida"
-                                  : estadoItem === "Rechazado"
-                                    ? "rechazada"
-                                    : estadoItem === "Parcial"
-                                      ? "parcial"
-                                      : "pendiente"
-                              }`}
-                            >
-                              {estadoItem}
+                            <input
+                              className="input-cantidad-tabla"
+                              type="number"
+                              min="0"
+                              step="1"
+                              max={item.pendienteOriginal}
+                              disabled={item.pendienteOriginal === 0}
+                              value={borradoresCantidades[`${item.detalleId}:cantidadRechazada`] ?? item.cantidadRechazada}
+                              aria-label={`Cantidad a rechazar de ${item.productoSolicitado}`}
+                              onFocus={(e) => e.currentTarget.select()}
+                              onChange={(e) => cambiarCantidadRevision(item.detalleId, "cantidadRechazada", e.target.value)}
+                              onBlur={() => terminarEdicionCantidad(item.detalleId, "cantidadRechazada")}
+                            />
+                          </td>
+                          <td>
+                            <span className={`estado-entrega-item ${disponibleCompleto ? "cumple" : item.disponible > 0 ? "no-cumple" : "sin-stock"}`}>
+                              {disponibleCompleto ? <Check size={16} /> : <X size={16} />}
+                              {textoRevision}
                             </span>
                           </td>
                         </tr>
@@ -873,6 +1606,163 @@ function SolicitudesSupervisor() {
                   </tbody>
                 </table>
               </div>
+            </div>
+
+            {itemsRevision.some((item) => item.pendienteOriginal > 0) && (
+              <p className={`solicitud-stock-aviso ${
+                itemsRevision.some((item) => item.pendienteOriginal > 0 && item.disponible === 0)
+                  ? "solicitud-stock-aviso-sin"
+                  : itemsRevision.some((item) => item.pendienteOriginal > item.disponible)
+                    ? "solicitud-stock-aviso-insuficiente"
+                    : "solicitud-stock-aviso-suficiente"
+              }`} role="status" aria-live="polite">
+                {itemsRevision.some((item) => item.pendienteOriginal > 0 && item.disponible === 0)
+                  ? "No cuentas con existencias de uno o más productos solicitados."
+                  : itemsRevision.some((item) => item.pendienteOriginal > item.disponible)
+                    ? "Tu stock es insuficiente para atender completamente esta solicitud."
+                    : "Cuentas con existencias suficientes para atender esta solicitud."}
+                {itemsRevision.some((item) => item.pendienteOriginal > item.disponible) && (
+                  abastecimientosVinculados.some((item) => item.estado === "pendiente" || item.estado === "parcial")
+                    ? " Ya tienes un pedido de abastecimiento en proceso con el Administrador."
+                    : abastecimientosVinculados.some((item) => item.estado === "atendida")
+                      ? " El Administrador ya atendió tu pedido de abastecimiento."
+                      : " Puedes solicitar abastecimiento al Administrador desde aquí."
+                )}
+              </p>
+            )}
+
+            <div className="bloque-observacion-admin-solicitud">
+              {mostrarObservacionRespuesta ? (
+                <div className="campo-observacion-admin-solicitud">
+                  <label>Observación</label>
+                  <textarea
+                    value={observacionAtencion}
+                    onChange={(e) => setObservacionAtencion(e.target.value)}
+                    placeholder="Escribe una observación sobre la atención."
+                  />
+                  <button
+                    className="boton-cancelar-observacion-solicitud"
+                    type="button"
+                    onClick={() => { setObservacionAtencion(""); setMostrarObservacionRespuesta(false); }}
+                  >Cancelar</button>
+                </div>
+              ) : (
+                <button
+                  className="boton-agregar-observacion-solicitud"
+                  type="button"
+                  onClick={() => setMostrarObservacionRespuesta(true)}
+                >+ Agregar observación</button>
+              )}
+            </div>
+
+            <div className="modal-acciones modal-acciones-solicitud">
+              <button
+                className="boton-secundario"
+                type="button"
+                disabled={consultandoAbastecimientos || guardandoAtencion || abastecimientosVinculados.some((item) => item.estado === "pendiente" || item.estado === "parcial")}
+                onClick={abrirModalAbastecimiento}
+              >
+                Solicitar abastecimiento
+              </button>
+              <button className="boton-secundario" type="button" disabled={guardandoAtencion} onClick={prepararRechazoRecibida}>
+                Rechazar
+              </button>
+              <button
+                className="boton-principal"
+                type="button"
+                disabled={guardandoAtencion || !itemsRevision.some((item) => item.cantidadEntregada + item.cantidadRechazada > 0)}
+                onClick={prepararAtencionRecibida}
+              >
+                {itemsRevision.reduce((total, item) => total + item.cantidadPendiente, 0) === 0
+                  ? "Aceptar solicitud"
+                  : "Aceptar parcialmente"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {solicitudGestion && modalAbastecimiento && (
+        <div className="modal-fondo modal-fondo-confirmacion">
+          <div className="modal-contenedor modal-solicitud-abastecimiento">
+            <div className="modal-header">
+              <div>
+                <h2>Solicitar abastecimiento</h2>
+                <p>Se enviará al Administrador una solicitud a tu nombre, vinculada internamente con este pedido. La entrega al Responsable no será automática.</p>
+              </div>
+              <button className="modal-cerrar" type="button" onClick={() => setModalAbastecimiento(false)} disabled={guardandoAbastecimiento}><X size={20} /></button>
+            </div>
+            <div className="tabla-card tabla-solicitud-atencion">
+              <div className="tabla-contenedor">
+                <table>
+                  <thead>
+                    <tr><th>Bien</th><th>Pendiente del Responsable</th><th>Tu stock</th><th>Cantidad a solicitar al Admin</th></tr>
+                  </thead>
+                  <tbody>
+                    {itemsRevision.filter((item) => item.pendienteOriginal > 0).map((item) => (
+                      <tr key={item.detalleId}>
+                        <td>{item.productoSolicitado}</td>
+                        <td>{item.pendienteOriginal}</td>
+                        <td>{item.disponible}</td>
+                        <td>
+                          <input
+                            className="input-cantidad-tabla"
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={cantidadesAbastecimiento[item.detalleId] ?? "0"}
+                            aria-label={`Cantidad a solicitar de ${item.productoSolicitado}`}
+                            onChange={(event) => setCantidadesAbastecimiento((actual) => ({
+                              ...actual,
+                              [item.detalleId]: event.target.value,
+                            }))}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="campo-formulario campo-completo abastecimiento-observacion">
+              <label>Observación (opcional)</label>
+              <textarea
+                value={observacionAbastecimiento}
+                maxLength={500}
+                onChange={(event) => setObservacionAbastecimiento(event.target.value)}
+                placeholder="Indica el motivo del abastecimiento."
+              />
+            </div>
+            <div className="modal-acciones">
+              <button className="boton-secundario" type="button" disabled={guardandoAbastecimiento} onClick={() => setModalAbastecimiento(false)}>Cancelar</button>
+              <button className="boton-principal" type="button" disabled={guardandoAbastecimiento} onClick={() => void enviarAbastecimiento()}>
+                {guardandoAbastecimiento ? "Enviando..." : "Enviar al Administrador"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {solicitudGestion && confirmacionAtencion && (
+        <div className="modal-fondo modal-fondo-confirmacion">
+          <div className="modal-contenedor modal-confirmacion-solicitud">
+            <div className="modal-header">
+              <div>
+                <h2>{confirmacionAtencion === "rechazar" ? "Rechazar solicitud" : "Confirmar atención"}</h2>
+                <p>{confirmacionAtencion === "rechazar"
+                  ? "Se rechazarán solamente las cantidades pendientes. Las entregas anteriores no se modificarán."
+                  : "Se registrarán las cantidades seleccionadas y se descontará únicamente el stock realmente entregado."}</p>
+              </div>
+              <button className="modal-cerrar" type="button" onClick={() => setConfirmacionAtencion(null)}><X size={20} /></button>
+            </div>
+            <div className="modal-acciones">
+              <button className="boton-secundario" type="button" onClick={() => setConfirmacionAtencion(null)}>Cancelar</button>
+              <button
+                className={`boton-principal ${confirmacionAtencion === "rechazar" ? "boton-confirmar-rechazo" : ""}`}
+                type="button"
+                disabled={guardandoAtencion}
+                onClick={() => void guardarAtencionRecibida()}
+              >{guardandoAtencion ? "Guardando..." : "Confirmar"}</button>
             </div>
           </div>
         </div>

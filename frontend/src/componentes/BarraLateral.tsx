@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { obtenerSolicitudesRecibidasApi } from "../api/solicitudesApi";
 import {
   ArrowLeftRight,
   BarChart3,
@@ -19,6 +21,40 @@ function BarraLateral() {
   const navigate = useNavigate();
   const { usuarioActual, cerrarSesion } = useAuth();
   const { solicitudes } = useInventario();
+  const [pendientesResponsables, setPendientesResponsables] = useState(0);
+
+  useEffect(() => {
+    if (usuarioActual?.rol !== "supervisor") {
+      setPendientesResponsables(0);
+      return;
+    }
+
+    let vigente = true;
+    const actualizarPendientes = () => {
+      void obtenerSolicitudesRecibidasApi()
+        .then((datos) => {
+          if (vigente) {
+            setPendientesResponsables(
+              datos.filter((solicitud) =>
+                solicitud.estado === "pendiente" || solicitud.estado === "parcial",
+              ).length,
+            );
+          }
+        })
+        .catch(() => {
+          // Un error de red no debe ocultar la navegación ni simular un estado sin pendientes.
+        });
+    };
+
+    actualizarPendientes();
+    window.addEventListener("focus", actualizarPendientes);
+    window.addEventListener("epuleam:solicitudes-actualizadas", actualizarPendientes);
+    return () => {
+      vigente = false;
+      window.removeEventListener("focus", actualizarPendientes);
+      window.removeEventListener("epuleam:solicitudes-actualizadas", actualizarPendientes);
+    };
+  }, [usuarioActual?.rol, usuarioActual?.id]);
 
   const solicitudesPendientes = solicitudes.filter(
     (solicitud) =>
@@ -173,6 +209,16 @@ function BarraLateral() {
               </NavLink>
 
               <NavLink
+                to="/responsable/solicitudes"
+                className={({ isActive }) =>
+                  isActive ? "sidebar-link activo" : "sidebar-link"
+                }
+              >
+                <ClipboardList size={21} />
+                <span>Solicitudes</span>
+              </NavLink>
+
+              <NavLink
                 to="/responsable/movimientos"
                 className={({ isActive }) =>
                   isActive ? "sidebar-link activo" : "sidebar-link"
@@ -225,6 +271,13 @@ function BarraLateral() {
               >
                 <ClipboardList size={21} />
                 <span>Solicitudes</span>
+                {pendientesResponsables > 0 && (
+                  <span
+                    className="sidebar-alerta-solicitudes sidebar-alerta-solicitudes-supervisor"
+                    title={`${pendientesResponsables} solicitudes de Responsables pendientes o parciales`}
+                    aria-label={`${pendientesResponsables} solicitudes recibidas pendientes o parciales`}
+                  >!</span>
+                )}
               </NavLink>
 
               <NavLink

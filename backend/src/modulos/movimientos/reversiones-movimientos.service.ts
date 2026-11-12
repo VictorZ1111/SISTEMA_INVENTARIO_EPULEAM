@@ -185,6 +185,16 @@ export class ReversionesMovimientosService {
       );
     }
 
+    // Bloqueamos primero la solicitud, como en la atención normal, para
+    // evitar cruzar los bloqueos con otra entrega concurrente.
+    // Si falla el stock, toda la transacción se revierte, incluido este recálculo.
+    await this.recalcularSolicitudSiAplica(
+      administrador,
+      movimiento,
+      usuarioId,
+      dto.motivo.trim(),
+    );
+
     const productoId = movimiento.productoId;
     const existencias = administrador.getRepository(Existencia);
 
@@ -229,13 +239,6 @@ export class ReversionesMovimientosService {
     existenciaDestino.cantidad -= movimiento.cantidad;
     existenciaOrigen.cantidad += movimiento.cantidad;
     await existencias.save([existenciaDestino, existenciaOrigen]);
-
-    await this.recalcularSolicitudSiAplica(
-      administrador,
-      movimiento,
-      usuarioId,
-      dto.motivo.trim(),
-    );
 
     const movimientos = administrador.getRepository(Movimiento);
 
@@ -352,66 +355,108 @@ export class ReversionesMovimientosService {
       return;
     }
 
-    const detallesRepository =
-      administrador.getRepository(SolicitudDetalle);
-    const solicitudesRepository =
-      administrador.getRepository(Solicitud);
+    const solicitudesRepository = administrador.getRepository(Solicitud);
+    const detallesRepository = administrador.getRepository(SolicitudDetalle);
 
-    const detalle = await detallesRepository
-      .createQueryBuilder("detalle")
-      .setLock("pessimistic_write")
-      .where("detalle.id = :id", {
-        id: movimiento.solicitudDetalleId,
-      })
-      .getOne();
-
-    if (detalle) {
-      detalle.cantidadEntregada = Math.max(
-        0,
-        detalle.cantidadEntregada - movimiento.cantidad,
-      );
-      detalle.cantidadPendiente =
-        detalle.cantidadSolicitada -
-        detalle.cantidadEntregada -
-        detalle.cantidadRechazada;
-      await detallesRepository.save(detalle);
-    }
-
+    // Misma transacción que la reversa física: ningún stock se mueve si las
+    // cantidades de la solicitud no pueden restablecerse coherentemente.
     const solicitud = await solicitudesRepository
       .createQueryBuilder("solicitud")
       .setLock("pessimistic_write")
-      .where("solicitud.id = :id", {
-        id: movimiento.solicitudId,
-      })
+      .where("solicitud.id = :id", { id: movimiento.solicitudId })
       .getOne();
 
     if (!solicitud) {
-      return;
+      throw new NotFoundException(
+        "No existe la solicitud relacionada con este movimiento.",
+      );
     }
 
-    const detalles = await detallesRepository.find({
-      where: {
-        solicitudId: solicitud.id,
-      },
-    });
+    const detalles = await detallesRepository
+      .createQueryBuilder("detalle")
+      .setLock("pessimistic_write")
+      .where("detalle.solicitudId = :solicitudId", { solicitudId: solicitud.id })
+      .orderBy("detalle.id", "ASC")
+      .getMany();
 
-    const totalSolicitado = detalles.reduce(
-      (total, item) => total + item.cantidadSolicitada,
+    const detalle = detalles.find((item) => item.id === movimiento.solicitudDetalleId);
+    if (!detalle) {
+      throw new ConflictException(
+        "El movimiento no corresponde a un bien de la solicitud.",
+      );
+    }
+
+    if (detalle.cantidadEntregada < movimiento.cantidad) {
+      throw new ConflictException(
+        "La cantidad entregada registrada no coincide con el movimiento que se intenta reversar.",
+      );
+    }
+
+    detalle.cantidadEntregada -= movimiento.cantidad;
+    detalle.cantidadPendiente += movimiento.cantidad;
+
+    // En una atención mixta, los rechazos forman parte de la decisión
+    // revertida. Cuando ya no quedan unidades entregadas activas en el pedido,
+    // también devolvemos sus rechazos a pendientes (no hay stock físico que
+    // devolver por esas unidades).
+    const noQuedanEntregas = detalles.every((item) => item.cantidadEntregada === 0);
+    if (noQuedanEntregas) {
+      for (const item of detalles) {
+        if (item.cantidadRechazada > 0) {
+          item.cantidadPendiente += item.cantidadRechazada;
+          item.cantidadRechazada = 0;
+        }
+      }
+    }
+
+    for (const item of detalles) {
+      if (
+        item.cantidadEntregada < 0 ||
+        item.cantidadRechazada < 0 ||
+        item.cantidadPendiente < 0 ||
+        item.cantidadEntregada + item.cantidadRechazada + item.cantidadPendiente !==
+          item.cantidadSolicitada
+      ) {
+        throw new ConflictException(
+          "La reversa no puede aplicarse porque las cantidades de la solicitud son inconsistentes.",
+        );
+      }
+    }
+
+    await detallesRepository.save(detalles);
+
+    const totalPendiente = detalles.reduce(
+      (total, item) => total + item.cantidadPendiente,
       0,
     );
     const totalEntregado = detalles.reduce(
       (total, item) => total + item.cantidadEntregada,
       0,
     );
+    const totalRechazado = detalles.reduce(
+      (total, item) => total + item.cantidadRechazada,
+      0,
+    );
 
-    solicitud.estado =
-      totalEntregado <= 0
-        ? EstadoSolicitud.PENDIENTE
-        : totalEntregado >= totalSolicitado
+    if (totalPendiente > 0) {
+      solicitud.estado =
+        totalEntregado + totalRechazado > 0
+          ? EstadoSolicitud.PARCIAL
+          : EstadoSolicitud.PENDIENTE;
+    } else {
+      solicitud.estado =
+        totalEntregado > 0
           ? EstadoSolicitud.ATENDIDA
-          : EstadoSolicitud.PARCIAL;
+          : EstadoSolicitud.RECHAZADA;
+    }
+
     solicitud.observacionAtencion = motivo;
-    solicitud.usuarioAtencionId = usuarioId;
+    // La reversa queda auditada por el movimiento nuevo. No registrar al
+    // usuario que revierte como si hubiese realizado una nueva entrega.
+    solicitud.usuarioAtencionId =
+      solicitud.estado === EstadoSolicitud.PENDIENTE
+        ? null
+        : solicitud.usuarioAtencionId;
     solicitud.atendidaAt =
       solicitud.estado === EstadoSolicitud.PENDIENTE
         ? null

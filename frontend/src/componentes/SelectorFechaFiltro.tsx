@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { CalendarDays } from "lucide-react";
 
 import {
   convertirTextoFechaAIso,
@@ -137,7 +138,7 @@ export default function SelectorFechaFiltro({
           onMouseDown={(evento) => evento.preventDefault()}
           onClick={() => setAbierto((estado) => !estado)}
         >
-          <span className="movimientos-fecha-filtro__marca" aria-hidden="true" />
+          <CalendarDays size={21} strokeWidth={1.8} aria-hidden="true" />
         </button>
 
         <input

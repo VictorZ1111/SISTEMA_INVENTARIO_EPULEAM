@@ -5,6 +5,7 @@ export interface SolicitudBackend {
   codigo: string;
   estado: "pendiente" | "parcial" | "atendida" | "rechazada";
   observacionSolicitante: string | null;
+  solicitudOrigenId?: string | null;
   observacionAtencion: string | null;
   createdAt: string;
   updatedAt: string;
@@ -58,6 +59,11 @@ export async function obtenerSolicitudesApi(esAdministrador: boolean) {
   return data;
 }
 
+export async function obtenerSolicitudesRecibidasApi() {
+  const { data } = await clienteApi.get<SolicitudBackend[]>("/solicitudes/recibidas");
+  return data;
+}
+
 export async function crearSolicitudApi(payload: CrearSolicitudPayload) {
   await clienteApi.post("/solicitudes", payload);
 }
@@ -92,5 +98,20 @@ export async function revertirSolicitudApi(id: string, motivo: string) {
     { motivo },
   );
 
+  return data;
+}
+
+export interface SolicitarAbastecimientoPayload {
+  detalles: Array<{ detalleId: string; cantidadSolicitada: number }>;
+  observacionSolicitante?: string;
+}
+
+export async function solicitarAbastecimientoApi(id: string, payload: SolicitarAbastecimientoPayload) {
+  const { data } = await clienteApi.post<SolicitudBackend>(`/solicitudes/${id}/abastecer`, payload);
+  return data;
+}
+
+export async function obtenerAbastecimientosApi(id: string) {
+  const { data } = await clienteApi.get<SolicitudBackend[]>(`/solicitudes/${id}/abastecimientos`);
   return data;
 }
