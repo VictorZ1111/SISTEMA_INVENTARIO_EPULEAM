@@ -23,14 +23,17 @@ import { Existencia } from "../inventario/entities/existencia.entity";
 import { Producto } from "../productos/entities/producto.entity";
 import { EstadoBienProducto } from "../productos/enums/estado-bien-producto.enum";
 import { EstadoProducto } from "../productos/enums/estado-producto.enum";
+import { TipoProducto } from "../productos/enums/tipo-producto.enum";
 import { EstadoUsuario } from "../usuarios/enums/estado-usuario.enum";
 import { RolUsuario } from "../usuarios/enums/rol-usuario.enum";
 import { DevolverStockSupervisorDto } from "./dto/devolver-stock-supervisor.dto";
+import { DevolverDesdeBodegaDto } from "./dto/devolver-desde-bodega.dto";
 import { DistribuirStockSupervisorDto } from "./dto/distribuir-stock-supervisor.dto";
 import { FiltrarMovimientosDto } from "./dto/filtrar-movimientos.dto";
 import { RegistrarAjusteDto } from "./dto/registrar-ajuste.dto";
 import { RegistrarEntradaDto } from "./dto/registrar-entrada.dto";
 import { RegistrarSalidaDto } from "./dto/registrar-salida.dto";
+import { RegistrarConsumoDto } from "./dto/registrar-consumo.dto";
 import { RegistrarTransferenciaDto } from "./dto/registrar-transferencia.dto";
 import { Movimiento } from "./entities/movimiento.entity";
 import { TipoMovimiento } from "./enums/tipo-movimiento.enum";
@@ -475,6 +478,131 @@ export class MovimientosService {
       },
     );
 
+    return this.buscarPorId(movimientoId);
+  }
+
+  /**
+   * Descuento operativo por uso de consumibles. No crea un Movimiento ni da de baja
+   * al producto maestro. Solo afecta las existencias de la ubicación autorizada.
+   */
+  async registrarConsumo(
+    dto: RegistrarConsumoDto,
+    usuario: UsuarioAutenticado,
+  ): Promise<void> {
+    if (usuario.rol !== RolUsuario.SUPERVISOR && usuario.rol !== RolUsuario.RESPONSABLE) {
+      throw new ForbiddenException("Solo el Supervisor o el Responsable pueden registrar consumos.");
+    }
+
+    await this.dataSource.transaction(async (administrador) => {
+      const existencias = administrador.getRepository(Existencia);
+      const existencia = await existencias.findOne({
+        where: { id: dto.existenciaId },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!existencia) {
+        throw new NotFoundException("No se encontró la existencia seleccionada.");
+      }
+      const [producto, bodega] = await Promise.all([
+        administrador.getRepository(Producto).findOne({ where: { id: existencia.productoId } }),
+        administrador.getRepository(Bodega).findOne({ where: { id: existencia.bodegaId } }),
+      ]);
+      if (!producto || !bodega) {
+        throw new NotFoundException("El consumible o su ubicación ya no están disponibles.");
+      }
+      this.validarProductoActivo(producto);
+      this.validarBodegaActiva(bodega);
+      if (producto.tipoProducto !== TipoProducto.CONSUMIBLE) {
+        throw new ConflictException("Esta acción solo se permite para consumibles.");
+      }
+      if (bodega.tipo !== TipoBodega.PRINCIPAL && bodega.tipo !== TipoBodega.SUCURSAL) {
+        throw new ForbiddenException("Solo se pueden usar consumibles de bodegas o sucursales finales.");
+      }
+      await this.validarAccesoBodegaOperativa(administrador, bodega, usuario);
+      if (existencia.cantidad < dto.cantidad) {
+        throw new ConflictException(`Stock insuficiente. Solo hay ${existencia.cantidad} unidades disponibles.`);
+      }
+      existencia.cantidad -= dto.cantidad;
+      await existencias.save(existencia);
+    });
+  }
+
+  /** Comprobación compartida por el consumo y la devolución desde bodegas finales. */
+  private async validarAccesoBodegaOperativa(
+    administrador: EntityManager,
+    bodega: Bodega,
+    usuario: UsuarioAutenticado,
+  ): Promise<void> {
+    if (usuario.rol !== RolUsuario.SUPERVISOR && usuario.rol !== RolUsuario.RESPONSABLE) {
+      throw new ForbiddenException("No tienes autorización para operar este inventario.");
+    }
+    const asignaciones = await administrador.getRepository(UsuarioBodega).find({
+      where: { usuarioId: usuario.id },
+      select: { bodegaId: true },
+    });
+    const idsAsignados = new Set(asignaciones.map((asignacion) => asignacion.bodegaId));
+    const directo = idsAsignados.has(bodega.id);
+    const sucursalSupervisada = usuario.rol === RolUsuario.SUPERVISOR &&
+      bodega.tipo === TipoBodega.SUCURSAL &&
+      Boolean(bodega.bodegaPadreId && idsAsignados.has(bodega.bodegaPadreId));
+    if (!directo && !sucursalSupervisada) {
+      throw new ForbiddenException("No tienes autorización para operar en este inventario.");
+    }
+    if (usuario.rol === RolUsuario.RESPONSABLE && bodega.tipo !== TipoBodega.SUCURSAL) {
+      throw new ForbiddenException("El Responsable solo puede operar en sus sucursales.");
+    }
+  }
+
+  /** Devolución desde una bodega final o sucursal hacia Inventario General. */
+  async devolverDesdeBodega(
+    dto: DevolverDesdeBodegaDto,
+    usuario: UsuarioAutenticado,
+  ): Promise<MovimientoPublico> {
+    if (usuario.rol !== RolUsuario.SUPERVISOR) {
+      throw new ForbiddenException("Solo el Supervisor puede devolver desde bodegas y sucursales.");
+    }
+    const movimientoId = await this.dataSource.transaction(async (administrador) => {
+      const existencias = administrador.getRepository(Existencia);
+      const origenExistencia = await existencias.findOne({
+        where: { id: dto.existenciaId },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!origenExistencia) throw new NotFoundException("No se encontró el bien seleccionado.");
+      const [producto, origen] = await Promise.all([
+        administrador.getRepository(Producto).findOne({ where: { id: origenExistencia.productoId } }),
+        administrador.getRepository(Bodega).findOne({ where: { id: origenExistencia.bodegaId } }),
+      ]);
+      if (!producto || !origen) throw new NotFoundException("El bien o su bodega no están disponibles.");
+      this.validarProductoActivo(producto);
+      this.validarBodegaActiva(origen);
+      if (origen.tipo !== TipoBodega.PRINCIPAL && origen.tipo !== TipoBodega.SUCURSAL) {
+        throw new ForbiddenException("La devolución debe originarse en una bodega o sucursal final.");
+      }
+      await this.validarAccesoBodegaOperativa(administrador, origen, usuario);
+      if (origenExistencia.cantidad < dto.cantidad) {
+        throw new ConflictException(`Stock insuficiente. Solo hay ${origenExistencia.cantidad} unidades disponibles.`);
+      }
+      const general = await administrador.getRepository(Bodega).findOne({
+        where: { tipo: TipoBodega.INVENTARIO_GENERAL, nombre: "Inventario General", estado: EstadoBodega.ACTIVA },
+      });
+      if (!general) throw new ConflictException("No se encontró el Inventario General activo.");
+      const destino = await this.bloquearOInicializarExistencia(administrador, producto.id, general.id);
+      origenExistencia.cantidad -= dto.cantidad;
+      destino.cantidad += dto.cantidad;
+      await existencias.save([origenExistencia, destino]);
+      const movimientos = administrador.getRepository(Movimiento);
+      const movimiento = await movimientos.save(movimientos.create({
+        tipo: TipoMovimiento.DEVOLUCION,
+        productoId: producto.id,
+        bodegaOrigenId: origen.id,
+        bodegaDestinoId: general.id,
+        usuarioId: usuario.id,
+        cantidad: dto.cantidad,
+        cantidadAnterior: null,
+        cantidadNueva: null,
+        observacion: this.normalizarObservacion(dto.observacion),
+      }));
+      return movimiento.id;
+    });
     return this.buscarPorId(movimientoId);
   }
 

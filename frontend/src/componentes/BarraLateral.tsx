@@ -4,6 +4,7 @@ import {
   ArrowLeftRight,
   BarChart3,
   ClipboardList,
+  FileText,
   LayoutDashboard,
   LogOut,
   Package,
@@ -159,6 +160,16 @@ function BarraLateral() {
               >
                 <ArrowLeftRight size={21} />
                 <span>Movimientos</span>
+              </NavLink>
+
+              <NavLink
+                to="/admin/actas"
+                className={({ isActive }) =>
+                  isActive ? "sidebar-link activo" : "sidebar-link"
+                }
+              >
+                <FileText size={21} />
+                <span>Actas</span>
               </NavLink>
 
               <NavLink

@@ -4,12 +4,14 @@ import {
   ArrowUpAZ,
   Paintbrush,
   Search,
+  MinusCircle,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import EncabezadoPagina from "../../componentes/EncabezadoPagina";
 import TablaBase from "../../componentes/TablaBase";
+import ModalConsumoConsumible from "../../componentes/ModalConsumoConsumible";
 import CampoDesplegable from "../../componentes/CampoDesplegable";
 
 import { useAuth } from "../../contexto/AuthContext";
@@ -117,7 +119,7 @@ function obtenerDiaOrden(fecha: string) {
 function MiBodegaResponsable() {
   const { usuarioActual } = useAuth();
   const { usuarios } = useUsuarios();
-  const { obtenerInventarioPorBodega, productos } = useInventario();
+  const { obtenerInventarioPorBodega, productos, recargarDatosInventario } = useInventario();
   const { categoriasActivas } = useConfiguracion();
 
   const bodegasPrincipales = useMemo(
@@ -136,6 +138,7 @@ function MiBodegaResponsable() {
   const [estadoFiltro, setEstadoFiltro] = useState<FiltroEstadoBien>("todos");
   const [orden, setOrden] = useState<OrdenBienes>("asc");
   const [detalleBien, setDetalleBien] = useState<InventarioBodega | null>(null);
+  const [consumoBien, setConsumoBien] = useState<InventarioBodega | null>(null);
 
   useEffect(() => {
     const bodegaGuardada = sessionStorage.getItem("epuleam_bodega_responsable");
@@ -456,14 +459,21 @@ function MiBodegaResponsable() {
                         </td>
                         <td>{item.fechaAsignacion}</td>
                         <td>
-                          <button
-                            className="boton-icono-tabla boton-icono-alerta"
-                            type="button"
-                            title="Ver información"
-                            onClick={() => setDetalleBien(item)}
-                          >
-                            !
-                          </button>
+                          <div className="acciones-tabla">
+                            <button
+                              className="boton-icono-tabla boton-icono-alerta"
+                              type="button"
+                              title="Ver información"
+                              onClick={() => setDetalleBien(item)}
+                            >
+                              !
+                            </button>
+                            {(item.producto?.tipoProducto ?? productos.find((producto) => producto.id === item.productoId)?.tipoProducto) === "consumible" && (
+                              <button className="boton-icono-tabla" type="button" title="Registrar baja por consumo" aria-label={`Registrar consumo de ${item.descripcion}`} onClick={() => setConsumoBien(item)}>
+                                <MinusCircle size={18} />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -536,6 +546,9 @@ function MiBodegaResponsable() {
             </div>
           </div>
         </div>
+      )}
+      {consumoBien && (
+        <ModalConsumoConsumible bien={consumoBien} alCerrar={() => setConsumoBien(null)} alCompletar={recargarDatosInventario} />
       )}
     </div>
   );

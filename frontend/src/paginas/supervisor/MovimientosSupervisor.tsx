@@ -1,7 +1,7 @@
 import {
   ArrowDownAZ,
   ArrowUpAZ,
-  FileText,
+  Download,
   Paintbrush,
   RotateCcw,
   Search,
@@ -429,10 +429,10 @@ function MovimientosSupervisor() {
                         <button
                           className="boton-icono-tabla"
                           type="button"
-                          title="Generar reporte PDF"
+                          title="Descargar reporte PDF"
                           onClick={() => generarReporteMovimientoPdf(movimiento)}
                         >
-                          <FileText size={18} />
+                          <Download size={18} />
                         </button>
 
                         {esMovimientoConReversa(movimiento) ? (

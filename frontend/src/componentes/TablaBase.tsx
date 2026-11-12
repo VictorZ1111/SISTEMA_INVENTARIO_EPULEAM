@@ -1,4 +1,5 @@
 import { Children, type ReactNode } from "react";
+import UleamLoader from "./UleamLoader";
 
 interface Props {
   titulo?: string;
@@ -76,7 +77,9 @@ function TablaBase({
             {estaVacia ? (
               <tr>
                 <td colSpan={columnas.length} className="tabla-vacia">
-                  {mensajeVacio ?? mensajeVacioPredeterminado}
+                  {mensajeVacio?.trim().toLowerCase().startsWith("cargando")
+                    ? <UleamLoader size={96} texto={mensajeVacio} />
+                    : mensajeVacio ?? mensajeVacioPredeterminado}
                 </td>
               </tr>
             ) : (

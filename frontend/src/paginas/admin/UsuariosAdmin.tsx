@@ -17,6 +17,7 @@ import { useMemo, useState, type FormEvent } from "react";
 
 import EncabezadoPagina from "../../componentes/EncabezadoPagina";
 import TablaBase from "../../componentes/TablaBase";
+import UleamLoader from "../../componentes/UleamLoader";
 
 import { useUsuarios } from "../../contexto/UsuariosContext";
 import { useAuth } from "../../contexto/AuthContext";
@@ -754,9 +755,9 @@ function UsuariosAdmin() {
         </div>
 
         {cargandoUsuarios && (
-          <p style={{ margin: "0 0 12px", color: "#64748b", fontWeight: 600 }}>
-            Cargando usuarios desde el servidor...
-          </p>
+          <div className="uleam-carga-en-seccion">
+            <UleamLoader size={93} texto="Cargando usuarios..." />
+          </div>
         )}
 
         <div className="usuarios-tabla-scroll">

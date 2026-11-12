@@ -315,12 +315,15 @@ export class ReversionesMovimientosService {
     existencia.cantidad += movimiento.cantidad;
     await existencias.save(existencia);
 
-    producto.estado = EstadoProducto.ACTIVO;
-    if (producto.estadoBien === EstadoBienProducto.BAJA) {
-      producto.estadoBien = EstadoBienProducto.BUENO;
+    if (movimiento.accion !== "baja_por_consumo") {
+      // Solo la baja administrativa desactiva y reactiva el producto maestro.
+      producto.estado = EstadoProducto.ACTIVO;
+      if (producto.estadoBien === EstadoBienProducto.BAJA) {
+        producto.estadoBien = EstadoBienProducto.BUENO;
+      }
+      producto.observacion = dto.motivo.trim();
+      await productos.save(producto);
     }
-    producto.observacion = dto.motivo.trim();
-    await productos.save(producto);
 
     const reversa = await movimientos.save(
       movimientos.create({

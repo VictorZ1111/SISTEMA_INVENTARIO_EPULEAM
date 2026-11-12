@@ -4,7 +4,7 @@ import {
 
   ArrowUpAZ,
 
-  FileText,
+  Download,
 
   Paintbrush,
 
@@ -906,13 +906,13 @@ function MovimientosAdmin() {
 
                           type="button"
 
-                          title="Generar reporte PDF"
+                          title="Descargar reporte PDF"
 
                           onClick={() => generarReporteMovimientoPdf(movimiento)}
 
                         >
 
-                          <FileText size={18} />
+                          <Download size={18} />
 
                         </button>
 

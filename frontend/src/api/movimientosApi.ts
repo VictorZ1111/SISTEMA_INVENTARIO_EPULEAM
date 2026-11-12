@@ -39,3 +39,20 @@ export async function reversarMovimientoApi(
 ) {
   await clienteApi.post(`/movimientos/${movimientoId}/revertir`, { motivo });
 }
+
+/** Descuenta unidades efectivamente utilizadas, preservando el producto maestro. */
+export async function registrarConsumoApi(datos: {
+  existenciaId: string;
+  cantidad: number;
+}): Promise<void> {
+  await clienteApi.post("/movimientos/consumo", datos);
+}
+
+/** Devuelve existencias de una bodega/sucursal del Supervisor al Inventario General. */
+export async function devolverDesdeBodegaApi(datos: {
+  existenciaId: string;
+  cantidad: number;
+  observacion?: string;
+}): Promise<void> {
+  await clienteApi.post("/movimientos/devolucion-bodega", datos);
+}

@@ -1,6 +1,8 @@
 import axios from "axios";
+import { imprimirReporteInstitucional } from "../../utilidades/marcaReportesHtml";
 import {
   Box,
+  CalendarDays,
   Building2,
   Download,
   Paintbrush,
@@ -228,6 +230,7 @@ function obtenerClaseIconoReporte(nombre: string, tipo: TipoReporte) {
 function construirTablaHtml(
   columnas: string[],
   filas: Array<Array<string | number>>,
+  clase = "",
 ) {
   const encabezados = columnas
     .map((columna) => `<th>${escaparHtml(columna)}</th>`)
@@ -244,8 +247,10 @@ function construirTablaHtml(
         .join("")
     : `<tr><td colspan="${columnas.length}">No existen registros para este periodo.</td></tr>`;
 
+  const atributoClase = clase ? ` class="${clase}"` : "";
+
   return `
-    <table>
+    <table${atributoClase}>
       <thead><tr>${encabezados}</tr></thead>
       <tbody>${cuerpo}</tbody>
     </table>
@@ -259,62 +264,13 @@ function imprimirDocumentoReporte(
   nombreCustodio = "Custodio asignado",
   soloFirmaAdministracion = false,
 ) {
-  const ventana = window.open("", "_blank", "width=1100,height=850");
-
-  if (!ventana) return false;
-
-  ventana.document.write(`
-    <!doctype html>
-    <html lang="es">
-      <head>
-        <meta charset="utf-8" />
-        <title>${escaparHtml(titulo)}</title>
-        <style>
-          * { box-sizing: border-box; }
-          body { margin: 0; padding: 28px; color: #0f172a; font-family: Arial, Helvetica, sans-serif; background: #fff; }
-          .encabezado { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: 18px; border-bottom: 2px solid #0f172a; margin-bottom: 22px; }
-          .encabezado h1 { margin: 0 0 6px; font-size: 22px; letter-spacing: .03em; }
-          .encabezado p { margin: 0; color: #475569; font-size: 13px; }
-          .marca { text-align: right; font-size: 12px; color: #475569; }
-          .resumen { margin: 0 0 18px; color: #334155; font-size: 12px; }
-          h2 { margin: 22px 0 10px; font-size: 15px; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 11px; }
-          th, td { border: 1px solid #94a3b8; padding: 7px 8px; text-align: left; vertical-align: top; }
-          th { background: #e2e8f0; color: #0f172a; font-weight: 700; }
-          .firmas { display: grid; grid-template-columns: repeat(2, 1fr); gap: 80px; margin-top: 56px; }
-          .firmas.firma-unica { grid-template-columns: minmax(240px, 420px); justify-content: center; }
-          .firma { text-align: center; color: #334155; font-size: 12px; }
-          .linea { border-top: 1px solid #0f172a; margin-bottom: 8px; }
-          @media print { body { padding: 18px; } }
-        </style>
-      </head>
-      <body>
-        <div class="encabezado">
-          <div>
-            <h1>${escaparHtml(titulo)}</h1>
-            <p>Periodo: ${escaparHtml(periodo)}</p>
-          </div>
-          <div class="marca">Sistema de Inventario<br />EPULEAM</div>
-        </div>
-        ${contenido}
-        <div class="firmas${soloFirmaAdministracion ? " firma-unica" : ""}">
-          ${
-            soloFirmaAdministracion
-              ? ""
-              : `<div class="firma"><div class="linea"></div>${escaparHtml(
-                  nombreCustodio,
-                )}</div>`
-          }
-          <div class="firma"><div class="linea"></div>Administración</div>
-        </div>
-      </body>
-    </html>
-  `);
-
-  ventana.document.close();
-  ventana.focus();
-  window.setTimeout(() => ventana.print(), 350);
-  return true;
+  return imprimirReporteInstitucional({
+    titulo,
+    periodo,
+    contenido,
+    firmas: soloFirmaAdministracion ? ["Administración"] : [nombreCustodio, "Administración"],
+    orientacion: "horizontal",
+  });
 }
 
 function obtenerMensajeError(error: unknown) {
@@ -549,6 +505,7 @@ function ReportesAdmin() {
           "Fecha",
         ],
         filasInventario,
+        "tabla-inventario",
       )}
       <h2>Movimientos del periodo</h2>
       ${construirTablaHtml(
@@ -563,6 +520,7 @@ function ReportesAdmin() {
           "Observación",
         ],
         filasMovimientos,
+        "tabla-movimientos",
       )}
     `;
   };
@@ -720,7 +678,8 @@ function ReportesAdmin() {
                   { valor: "rango", texto: "Entre periodos" },
                 ]}
                 ariaLabel="Seleccionar periodo"
-                mostrarIconoFiltro={false}
+                icono={CalendarDays}
+                mostrarIconoFiltro
                 ancho="100%"
               />
             </label>
@@ -797,7 +756,7 @@ function ReportesAdmin() {
                   })),
                 ]}
                 ariaLabel="Seleccionar custodio"
-                mostrarIconoFiltro={false}
+                mostrarIconoFiltro
                 ancho="100%"
               />
             </label>
@@ -813,7 +772,7 @@ function ReportesAdmin() {
                   { valor: "no_consumible", texto: "No consumibles" },
                 ]}
                 ariaLabel="Seleccionar tipo de bien"
-                mostrarIconoFiltro={false}
+                mostrarIconoFiltro
                 ancho="100%"
               />
             </label>

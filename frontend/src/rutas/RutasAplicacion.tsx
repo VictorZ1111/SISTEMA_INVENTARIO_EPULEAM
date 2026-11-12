@@ -14,6 +14,7 @@ import SolicitudesAdmin from "../paginas/admin/SolicitudesAdmin";
 import InventarioAdmin from "../paginas/admin/InventarioAdmin";
 import MovimientosAdmin from "../paginas/admin/MovimientosAdmin";
 import ReportesAdmin from "../paginas/admin/ReportesAdmin";
+import ActasAdmin from "../paginas/admin/ActasAdmin";
 import ConfiguracionAdmin from "../paginas/admin/ConfiguracionAdmin";
 
 import PanelResponsable from "../paginas/responsable/PanelResponsable";
@@ -135,6 +136,17 @@ function RutasAplicacion() {
           <RutaProtegida rolesPermitidos={["admin"]}>
             <LayoutPrincipal>
               <MovimientosAdmin />
+            </LayoutPrincipal>
+          </RutaProtegida>
+        }
+      />
+
+      <Route
+        path="/admin/actas"
+        element={
+          <RutaProtegida rolesPermitidos={["admin"]}>
+            <LayoutPrincipal>
+              <ActasAdmin />
             </LayoutPrincipal>
           </RutaProtegida>
         }

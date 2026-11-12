@@ -2,7 +2,7 @@
 
 Sistema institucional de gestión de inventario desarrollado para EPULEAM. El proyecto permite administrar bienes, existencias, bodegas, usuarios, solicitudes, movimientos, reportes y trazabilidad operativa mediante roles diferenciados.
 
-> Estado del documento: versión funcional avanzada en etapa de saneamiento, regresión y cierre técnico. Actualizado al 8 de noviembre de 2026.
+> Estado: versión funcional avanzada, etapa 5C.21 (revisión de consumo, devoluciones y actas). Actualizado el 12 de noviembre de 2026. Este README describe las funcionalidades presentes en el código; la aprobación funcional final exige probarlas con PostgreSQL.
 
 ---
 
@@ -10,7 +10,7 @@ Sistema institucional de gestión de inventario desarrollado para EPULEAM. El pr
 
 Centralizar el control de bienes institucionales y su distribución entre Inventario General, áreas principales y sucursales, manteniendo trazabilidad de entradas, transferencias, bajas, modificaciones, devoluciones, solicitudes y reversas.
 
-El sistema trabaja con tres perfiles operativos:
+El sistema trabaja con tres perfiles operativos, además de un Administrador General protegido que dispone de atribuciones administrativas especiales:
 
 - **Administrador**: controla la configuración general, usuarios, inventario, bodegas, solicitudes, movimientos y reportes.
 - **Supervisor**: administra las áreas que tiene asignadas, recibe bienes en un stock técnico intermedio y distribuye o devuelve esos bienes.
@@ -147,7 +147,9 @@ Funciones principales:
 - Recibir bienes entregados por el Administrador en **Productos en stock**.
 - Distribuir stock a la bodega final correspondiente.
 - Distribuir Gastronomía hacia sucursales Tasty.
-- Devolver bienes pendientes al Inventario General.
+- Devolver bienes pendientes al Inventario General desde Productos en stock.
+- Devolver al Inventario General unidades existentes en sus bodegas principales y sucursales autorizadas.
+- Descontar consumibles utilizados, sin crear movimientos.
 - Consultar y gestionar solicitudes permitidas por su rol.
 - Consultar movimientos asociados a sus bodegas.
 - Generar reportes de movimientos cuando corresponda.
@@ -171,6 +173,7 @@ Funciones principales:
 - Consultar movimientos relacionados con su asignación.
 - Crear o revisar solicitudes según el flujo operativo habilitado.
 - Consultar el estado de bienes y existencias disponibles.
+- Descontar las unidades utilizadas de consumibles en sus sucursales autorizadas, sin crear movimientos.
 
 ---
 
@@ -393,6 +396,29 @@ No se deben reemplazar errores específicos por un mensaje genérico de cantidad
 
 ---
 
+## 9.1 Uso de consumibles y devoluciones desde bodegas (etapa 5C.21)
+
+**Consumo / baja por uso**, para Supervisor y Responsable exclusivamente:
+
+- Disponible desde el inventario final de una bodega o sucursal, solo en productos de tipo `consumible`.
+- Se captura **únicamente la cantidad utilizada**; no exige observación ni registra un movimiento.
+- Descuenta la existencia en la ubicación seleccionada dentro de una transacción PostgreSQL con bloqueo pesimista; impide valores negativos o cantidades superiores al disponible.
+- No desactiva ni elimina el producto maestro. Si la cantidad llega a cero, la existencia permanece registrada con cantidad cero.
+- Supervisor: en áreas principales asignadas y sus sucursales. Responsable: solo en sucursales asignadas. El backend comprueba el permiso independientemente de la interfaz.
+- **Decisión funcional expresa:** el consumo no crea registro en `movimientos`. Por ello los reportes basados exclusivamente en movimientos tampoco contabilizarán estas unidades como movimiento histórico. No se debe presentar el consumo como devolución o baja administrativa.
+
+**Devolución desde inventario final**, exclusiva de Supervisor:
+
+- Nueva acción desde la tabla de inventario de sus bodegas principales y sucursales autorizadas.
+- Selecciona cantidad y, si lo desea, observación. El destino es **Inventario General**.
+- Descuenta en origen, incrementa en Inventario General y crea un movimiento `devolucion` de forma atómica.
+- Admite consumibles y no consumibles con stock disponible; no modifica solicitudes ya emitidas.
+- Es independiente de la devolución que sigue existiendo en **Productos en stock** (bodega técnica del Supervisor).
+
+Endpoints operativos (ambos protegidos por JWT y rol): `POST /api/movimientos/consumo` y `POST /api/movimientos/devolucion-bodega`.
+
+---
+
 ## 10. Usuarios y asignaciones
 
 Los usuarios manejan estados activos/inactivos y roles.
@@ -410,6 +436,16 @@ Desactivar significa bloquear o suspender su uso del sistema; no significa retir
 Las operaciones destructivas deben proteger la integridad del inventario y de las relaciones existentes.
 
 No se debe eliminar o reasignar información si ello deja existencias o trazabilidad sin relación válida.
+
+---
+
+### Horarios de acceso y excepciones temporales
+
+- El Administrador configura los días y las horas autorizadas de cada usuario; la hora oficial es **America/Guayaquil**.
+- El backend valida el horario al iniciar sesión y durante el uso de JWT. Fuera del horario se bloquea el acceso operativo.
+- Se pueden aplicar excepciones de **una hora**: permitir acceso extraordinario fuera del horario, o bloquear temporalmente dentro del horario; después vuelve a aplicar la programación normal.
+- Si un usuario está desactivado, las restricciones de estado siguen vigentes. Una excepción horaria no debe confundirse con activar o desactivar su cuenta.
+- Los códigos de acceso están protegidos. El Administrador General tiene protecciones especiales y se utiliza autorización de código para operaciones que la requieren.
 
 ---
 
@@ -452,7 +488,7 @@ reversa
 devolucion
 ```
 
-La interfaz normaliza algunos tipos técnicos para mostrarlos con una terminología empresarial más clara.
+La interfaz normaliza algunos tipos técnicos para mostrarlos con una terminología empresarial más clara. **Excepción:** el consumo de unidades de un consumible no genera un movimiento, por decisión operativa de esta versión.
 
 Ejemplos visibles:
 
@@ -536,6 +572,17 @@ El sistema utiliza selectores personalizados para mantener una interfaz uniforme
 - Año: selector visual de años por bloques.
 
 Todos los controles deben compartir la misma altura, borde, radio y lenguaje visual.
+
+---
+
+## 13.1 Actas y documentos institucionales
+
+- Pantalla `Administrador → Actas` con dos pestañas: **Recepción interna** y **Entrega**.
+- Filtros por día, mes, año, entre periodos, custodio y tipo de bien. La tabla muestra fecha, código, bien, cantidad, usuario, estado y acción de descarga.
+- **Descarga Word (.docx)** a partir de las plantillas aprobadas bajo `frontend/src/assets/plantillas/`, manteniendo logo oficial, franjas, texto institucional y espacios de firma. Ciudad fija: **Manta**.
+- En documentos, los valores comprobables (fecha, código, bien, cantidad, origen/destino cuando corresponde) se completan desde registros existentes. Firmantes, cargos, memorandos y demás campos no confirmados se conservan como marcadores de la plantilla para revisión con el cliente; no se inventan nombres.
+- **Reportes**: exportación a través de la vista de impresión/PDF del navegador con encabezado y franjas institucionales; tablas horizontales donde es necesario. Los documentos de actas actualmente se descargan en Word desde la pantalla de Actas.
+- La función de **préstamos** está planteada, pero no integrada y no debe aparecer como operación disponible.
 
 ---
 
@@ -830,6 +877,15 @@ Preferir estilos encapsulados por componente cuando una nueva UI pueda quedar ai
 12. Ejecutar pruebas finales con base de datos limpia o controlada.
 13. Crear commit/tag de versión estable.
 
+### Funcionalidades aplazadas / sujetas a validación
+
+- Préstamos de bienes y su devolución al cerrar préstamo: **no implementado**.
+- Alertas de bajo stock por Outlook: **pendiente de aprobación**.
+- Plantillas Word oficiales definitivas y texto/firma de las actas: pendiente de validación con el cliente (los textos actuales provienen de las imágenes de referencia aprobadas).
+- Integración de observabilidad/auditoría histórica del uso de consumibles: no se registra movimiento por la decisión funcional vigente.
+- Depuración final de CSS y mensajes de API, pruebas de roles, migraciones, horario, solicitudes y reversas sobre datos reales.
+- No borrar datos de prueba sin respaldo ni aprobación.
+
 ### Mejora de negocio expresamente aplazada
 
 Rediseñar cómo se representa en auditoría el paso por Stock Supervisor.
@@ -870,10 +926,12 @@ git commit -m "descripcion clara del cierre"
 git push
 ```
 
-La rama de saneamiento utilizada durante esta etapa ha sido:
+Ramas históricas de trabajo; confirma la actual mediante `git branch --show-current`:
 
 ```text
 etapa-4-saneamiento
+etapa-5b-actualizaciones
+etapa-5c-actas
 ```
 
 No mezclar cambios experimentales con una versión que ya fue validada sin crear antes un punto de recuperación.
@@ -900,3 +958,19 @@ La etapa puede considerarse cerrada cuando:
 ## 27. Nota final
 
 Este README describe el **estado funcional actual**, no el diseño futuro ideal. Las reglas de negocio que todavía están en discusión se identifican explícitamente como pendientes para evitar que una refactorización automática cambie comportamientos ya aceptados.
+
+---
+
+## 28. README oficial y limpieza de documentación
+
+El archivo `README.md` de la **raíz** es la única documentación general de funcionamiento de EPULEAM. Los archivos `backend/README.md` y `frontend/README.md` del ZIP original son los README predeterminados de NestJS y Vite, respectivamente, y no contienen instrucciones operativas propias del proyecto. **No son obligatorios para compilar ni ejecutar**. Se pueden retirar del repositorio después de confirmarlo en Git; no es necesario mantenerlos duplicados.
+
+## 29. Verificaciones recomendadas para la etapa 5C.21
+
+1. Consumible con 4 unidades: registrar consumo de 1; quedan 3, sin nuevo movimiento. Repetir con 0, 5, producto no consumible y rol Administrador: debe rechazar.
+2. Devolver 1 unidad desde una bodega asignada a Supervisor: disminuye origen, aumenta Inventario General y aparece **Devolución** en Movimientos.
+3. Devolver desde una sucursal del área asignada: misma operación; desde una sucursal ajena, el backend rechaza. Responsable no puede devolver.
+4. Comprobar los filtros de Actas y descargar los dos tipos de Word. Confirmar literalidad de los párrafos y que ciudad es Manta.
+5. Ejecutar `npm run build` en ambas carpetas, revisar migraciones pendientes y probar con PostgreSQL en el entorno local.
+
+**No requiere migración nueva** en esta etapa: se reutilizan existencias y movimientos existentes. La confirmación de funcionamiento corresponde a la prueba del usuario con la base de datos local.

@@ -1,0 +1,167 @@
+/* Indicador EP ULEAM: contornos animados, sin rellenos. */
+.uleam-loader {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  text-align: center;
+  vertical-align: middle;
+  color: #64748b;
+}
+.uleam-loader--horizontal { flex-direction: row; gap: 9px; }
+.uleam-loader__logo {
+  display: block;
+  flex: 0 0 auto;
+  max-width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.uleam-loader__texto {
+  color: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+/* Mantener los colores y las formas originales, solamente en contorno. */
+.uleam-forma--0, .uleam-forma--1 { color: #e72b36; }
+.uleam-forma--2, .uleam-forma--3 { color: #087fe0; }
+.uleam-forma--4, .uleam-forma--5, .uleam-forma--6,
+.uleam-forma--7, .uleam-forma--8 { color: #20b957; }
+.uleam-forma__trazo {
+  fill: none;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  opacity: 0;
+  filter: drop-shadow(0 0 2px currentColor);
+  animation-duration: 1.55s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+.uleam-forma--0 .uleam-forma__trazo { animation-name: uleam-linea-0; }
+@keyframes uleam-linea-0 {
+  0%, 0% { stroke-dashoffset: 100; opacity: 0; }
+  19%, 95% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 100; opacity: 0; }
+}
+
+.uleam-forma--1 .uleam-forma__trazo { animation-name: uleam-linea-1; }
+@keyframes uleam-linea-1 {
+  0%, 15% { stroke-dashoffset: 100; opacity: 0; }
+  33%, 95% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 100; opacity: 0; }
+}
+
+.uleam-forma--2 .uleam-forma__trazo { animation-name: uleam-linea-2; }
+@keyframes uleam-linea-2 {
+  0%, 26% { stroke-dashoffset: 100; opacity: 0; }
+  43%, 95% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 100; opacity: 0; }
+}
+
+.uleam-forma--3 .uleam-forma__trazo { animation-name: uleam-linea-3; }
+@keyframes uleam-linea-3 {
+  0%, 34% { stroke-dashoffset: 100; opacity: 0; }
+  53%, 95% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 100; opacity: 0; }
+}
+
+.uleam-forma--4 .uleam-forma__trazo { animation-name: uleam-linea-4; }
+@keyframes uleam-linea-4 {
+  0%, 46% { stroke-dashoffset: 100; opacity: 0; }
+  60%, 95% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 100; opacity: 0; }
+}
+
+.uleam-forma--5 .uleam-forma__trazo { animation-name: uleam-linea-5; }
+@keyframes uleam-linea-5 {
+  0%, 50% { stroke-dashoffset: 100; opacity: 0; }
+  64%, 95% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 100; opacity: 0; }
+}
+
+.uleam-forma--6 .uleam-forma__trazo { animation-name: uleam-linea-6; }
+@keyframes uleam-linea-6 {
+  0%, 54% { stroke-dashoffset: 100; opacity: 0; }
+  68%, 95% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 100; opacity: 0; }
+}
+
+.uleam-forma--7 .uleam-forma__trazo { animation-name: uleam-linea-7; }
+@keyframes uleam-linea-7 {
+  0%, 58% { stroke-dashoffset: 100; opacity: 0; }
+  72%, 95% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 100; opacity: 0; }
+}
+
+.uleam-forma--8 .uleam-forma__trazo { animation-name: uleam-linea-8; }
+@keyframes uleam-linea-8 {
+  0%, 62% { stroke-dashoffset: 100; opacity: 0; }
+  77%, 95% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 100; opacity: 0; }
+}
+
+/* Compatibilidad con los indicadores de carga ya conectados. */
+.login-boton .uleam-loader { color: #fff; font-weight: 800; }
+.uleam-loader--horizontal .uleam-loader__texto { font-size: inherit; }
+.tabla-vacia .uleam-loader { margin: 6px auto; }
+.uleam-carga-en-seccion { display: flex; justify-content: center; padding: 14px 0; }
+
+/* Ingreso: el logo reemplaza al botón sin alterar el formulario. */
+.login-loader-sustituto {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 96px;
+  margin-top: 6px;
+  padding: 4px 0;
+}
+.login-loader-sustituto .uleam-loader__texto,
+.uleam-apartado-cargando .uleam-loader__texto { display: none; }
+
+/* Centrado únicamente dentro del panel de contenido derecho. */
+.contenido-principal .uleam-apartado-cargando {
+  width: 100%;
+  min-height: calc(100dvh - 68px);
+  display: grid;
+  place-items: center;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background-color: #f8fafc;
+}
+.contenido-principal .uleam-apartado-contenido { width: 100%; min-width: 0; }
+.contenido-principal .uleam-apartado-contenido--espera { display: none; }
+@media (max-width: 900px) {
+  .contenido-principal .uleam-apartado-cargando {
+    min-height: calc(100dvh - 48px);
+  }
+}
+
+/* Marcas diagonales pequeñas de contorno; solo durante la carga. */
+.contenido-principal .uleam-apartado-cargando::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("../assets/logos/marca-agua-loader.svg");
+  background-repeat: repeat;
+  background-size: 170px 120px;
+}
+.contenido-principal .uleam-apartado-cargando > .uleam-loader {
+  position: relative;
+  z-index: 1;
+}
+
+/* Accesibilidad: si se desactivan animaciones, el contorno sigue visible. */
+@media (prefers-reduced-motion: reduce) {
+  .uleam-forma__trazo {
+    animation: none !important;
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}

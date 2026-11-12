@@ -1,0 +1,35 @@
+/* Loader institucional centralizado: el logo se traza sin anillos externos. */
+.epuleam-loader-fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #101114;
+  isolation: isolate;
+}
+.epuleam-loader-marca {
+  display: block;
+  width: min(340px, 76vw);
+  max-width: 100%;
+  line-height: 0;
+}
+.epuleam-loader-marca img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  user-select: none;
+}
+.epuleam-loader-lectura {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .epuleam-loader-marca { width: min(235px, 70vw); }
+}

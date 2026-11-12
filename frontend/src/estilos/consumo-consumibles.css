@@ -1,0 +1,21 @@
+/* Baja por consumo, sin modificar el diseño compartido de los modales existentes. */
+.consumo-modal-fondo { z-index: 10800; padding: 18px; }
+.consumo-modal { width: min(560px, 100%); max-height: min(92dvh, 760px); overflow-y: auto; }
+.consumo-formulario { display: grid; gap: 17px; padding: 23px 28px 24px; }
+.consumo-resumen { display: grid; grid-template-columns: 1.4fr 1fr .65fr; gap: 10px; }
+.consumo-resumen > div { border: 1px solid #e2e8f0; border-radius: 9px; padding: 10px; background: #f8fafc; min-width: 0; }
+.consumo-resumen span, .consumo-resumen strong { display: block; }
+.consumo-resumen span { color: #64748b; font-size: 12px; font-weight: 650; margin-bottom: 4px; }
+.consumo-resumen strong { color: #0f172a; font-size: 13px; overflow-wrap: anywhere; }
+.consumo-campo { display: grid; gap: 7px; font-size: 13px; font-weight: 700; color: #334155; }
+.consumo-campo input, .consumo-campo textarea { width:100%; border:1px solid #dbe3ee; background:white; color:#0f172a; border-radius:9px; padding:12px 13px; font:inherit; font-weight:500; box-sizing:border-box; }
+.consumo-campo input:focus, .consumo-campo textarea:focus { outline:2px solid #bfdbfe; border-color:#3b82f6; }
+.consumo-campo textarea { resize:vertical; min-height:84px; }
+.consumo-aviso { font-size:12px; color:#64748b; line-height:1.5; margin:0; }
+.consumo-error { color:#b91c1c; border:1px solid #fecaca; border-radius:9px; background:#fff7f7; padding:10px 12px; margin:0; font-size:13px; }
+.consumo-acciones { display:flex; justify-content:flex-end; gap:10px; padding-top:15px; border-top:1px solid #e5e7eb; }
+@media(max-width:550px){.consumo-resumen{grid-template-columns:1fr 1fr}.consumo-resumen>div:first-child{grid-column:1/-1}.consumo-formulario{padding:16px}.consumo-modal-fondo{padding:8px}}
+
+/* Las tres acciones del inventario supervisor permanecen en una sola fila. */
+.pagina-responsable .acciones-tabla { flex-wrap: nowrap; align-items: center; }
+.pagina-responsable .acciones-tabla .boton-icono-tabla { flex: 0 0 auto; }

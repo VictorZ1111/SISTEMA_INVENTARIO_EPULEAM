@@ -5,6 +5,8 @@ import {
   FileText,
   Paintbrush,
   Search,
+  MinusCircle,
+  PackageMinus,
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -13,6 +15,8 @@ import { useLocation } from "react-router-dom";
 import CampoDesplegable from "../../componentes/CampoDesplegable";
 import EncabezadoPagina from "../../componentes/EncabezadoPagina";
 import TablaBase from "../../componentes/TablaBase";
+import ModalConsumoConsumible from "../../componentes/ModalConsumoConsumible";
+import ModalDevolucionBodega from "../../componentes/ModalDevolucionBodega";
 
 import { useAuth } from "../../contexto/AuthContext";
 import {
@@ -132,7 +136,7 @@ function BodegasSupervisor() {
   const { usuarioActual } = useAuth();
   const { usuarios } = useUsuarios();
   const location = useLocation();
-  const { obtenerInventarioPorBodega, productos } = useInventario();
+  const { obtenerInventarioPorBodega, productos, recargarDatosInventario } = useInventario();
   const { categoriasActivas } = useConfiguracion();
 
   const bodegasPrincipales = useMemo(
@@ -160,6 +164,8 @@ function BodegasSupervisor() {
   const [estadoFiltro, setEstadoFiltro] = useState<FiltroEstadoBien>("todos");
   const [orden, setOrden] = useState<OrdenBienes>("asc");
   const [detalleBien, setDetalleBien] = useState<InventarioBodega | null>(null);
+  const [consumoBien, setConsumoBien] = useState<InventarioBodega | null>(null);
+  const [devolucionBien, setDevolucionBien] = useState<InventarioBodega | null>(null);
 
   const inventarioUsuario = useMemo(() => {
     if (!bodegaSeleccionada) return [];
@@ -544,14 +550,24 @@ function BodegasSupervisor() {
                         </td>
                         <td>{item.fechaAsignacion}</td>
                         <td>
-                          <button
-                            className="boton-icono-tabla boton-icono-alerta"
-                            type="button"
-                            title="Ver información"
-                            onClick={() => setDetalleBien(item)}
-                          >
-                            !
-                          </button>
+                          <div className="acciones-tabla">
+                            <button
+                              className="boton-icono-tabla boton-icono-alerta"
+                              type="button"
+                              title="Ver información"
+                              onClick={() => setDetalleBien(item)}
+                            >
+                              !
+                            </button>
+                            {(item.producto?.tipoProducto ?? productos.find((producto) => producto.id === item.productoId)?.tipoProducto) === "consumible" && (
+                              <button className="boton-icono-tabla" type="button" title="Registrar baja por consumo" aria-label={`Registrar consumo de ${item.descripcion}`} onClick={() => setConsumoBien(item)}>
+                                <MinusCircle size={18} />
+                              </button>
+                            )}
+                            <button className="boton-icono-tabla" type="button" title="Devolver al Inventario General" aria-label={`Devolver ${item.descripcion} al Inventario General`} onClick={() => setDevolucionBien(item)}>
+                              <PackageMinus size={18} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -616,6 +632,12 @@ function BodegasSupervisor() {
             </div>
           </div>
         </div>
+      )}
+      {consumoBien && (
+        <ModalConsumoConsumible bien={consumoBien} alCerrar={() => setConsumoBien(null)} alCompletar={recargarDatosInventario} />
+      )}
+      {devolucionBien && (
+        <ModalDevolucionBodega bien={devolucionBien} alCerrar={() => setDevolucionBien(null)} alCompletar={recargarDatosInventario} />
       )}
     </div>
   );

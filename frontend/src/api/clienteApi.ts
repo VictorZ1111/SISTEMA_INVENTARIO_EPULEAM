@@ -22,7 +22,9 @@ clienteApi.interceptors.request.use((configuracion) => {
 // Traducción centralizada de errores técnicos. Las validaciones de negocio en
 // español se conservan; no se exponen SQL, tablas, rutas ni restricciones de BD.
 clienteApi.interceptors.response.use(
-  (respuesta) => respuesta,
+  (respuesta) => {
+    return respuesta;
+  },
   (error: unknown) => {
     if (axios.isAxiosError(error)) {
       if (!error.response) {

@@ -16,11 +16,13 @@ import { RolesGuard } from "../auth/guards/roles.guard";
 import type { UsuarioAutenticado } from "../auth/interfaces/usuario-autenticado.interface";
 import { RolUsuario } from "../usuarios/enums/rol-usuario.enum";
 import { DevolverStockSupervisorDto } from "./dto/devolver-stock-supervisor.dto";
+import { DevolverDesdeBodegaDto } from "./dto/devolver-desde-bodega.dto";
 import { DistribuirStockSupervisorDto } from "./dto/distribuir-stock-supervisor.dto";
 import { FiltrarMovimientosDto } from "./dto/filtrar-movimientos.dto";
 import { RegistrarAjusteDto } from "./dto/registrar-ajuste.dto";
 import { RegistrarEntradaDto } from "./dto/registrar-entrada.dto";
 import { RegistrarSalidaDto } from "./dto/registrar-salida.dto";
+import { RegistrarConsumoDto } from "./dto/registrar-consumo.dto";
 import { RegistrarTransferenciaDto } from "./dto/registrar-transferencia.dto";
 import { RevertirMovimientoDto } from "./dto/revertir-movimiento.dto";
 import {
@@ -114,6 +116,25 @@ export class MovimientosController {
       dto,
       usuario,
     );
+  }
+
+  @Post("devolucion-bodega")
+  @Roles(RolUsuario.SUPERVISOR)
+  devolverDesdeBodega(
+    @Body() dto: DevolverDesdeBodegaDto,
+    @UsuarioActual() usuario: UsuarioAutenticado,
+  ): Promise<MovimientoPublico> {
+    return this.movimientosService.devolverDesdeBodega(dto, usuario);
+  }
+
+  /** El consumo reduce existencias sin crear un movimiento. */
+  @Post("consumo")
+  @Roles(RolUsuario.SUPERVISOR, RolUsuario.RESPONSABLE)
+  registrarConsumo(
+    @Body() dto: RegistrarConsumoDto,
+    @UsuarioActual() usuario: UsuarioAutenticado,
+  ): Promise<void> {
+    return this.movimientosService.registrarConsumo(dto, usuario);
   }
 
   @Post("salida")

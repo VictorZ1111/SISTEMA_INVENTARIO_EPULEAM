@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../contexto/AuthContext";
+import UleamLoader from "../../componentes/UleamLoader";
 
 import imagenFondo from "../../assets/imagenes/EP.png";
 import logoEpuleam from "../../assets/logos/EPULEAM.png";
@@ -11,6 +12,8 @@ import "../../estilos/login.css";
 
 const DOMINIO_CORREO = "@epuleam.com";
 const REGEX_CODIGO = /^[A-Za-z]{2}\d{5}[^A-Za-z0-9]$/;
+// El usuario pidió apreciar al menos un ciclo del logo tras pulsar Ingresar.
+const TIEMPO_MINIMO_LOADER_INGRESO_MS = 1650;
 
 function InicioSesion() {
   const navigate = useNavigate();
@@ -29,13 +32,14 @@ function InicioSesion() {
   const [enviando, setEnviando] = useState(false);
 
   useEffect(() => {
-    if (!cargandoSesion && estaAutenticado && usuarioActual) {
+    if (!enviando && !cargandoSesion && estaAutenticado && usuarioActual) {
       navigate(obtenerRutaPorRol(usuarioActual.rol), {
         replace: true,
       });
     }
   }, [
     cargandoSesion,
+    enviando,
     estaAutenticado,
     usuarioActual,
     navigate,
@@ -68,13 +72,12 @@ function InicioSesion() {
 
     setMensajeError("");
     setEnviando(true);
+    const inicio = Date.now();
+    let rutaDestino = "";
 
     try {
       const usuario = await iniciarSesion(correoCompleto, codigoAcceso);
-
-      navigate(obtenerRutaPorRol(usuario.rol), {
-        replace: true,
-      });
+      rutaDestino = obtenerRutaPorRol(usuario.rol);
     } catch (error) {
       setMensajeError(
         error instanceof Error
@@ -82,7 +85,17 @@ function InicioSesion() {
           : "No fue posible iniciar sesión.",
       );
     } finally {
+      // El servidor responde en paralelo: solo se mantiene visible el logo
+      // el tiempo restante para que el usuario vea el efecto de dibujo.
+      const restante = Math.max(0, TIEMPO_MINIMO_LOADER_INGRESO_MS - (Date.now() - inicio));
+      if (restante > 0) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, restante));
+      }
       setEnviando(false);
+    }
+
+    if (rutaDestino) {
+      navigate(rutaDestino, { replace: true });
     }
   };
 
@@ -179,13 +192,19 @@ function InicioSesion() {
               <div className="mensaje-error-login">{mensajeError}</div>
             )}
 
-            <button
-              className="login-boton"
-              type="submit"
-              disabled={enviando || cargandoSesion}
-            >
-              {enviando ? "Ingresando..." : "Ingresar"}
-            </button>
+            {enviando ? (
+              <div className="login-loader-sustituto" aria-live="polite">
+                <UleamLoader size={118} texto="Ingresando..." />
+              </div>
+            ) : (
+              <button
+                className="login-boton"
+                type="submit"
+                disabled={cargandoSesion}
+              >
+                Ingresar
+              </button>
+            )}
           </form>
         </div>
       </section>
