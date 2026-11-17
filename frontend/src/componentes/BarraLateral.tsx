@@ -1,3 +1,4 @@
+import { nombreVisualUsuario } from "../utilidades/nombresVisuales";
 import { useEffect, useState } from "react";
 import { obtenerSolicitudesRecibidasApi } from "../api/solicitudesApi";
 import {
@@ -312,6 +313,7 @@ function BarraLateral() {
 
         <div className="datos-usuario">
           <h3>{obtenerNombreRol()}</h3>
+          <p title={usuarioActual?.nombre || ""}>{nombreVisualUsuario(usuarioActual?.nombre || "")}</p>
         </div>
 
         <button

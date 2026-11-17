@@ -25,7 +25,6 @@ import TablaBase from "../../componentes/TablaBase";
 import { useConfiguracion } from "../../contexto/ConfiguracionContext";
 import { useUsuarios } from "../../contexto/UsuariosContext";
 import {
-  esSucursalTasty,
   formatearNombresUsuarios,
   obtenerResponsablesSucursal,
   obtenerSupervisoresBodega,
@@ -204,9 +203,18 @@ function BodegasAdmin() {
     [bodegasSistema, gastronomia],
   );
 
+  const sucursalesOtrasAreas = useMemo(
+    () => bodegasSistema.filter((bodega) =>
+      bodega.tipo === "sucursal" &&
+      bodega.nombre !== "Sucursal Limpieza" && bodega.nombre !== "Sucursal Oficina" &&
+      !sucursalesTastyEditadas.some((sucursal) => sucursal.id === bodega.id),
+    ),
+    [bodegasSistema, sucursalesTastyEditadas],
+  );
+
   const bodegasDisponibles: Bodega[] = useMemo(
-    () => [...bodegasListado, ...sucursalesTastyEditadas],
-    [bodegasListado, sucursalesTastyEditadas],
+    () => [...bodegasListado, ...sucursalesTastyEditadas, ...sucursalesOtrasAreas],
+    [bodegasListado, sucursalesTastyEditadas, sucursalesOtrasAreas],
   );
 
   const bodegaSeleccionada = id
@@ -216,12 +224,17 @@ function BodegasAdmin() {
   const esGastronomia =
     bodegaSeleccionada?.nombre.toLowerCase() === "gastronomía";
 
-  const esBodegaSeleccionadaSucursalTasty = Boolean(
-    bodegaSeleccionada &&
-      sucursalesTastyEditadas.some(
-        (sucursal) => sucursal.id === bodegaSeleccionada.id
+  const sucursalesDelArea = bodegaSeleccionada?.tipo === "principal"
+    ? bodegasDisponibles.filter((bodega) =>
+        bodega.tipo === "sucursal" &&
+        bodega.nombre !== "Sucursal Limpieza" && bodega.nombre !== "Sucursal Oficina" &&
+        String(bodega.bodegaPadreId) === String(bodegaSeleccionada.id),
       )
-  );
+    : [];
+
+  const bodegaPadreSeleccionada = bodegaSeleccionada?.bodegaPadreId
+    ? bodegasListado.find((bodega) => String(bodega.id) === String(bodegaSeleccionada.bodegaPadreId))
+    : undefined;
 
   const filtrosInventarioActivos =
     busquedaInventario.trim() !== "" ||
@@ -279,8 +292,8 @@ function BodegasAdmin() {
   };
 
   const volverDesdeDetalle = () => {
-    if (esBodegaSeleccionadaSucursalTasty && gastronomia) {
-      navigate(`/admin/bodegas/${gastronomia.id}`);
+    if (bodegaPadreSeleccionada) {
+      navigate(`/admin/bodegas/${bodegaPadreSeleccionada.id}`);
       return;
     }
 
@@ -628,7 +641,7 @@ function BodegasAdmin() {
                   </strong>
                 </div>
 
-                {esSucursalTasty(bodegaSeleccionada.nombre) && (
+                {bodegaSeleccionada.tipo === "sucursal" && (
                   <div>
                     <span
                       style={{
@@ -861,11 +874,11 @@ function BodegasAdmin() {
           </div>
         </section>
 
-        {esGastronomia && (
+        {sucursalesDelArea.length > 0 && (
           <section className="seccion-dashboard">
             <div className="seccion-dashboard-header">
               <div>
-                <h2>Sucursales Tasty</h2>
+                <h2>{esGastronomia ? "Sucursales Tasty" : `Sucursales de ${bodegaSeleccionada?.nombre}`}</h2>
                 <p>
                   Selecciona una sucursal para revisar su inventario individual.
                 </p>
@@ -880,7 +893,7 @@ function BodegasAdmin() {
                 alignItems: "stretch",
               }}
             >
-              {sucursalesTastyEditadas.map((sucursal) => (
+              {sucursalesDelArea.map((sucursal) => (
                 <button
                   key={sucursal.id}
                   type="button"
@@ -904,8 +917,8 @@ function BodegasAdmin() {
                       width: "40px",
                       height: "40px",
                       borderRadius: "12px",
-                      background: "#f97316",
-                      color: "#ffffff",
+                      background: obtenerColorIconoBodega(sucursal.nombre).background,
+                      color: obtenerColorIconoBodega(sucursal.nombre).color,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -913,7 +926,7 @@ function BodegasAdmin() {
                       flexShrink: 0,
                     }}
                   >
-                    <Utensils size={19} />
+                    {obtenerIconoBodega(sucursal)}
                   </div>
 
                   <h3

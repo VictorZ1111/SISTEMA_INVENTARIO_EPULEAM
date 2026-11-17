@@ -11,13 +11,14 @@ import { useNavigate } from "react-router-dom";
 
 import CampoDesplegable from "../../componentes/CampoDesplegable";
 import EncabezadoPagina from "../../componentes/EncabezadoPagina";
+import { nombreVisualUsuario } from "../../utilidades/nombresVisuales";
 import TablaBase from "../../componentes/TablaBase";
 
 import { useAuth } from "../../contexto/AuthContext";
 import {
   limpiarPrefijoBodega as limpiarNombreBodega,
   obtenerBodegasPrincipalesUsuario,
-  obtenerSucursalesTastyUsuario,
+  obtenerSucursalesUsuario,
 } from "../../dominio/bodegas";
 import {
   esBienVisible,
@@ -86,7 +87,7 @@ function PanelSupervisor() {
     [usuarioActual]
   );
   const sucursalesTasty = useMemo(
-    () => obtenerSucursalesTastyUsuario(usuarioActual),
+    () => obtenerSucursalesUsuario(usuarioActual).filter((nombre) => nombre.startsWith("Tasty ")),
     [usuarioActual]
   );
 
@@ -178,7 +179,7 @@ function PanelSupervisor() {
   return (
     <div className="pagina-admin pagina-responsable pagina-supervisor-inicio">
       <EncabezadoPagina
-        titulo="Inicio"
+        titulo={`Bienvenido, ${nombreVisualUsuario(usuarioActual?.nombre || "Usuario")}`}
         descripcion="Consulta el Inventario General y accede a tus bodegas asignadas."
       />
 
@@ -376,8 +377,8 @@ function PanelSupervisor() {
       <section className="seccion-dashboard seccion-compacta">
         <div className="seccion-dashboard-header">
           <div>
-            <h2>Sucursales Tasty</h2>
-            <p>Accede únicamente a las sucursales gastronómicas habilitadas.</p>
+            <h2>Sucursales asignadas</h2>
+            <p>Accede a las sucursales habilitadas para tu usuario.</p>
           </div>
         </div>
 
@@ -406,7 +407,7 @@ function PanelSupervisor() {
           </div>
         ) : (
           <div className="responsable-bodega-vacia">
-            No tienes asignada ninguna sucursal de Tasty.
+            No tienes sucursales asignadas.
           </div>
         )}
       </section>

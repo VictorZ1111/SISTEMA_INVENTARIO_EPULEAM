@@ -1,0 +1,33 @@
+/* Detalle de usuario: datos y horario en paralelo, asignaciones abajo. */
+.usuario-detalle-modal { max-width: 1100px !important; }
+.usuario-detalle-contenido { padding: 18px 25px 25px; }
+.usuario-detalle-presentacion { display: flex; align-items: center; gap: 16px; padding: 16px 18px; margin-bottom: 15px; border: 1px solid #e2e8f0; border-radius: 16px; background: #f8fafc; }
+.usuario-detalle-avatar { flex: 0 0 52px; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: #111; color: white; font-weight: 800; font-size: 20px; }
+.usuario-detalle-presentacion h3 { font-size: 19px; color: #0f172a; font-weight: 800; margin: 0 0 3px; }
+.usuario-detalle-presentacion p { color: #64748b; margin: 0; overflow-wrap: anywhere; }
+.usuario-detalle-paneles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: stretch; }
+.usuario-detalle-panel { padding: 16px; border: 1px solid #e2e8f0; border-radius: 15px; background: white; min-width: 0; }
+.usuario-detalle-panel h3 { margin: 0 0 12px; font-size: 16px; color: #0f172a; }
+.usuario-detalle-campos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.usuario-detalle-campos .detalle-usuario-card { padding: 11px 13px; background: #f8fafc; min-width: 0; }
+.usuario-detalle-campos .detalle-usuario-card p { overflow-wrap: anywhere; font-size: 14px; }
+.usuario-detalle-card-ancho { grid-column: 1 / -1; }
+.usuario-detalle-horarios { display: grid; grid-template-columns: 1fr; gap: 5px; }
+.usuario-detalle-horario { display: flex; justify-content: space-between; align-items: center; padding: 8px 11px; gap: 9px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 13px; }
+.usuario-detalle-horario span { color: #475569; font-weight: 650; }
+.usuario-detalle-horario strong { color: #0f172a; font-size: 13px; white-space: nowrap; }
+.usuario-detalle-horario .usuario-horario-sin-acceso { color: #b91c1c; }
+.usuario-detalle-horario-libre, .usuario-detalle-sin-asignaciones { color: #64748b; margin: 0; }
+.usuario-detalle-asignaciones { margin-top: 14px; }
+@media (max-width: 800px) { .usuario-detalle-paneles { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .usuario-detalle-campos { grid-template-columns: 1fr; } }
+
+/* Ficha de usuario: altura contenida y scroll solo si la pantalla no alcanza. */
+.usuario-detalle-modal { max-height: min(90dvh, 740px); display: flex; flex-direction: column; overflow: hidden; }
+.usuario-detalle-modal .modal-header { flex-shrink: 0; padding-top: 17px; padding-bottom: 17px; }
+.usuario-detalle-modal .usuario-detalle-contenido { flex: 1; min-height: 0; overflow-y: auto; padding-top: 12px; }
+.usuario-detalle-modal .usuario-detalle-presentacion { padding: 10px 14px; margin-bottom: 10px; }
+.usuario-detalle-modal .usuario-detalle-panel { padding: 12px 14px; }
+.usuario-detalle-modal .usuario-detalle-campos .detalle-usuario-card { padding: 8px 11px; }
+.usuario-detalle-modal .usuario-detalle-horario { padding: 5px 10px; }
+.usuario-detalle-modal .usuario-detalle-asignaciones { margin-top: 10px; }

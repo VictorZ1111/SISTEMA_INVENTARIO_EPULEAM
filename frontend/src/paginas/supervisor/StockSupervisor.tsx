@@ -305,11 +305,9 @@ function StockSupervisor() {
       (item) => item.area.id === areaId,
     );
 
-    if (
-      stockArea &&
-      stockArea.destinos.length === 1 &&
-      stockArea.destinos[0].id === stockArea.area.id
-    ) {
+    // Limpieza y Oficina conservan su área como destino inicial, aunque
+    // ahora también permitan distribuir hacia una sucursal responsable.
+    if (stockArea?.destinos.some((destino) => destino.id === stockArea.area.id)) {
       setDestinosSeleccionados([stockArea.area.id]);
       return;
     }

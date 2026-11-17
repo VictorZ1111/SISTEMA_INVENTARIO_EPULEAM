@@ -2,9 +2,12 @@ import { Box, Building2, Paintbrush, Utensils } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import EncabezadoPagina from "../../componentes/EncabezadoPagina";
+import { useAuth } from "../../contexto/AuthContext";
+import { nombreVisualUsuario } from "../../utilidades/nombresVisuales";
 import { useUsuarios } from "../../contexto/UsuariosContext";
 
 function PanelAdmin() {
+  const { usuarioActual } = useAuth();
   const navigate = useNavigate();
   const { bodegasDisponibles } = useUsuarios();
 
@@ -15,13 +18,14 @@ function PanelAdmin() {
     (bodega) => bodega.tipo === "principal",
   );
   const sucursalesTastyAdmin = bodegasDisponibles.filter(
-    (bodega) => bodega.tipo === "sucursal",
+    (bodega) => bodega.tipo === "sucursal" &&
+      bodega.nombre !== "Sucursal Limpieza" && bodega.nombre !== "Sucursal Oficina",
   );
 
   return (
     <div className="pagina-admin">
       <EncabezadoPagina
-        titulo="Panel de Administración"
+        titulo={`Bienvenido, ${nombreVisualUsuario(usuarioActual?.nombre || "Usuario")}`}
         descripcion="Accesos directos a las secciones principales del sistema"
       />
 

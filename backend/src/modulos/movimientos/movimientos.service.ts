@@ -547,8 +547,13 @@ export class MovimientosService {
     if (!directo && !sucursalSupervisada) {
       throw new ForbiddenException("No tienes autorización para operar en este inventario.");
     }
-    if (usuario.rol === RolUsuario.RESPONSABLE && bodega.tipo !== TipoBodega.SUCURSAL) {
-      throw new ForbiddenException("El Responsable solo puede operar en sus sucursales.");
+    if (usuario.rol === RolUsuario.RESPONSABLE) {
+      const permitida = bodega.tipo === TipoBodega.SUCURSAL ||
+        (bodega.tipo === TipoBodega.PRINCIPAL &&
+          (bodega.nombre === "Bodega Limpieza" || bodega.nombre === "Bodega Oficina"));
+      if (!permitida) {
+        throw new ForbiddenException("El Responsable solo puede operar en las ubicaciones asignadas.");
+      }
     }
   }
 
@@ -1099,7 +1104,16 @@ export class MovimientosService {
       },
     });
 
-    return sucursales.length > 0 ? sucursales : [area];
+    // Limpieza y Oficina son destinos físicos únicos; no distribuir hacia
+    // las sucursales auxiliares antiguas, que permanecen solo por historial.
+    const sucursalesOperativas = sucursales.filter((sucursal) =>
+      sucursal.nombre !== "Sucursal Limpieza" && sucursal.nombre !== "Sucursal Oficina"
+    );
+    if (["Bodega Limpieza", "Bodega Oficina"].includes(area.nombre)) {
+      return [area];
+    }
+
+    return sucursalesOperativas.length > 0 ? sucursalesOperativas : [area];
   }
 
   private normalizarObservacion(

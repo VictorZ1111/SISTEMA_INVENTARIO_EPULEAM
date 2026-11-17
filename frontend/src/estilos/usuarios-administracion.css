@@ -1,0 +1,192 @@
+/* Gestión de usuarios: ajuste encapsulado, sin modificar las tablas de otros módulos. */
+.usuarios-filtros {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+.usuarios-filtros .buscador-input-contenedor { flex: 1 1 180px; min-width: 150px; }
+.usuarios-filtros .campo-desplegable { flex: 0 0 auto; }
+.usuarios-filtros .campo-desplegable button { white-space: nowrap; }
+
+.usuarios-tabla-scroll .tabla-card .tabla-contenedor {
+  min-height: clamp(280px, calc(100dvh - 470px), 450px);
+  max-height: clamp(300px, calc(100dvh - 335px), 535px);
+  overflow-x: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.usuarios-tabla-scroll table { width: 100%; min-width: 940px; table-layout: fixed; }
+.usuarios-tabla-scroll th:nth-child(1) { width: 23%; }
+.usuarios-tabla-scroll th:nth-child(2) { width: 24%; }
+.usuarios-tabla-scroll th:nth-child(3) { width: 13%; }
+.usuarios-tabla-scroll th:nth-child(4) { width: 21%; }
+.usuarios-tabla-scroll th:nth-child(5) { width: 19%; }
+.usuarios-tabla-scroll td { overflow-wrap: anywhere; padding-top: 12px; padding-bottom: 12px; }
+.usuarios-tabla-scroll th { padding-top: 13px; padding-bottom: 13px; }
+.usuarios-tabla-scroll th:last-child, .usuarios-tabla-scroll td:last-child { padding-left: 10px; padding-right: 10px; }
+.usuarios-tabla-scroll .acciones-tabla { gap: 5px; flex-wrap: nowrap; justify-content: flex-start; }
+.usuarios-tabla-scroll .acciones-tabla .boton-icono-tabla { flex: 0 0 34px; }
+.usuarios-tabla-scroll .acciones-tabla .boton-icono-tabla:disabled { opacity: .38; cursor: not-allowed; }
+.usuario-badge-acceso { display: inline-flex; white-space: normal; width: fit-content; max-width: 100%; line-height: 1.35; text-align: center; }
+.usuario-badge-temporal { border: 0; }
+
+/* Ficha: datos y horario en paralelo; asignaciones en una fila de ancho completo. */
+.modal-usuario-compacto { display: flex; flex-direction: column; overflow: hidden; }
+.modal-usuario-compacto .formulario-usuario-compacto {
+  padding: 0;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  flex-direction: column;
+}
+.modal-usuario-compacto .usuario-form-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  flex: 1 1 auto;
+  padding: 20px 24px;
+  align-content: start;
+}
+.modal-usuario-compacto .usuario-form-columna { min-width: 0; align-self: start; }
+.modal-usuario-compacto .usuario-form-columna > h3,
+.modal-usuario-compacto .usuario-asignaciones-panel > h3 {
+  color: #0f172a; font-size: 16px; font-weight: 750; margin: 0 0 15px;
+}
+.modal-usuario-compacto .usuario-form-datos,
+.modal-usuario-compacto .usuario-form-horarios {
+  background: #fff;
+  border: 1px solid #e0e7f0;
+  border-radius: 16px;
+  padding: 18px;
+}
+.modal-usuario-compacto .usuario-datos-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.modal-usuario-compacto .usuario-datos-grid > .campo-formulario { min-width: 0; }
+.modal-usuario-compacto .usuario-datos-grid .usuario-datos-ancho { grid-column: 1 / -1; }
+.modal-usuario-compacto .usuario-datos-grid .boton-principal { display: inline-flex; gap: 7px; align-items: center; justify-content: center; }
+.modal-usuario-compacto .correo-institucional-compacto span { padding-inline: 8px; font-size: 12px; }
+.modal-usuario-compacto .usuario-form-horarios .horario-usuario-panel { border: 0; padding: 0 !important; background: transparent; }
+/* Un día por fila, con horas de entrada y salida independientes. */
+.modal-usuario-compacto .usuario-form-horarios .horario-usuario-lista,
+.modal-usuario-compacto .usuario-form-horarios .horario-usuario-lista.horario-todos-los-dias {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 6px !important;
+}
+.modal-usuario-compacto .usuario-form-horarios .horario-usuario-dia {
+  display: grid !important;
+  grid-template-columns: 115px minmax(0, 1fr) !important;
+  gap: 10px !important;
+  padding: 5px 9px !important;
+  min-height: 44px;
+}
+.modal-usuario-compacto .usuario-form-horarios .horario-usuario-dia-nombre {
+  min-width: 0 !important;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.modal-usuario-compacto .usuario-form-horarios .horario-usuario-rango {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 14px minmax(0, 1fr);
+  align-items: center;
+  justify-content: stretch;
+  gap: 8px !important;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.modal-usuario-compacto .usuario-form-horarios .horario-usuario-rango .selector-hora-epuleam {
+  flex: 1 1 0;
+  width: 100%;
+  min-width: 0;
+}
+.modal-usuario-compacto .usuario-form-horarios .horario-usuario-rango .selector-hora-epuleam__boton {
+  height: 38px;
+  padding: 0 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  box-shadow: none;
+  background: #fff;
+  gap: 5px;
+}
+.modal-usuario-compacto .usuario-form-horarios .horario-usuario-rango .selector-hora-epuleam__boton:focus-visible {
+  outline: 2px solid #64748b;
+  outline-offset: -2px;
+}
+.modal-usuario-compacto .usuario-form-horarios .horario-usuario-separador { text-align: center; }
+.modal-usuario-compacto .usuario-form-horarios .horario-usuario-encabezado small { font-size: 11px; }
+.modal-usuario-compacto .usuario-form-horarios .horario-usuario-libre { display: none; }
+/* Sección de asignaciones situada debajo de ambos paneles y extendida a todo el modal. */
+.modal-usuario-compacto .usuario-form-asignaciones {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0;
+  padding: 17px 18px;
+  border: 1px solid #e0e7f0;
+  border-radius: 16px;
+  background: #fff;
+}
+.modal-usuario-compacto .usuario-asignaciones-opciones { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
+.modal-usuario-compacto .usuario-asignacion-opcion {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid #dbe1ea;
+  border-radius: 12px;
+  min-width: 0;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
+  transition: border-color .15s ease, background .15s ease;
+}
+.modal-usuario-compacto .usuario-asignacion-opcion input { width: 17px; height: 17px; min-height: 0; padding: 0; flex-shrink: 0; accent-color: #111827; }
+.modal-usuario-compacto .usuario-asignacion-opcion span { overflow-wrap: anywhere; }
+.modal-usuario-compacto .usuario-asignacion-opcion.seleccionada { border-color: currentColor; }
+.modal-usuario-compacto .usuario-asignacion-opcion:not(.seleccionada) { background: #fff; }
+.modal-usuario-compacto .usuario-asignacion-opcion:hover { border-color: #94a3b8; }
+.modal-usuario-compacto .modal-acciones-usuario { margin: 0; padding: 15px 24px; }
+@media (max-width: 1080px) {
+  .modal-usuario-compacto .usuario-form-layout { grid-template-columns: 1fr; }
+  .modal-usuario-compacto .usuario-asignaciones-opciones { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .usuarios-filtros { flex-wrap: wrap; }
+}
+@media (max-width: 700px) {
+  .modal-usuario-compacto .usuario-asignaciones-opciones { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 650px) {
+  .modal-usuario-compacto .usuario-datos-grid { grid-template-columns: 1fr; }
+  .modal-usuario-compacto .usuario-form-horarios .horario-usuario-dia { grid-template-columns: minmax(0, 1fr) !important; }
+}
+@media (max-width: 450px) {
+  .modal-usuario-compacto .usuario-asignaciones-opciones { grid-template-columns: 1fr; }
+}
+
+/* Interacciones: la mano aparece en acciones y elementos seleccionables. */
+.usuarios-filtros button:not(:disabled),
+.usuarios-tabla-scroll button:not(:disabled),
+.modal-usuario-compacto button:not(:disabled),
+.modal-usuario-compacto input[type="checkbox"]:not(:disabled),
+.modal-usuario-compacto .usuario-asignacion-opcion,
+.usuarios-confirmacion button:not(:disabled) { cursor: pointer; }
+.usuarios-filtros button:disabled,
+.usuarios-tabla-scroll button:disabled,
+.modal-usuario-compacto button:disabled,
+.usuarios-confirmacion button:disabled { cursor: not-allowed; }
+/* Confirmación consistente con el resto de los modales de EPULEAM. */
+.usuarios-confirmacion-fondo { z-index: 180; }
+.usuarios-confirmacion { max-width: 470px; }
+.usuarios-confirmacion-cuerpo { padding: 20px 28px 12px; }
+.usuarios-confirmacion-cuerpo strong { display: block; color: #0f172a; overflow-wrap: anywhere; }
+.usuarios-confirmacion .modal-acciones { display: flex; justify-content: flex-end; gap: 12px; padding: 16px 28px 22px; }
+
+/* Acciones confirmadas: capa superior al formulario, con un solo cierre seguro. */
+.usuario-confirmacion-fondo { z-index: 2000; }
+.usuario-confirmacion-modal { width: min(94vw, 480px); max-width: 480px; }
+.usuario-confirmacion-modal .modal-acciones { padding: 16px 24px 24px; }
+.usuario-confirmacion-nombre { margin: 17px 24px 0; padding: 13px 15px; border-radius: 11px; background: #f4f7fb; font-weight: 750; color: #0f172a; }

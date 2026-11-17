@@ -21,6 +21,7 @@ export function obtenerTituloBodega(bodega: string) {
   const nombre = limpiarPrefijoBodega(bodega);
   const normalizado = normalizarBodega(bodega);
 
+  if (nombre.startsWith("Sucursal ")) return nombre;
   if (normalizado.includes("limpieza")) return "Bodega Limpieza";
   if (normalizado.includes("oficina")) return "Bodega Oficina";
 

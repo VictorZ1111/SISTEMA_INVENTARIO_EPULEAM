@@ -312,12 +312,13 @@ export class InventarioService {
           id: area.id,
           nombre: area.nombre,
         },
-        destinos: (sucursalesPorArea.get(area.id) || [area]).map(
-          (destino) => ({
-            id: destino.id,
-            nombre: destino.nombre,
-          }),
-        ),
+        destinos: (() => {
+          const sucursalesArea = sucursalesPorArea.get(area.id) || [];
+          const opciones = ["Bodega Limpieza", "Bodega Oficina"].includes(area.nombre)
+            ? [area, ...sucursalesArea]
+            : sucursalesArea.length > 0 ? sucursalesArea : [area];
+          return opciones.map((destino) => ({ id: destino.id, nombre: destino.nombre }));
+        })(),
         producto: this.convertirProductoInventario(existencia),
       };
     });

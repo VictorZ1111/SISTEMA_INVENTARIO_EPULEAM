@@ -201,15 +201,17 @@ Gastronomía
 
 **Importante:** el nombre institucional visible debe ser `Gastronomía`, no `Gastronomía Tasty`.
 
-### Sucursales de Gastronomía
+### Sucursales y ubicaciones operativas
 
 ```text
-Tasty 1
-Tasty 2
-Tasty 3
-Tasty 4
-Tasty 5
+Gastronomía → Tasty 1, Tasty 2, Tasty 3, Tasty 4 y Tasty 5
+Limpieza → Bodega Limpieza (inventario físico único)
+Oficina → Bodega Oficina (inventario físico único)
 ```
+
+El Supervisor se asigna a la bodega principal. El Responsable puede recibir **Tasty 1–5**, **Bodega Limpieza** y/o **Bodega Oficina**, incluso en combinación. En Limpieza y Oficina comparte la ubicación física con el Supervisor, pero **nunca sus permisos**: su rol conserva únicamente las acciones de Responsable.
+
+Las antiguas `Sucursal Limpieza` y `Sucursal Oficina` no se generan de nuevo ni se ofrecen como destinos operativos. **No se eliminan sus filas históricas automáticamente**: si ya tienen existencias, solicitudes, movimientos o asignaciones, deben revisarse antes de una migración de datos. Para cuentas antiguas asignadas a esas sucursales, entrar en **Editar usuario**, comprobar las ubicaciones reales y guardar para reemplazar la asignación. No se necesita migración de esquema para el nuevo modelo.
 
 ### Stock técnico del Supervisor
 
@@ -404,7 +406,7 @@ No se deben reemplazar errores específicos por un mensaje genérico de cantidad
 - Se captura **únicamente la cantidad utilizada**; no exige observación ni registra un movimiento.
 - Descuenta la existencia en la ubicación seleccionada dentro de una transacción PostgreSQL con bloqueo pesimista; impide valores negativos o cantidades superiores al disponible.
 - No desactiva ni elimina el producto maestro. Si la cantidad llega a cero, la existencia permanece registrada con cantidad cero.
-- Supervisor: en áreas principales asignadas y sus sucursales. Responsable: solo en sucursales asignadas. El backend comprueba el permiso independientemente de la interfaz.
+- Supervisor: en áreas principales asignadas y sus sucursales. Responsable: en Tasty o en las bodegas reales Limpieza/Oficina que tenga asignadas. El backend comprueba el permiso independientemente de la interfaz.
 - **Decisión funcional expresa:** el consumo no crea registro en `movimientos`. Por ello los reportes basados exclusivamente en movimientos tampoco contabilizarán estas unidades como movimiento histórico. No se debe presentar el consumo como devolución o baja administrativa.
 
 **Devolución desde inventario final**, exclusiva de Supervisor:
@@ -421,7 +423,7 @@ Endpoints operativos (ambos protegidos por JWT y rol): `POST /api/movimientos/co
 
 ## 10. Usuarios y asignaciones
 
-Los usuarios manejan estados activos/inactivos y roles.
+Los usuarios conservan en la base de datos los estados de cuenta `activo` e `inactivo`. La interfaz distingue `Activo`, `Inhabilitado`, `Fuera de horario`, `Activo temporalmente` e `Inhabilitado temporalmente`, según la cuenta, el horario y la excepción vigente. Los filtros «Activos» y «Desactivados» agrupan según el acceso efectivo. El formulario de usuario separa visualmente nombres y apellidos, pero sigue utilizando el campo `nombre` existente.
 
 Un Supervisor puede tener varias áreas principales asignadas.
 
@@ -443,7 +445,7 @@ No se debe eliminar o reasignar información si ello deja existencias o trazabil
 
 - El Administrador configura los días y las horas autorizadas de cada usuario; la hora oficial es **America/Guayaquil**.
 - El backend valida el horario al iniciar sesión y durante el uso de JWT. Fuera del horario se bloquea el acceso operativo.
-- Se pueden aplicar excepciones de **una hora**: permitir acceso extraordinario fuera del horario, o bloquear temporalmente dentro del horario; después vuelve a aplicar la programación normal.
+- Se pueden aplicar excepciones de **dos horas**: permitir acceso extraordinario fuera del horario, o bloquear temporalmente dentro del horario; después vuelve a aplicar la programación normal.
 - Si un usuario está desactivado, las restricciones de estado siguen vigentes. Una excepción horaria no debe confundirse con activar o desactivar su cuenta.
 - Los códigos de acceso están protegidos. El Administrador General tiene protecciones especiales y se utiliza autorización de código para operaciones que la requieren.
 
@@ -974,3 +976,12 @@ El archivo `README.md` de la **raíz** es la única documentación general de fu
 5. Ejecutar `npm run build` en ambas carpetas, revisar migraciones pendientes y probar con PostgreSQL en el entorno local.
 
 **No requiere migración nueva** en esta etapa: se reutilizan existencias y movimientos existentes. La confirmación de funcionamiento corresponde a la prueba del usuario con la base de datos local.
+
+
+## 30. Ajustes de interfaz y permisos — Etapa 5D.06
+
+- Gestión de Usuarios: recuperada la confirmación de guardar cambios; detalle compacto y códigos de acceso protegidos mediante **hash bcrypt**, no reversibles. El código histórico **no se puede visualizar**; solo se puede restablecer con autorización del Administrador General.
+- Inventario General: «Agregar» unidades solicita confirmación posterior y registra una entrada usando la operación ya existente. Detalles de usuarios y bienes ajustados para reducir desplazamientos.
+- Inicio: saludo con primer nombre y primer apellido aproximado. Los nombres completos se conservan en la base y documentos; para identificar apellidos sin ambigüedad en casos de tres o más nombres, en el futuro conviene separar nombres y apellidos en el modelo persistente.
+- **Advertencia de transición:** comprobar y reasignar los registros antiguos de `Sucursal Limpieza` y `Sucursal Oficina`; este parche no mueve ni elimina existencias históricas. Conservar respaldo de PostgreSQL antes de saneamiento.
+- Verificar `npm run build` en backend y frontend y probar las solicitudes de un Responsable asignado a Bodega Limpieza o Bodega Oficina antes de considerar estable la etapa.

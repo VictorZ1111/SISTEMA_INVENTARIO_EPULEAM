@@ -82,6 +82,9 @@ export class AsignacionesService {
     "Tasty 3",
     "Tasty 4",
     "Tasty 5",
+    // Limpieza y Oficina se asignan como bodegas reales al Responsable,
+    // sin crear otra ubicación física.
+
   ]);
 
   constructor(
@@ -404,15 +407,15 @@ export class AsignacionesService {
       }
 
       if (usuario.rol === RolUsuario.RESPONSABLE) {
-        const permitida =
-          bodega.tipo === TipoBodega.SUCURSAL &&
-          this.sucursalesResponsablePermitidas.has(
-            bodega.nombre,
-          );
+        const esTasty = bodega.tipo === TipoBodega.SUCURSAL &&
+          this.sucursalesResponsablePermitidas.has(bodega.nombre);
+        const esAreaCompartida = bodega.tipo === TipoBodega.PRINCIPAL &&
+          (bodega.nombre === "Bodega Limpieza" || bodega.nombre === "Bodega Oficina");
+        const permitida = esTasty || esAreaCompartida;
 
         if (!permitida) {
           throw new ConflictException(
-            "Un Responsable solo puede recibir sucursales Tasty 1 a Tasty 5.",
+            "Un Responsable solo puede recibir Tasty 1–5, Bodega Limpieza o Bodega Oficina.",
           );
         }
       }

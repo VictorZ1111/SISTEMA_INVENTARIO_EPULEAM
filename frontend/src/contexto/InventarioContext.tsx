@@ -94,6 +94,7 @@ interface InventarioContexto {
   editarProducto: (
     id: string | number,
     productoActualizado: Omit<Producto, "id" | "fechaRegistro">,
+    opciones?: { sinAjusteCantidad?: boolean },
   ) => Promise<ResultadoOperacionInventario>;
   desactivarProducto: (id: string | number) => Promise<boolean>;
   eliminarProducto: (datos: { id: string | number; observacion?: string }) => Promise<boolean>;
@@ -368,7 +369,8 @@ export function InventarioProvider({ children }: Props) {
 
   const editarProducto = async (
     id: string | number,
-    productoActualizado: Omit<Producto, "id" | "fechaRegistro">
+    productoActualizado: Omit<Producto, "id" | "fechaRegistro">,
+    opciones?: { sinAjusteCantidad?: boolean },
   ): Promise<ResultadoOperacionInventario> => {
     const productoOriginal =
       productos.find((producto) => producto.id === id) ||
@@ -389,7 +391,7 @@ export function InventarioProvider({ children }: Props) {
     }
 
     try {
-      const cambiaCantidad = productoActualizado.cantidad !== productoOriginal.cantidad;
+      const cambiaCantidad = !opciones?.sinAjusteCantidad && productoActualizado.cantidad !== productoOriginal.cantidad;
       const bodegaAjuste = cambiaCantidad
         ? await buscarBodegaPorNombre(productoOriginal.ubicacion)
         : null;

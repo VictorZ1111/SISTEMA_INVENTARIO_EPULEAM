@@ -9,13 +9,16 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import TablaBase from "../../componentes/TablaBase";
 import CampoDesplegable from "../../componentes/CampoDesplegable";
+import "../../estilos/inventario-formularios.css";
 
 import { useConfiguracion } from "../../contexto/ConfiguracionContext";
 import { clienteApi } from "../../api/clienteApi";
+import { registrarEntradaInventarioGeneralApi } from "../../api/movimientosApi";
+import axios from "axios";
 import { useUsuarios } from "../../contexto/UsuariosContext";
 import {
   obtenerCustodioAsignado,
@@ -189,6 +192,7 @@ function InventarioAdmin() {
     productos,
     agregarProducto,
     editarProducto,
+    recargarDatosInventario,
     eliminarProducto,
     distribuirProducto,
     distribuirAutomaticamenteConsumible,
@@ -205,6 +209,13 @@ function InventarioAdmin() {
     useState<Producto | null>(null);
   const [productoBaja, setProductoBaja] = useState<Producto | null>(null);
   const [observacionBaja, setObservacionBaja] = useState("");
+  const [productoEntrada, setProductoEntrada] = useState<Producto | null>(null);
+  const [cantidadEntrada, setCantidadEntrada] = useState("1");
+  const [guardandoEntrada, setGuardandoEntrada] = useState(false);
+  const [pendienteConfirmarEntrada, setPendienteConfirmarEntrada] = useState(false);
+  const guardandoEntradaRef = useRef(false);
+  const [confirmandoEdicion, setConfirmandoEdicion] = useState(false);
+  const guardandoEdicionRef = useRef(false);
 
   const [busqueda, setBusqueda] = useState("");
   const [categoriaFiltro, setCategoriaFiltro] = useState("todas");
@@ -518,6 +529,7 @@ function InventarioAdmin() {
   };
 
   const cerrarModalEditar = () => {
+    setConfirmandoEdicion(false);
     setProductoEditar(null);
     setFormularioProducto(formularioProductoInicial);
   };
@@ -526,8 +538,6 @@ function InventarioAdmin() {
     event.preventDefault();
 
     if (!productoEditar) return;
-
-    const cantidad = Number(formularioProducto.cantidad);
 
     if (!formularioProducto.codigo.trim()) {
       mostrarMensaje("error", "El código del bien es obligatorio.");
@@ -553,15 +563,18 @@ function InventarioAdmin() {
     }
 
 
-    if (Number.isNaN(cantidad) || cantidad < 0) {
-      mostrarMensaje("error", "La cantidad debe ser válida.");
-      return;
-    }
+    setConfirmandoEdicion(true);
+  };
 
-    const editado = await editarProducto(productoEditar.id, {
+  const confirmarGuardarEdicion = async () => {
+    if (!productoEditar || guardandoEdicionRef.current) return;
+    guardandoEdicionRef.current = true;
+    setConfirmandoEdicion(false);
+    try {
+      const editado = await editarProducto(productoEditar.id, {
       codigo: formularioProducto.codigo.trim(),
       descripcion: formularioProducto.descripcion.trim(),
-      cantidad,
+      cantidad: productoEditar.cantidad,
       tipoProducto: formularioProducto.tipoProducto,
       empresa:
         formularioProducto.tipoProducto === "no_consumible"
@@ -585,7 +598,7 @@ function InventarioAdmin() {
       unidad: "Unidad",
       observacion: formularioProducto.observacion.trim(),
       estado: productoEditar.estado,
-    });
+    }, { sinAjusteCantidad: true });
 
     if (!editado.ok) {
       mostrarMensaje(
@@ -595,8 +608,13 @@ function InventarioAdmin() {
       return;
     }
 
-    cerrarModalEditar();
-    mostrarMensaje("exito", "Bien actualizado correctamente.");
+      cerrarModalEditar();
+      mostrarMensaje("exito", "Bien actualizado correctamente.");
+    } catch {
+      mostrarMensaje("error", "No se pudo actualizar el bien. Inténtalo nuevamente.");
+    } finally {
+      guardandoEdicionRef.current = false;
+    }
   };
 
   const abrirModalDistribuir = (producto: Producto) => {
@@ -909,6 +927,67 @@ function InventarioAdmin() {
     return true;
   };
 
+  const abrirModalEntrada = (producto: Producto) => {
+    setProductoEntrada(producto);
+    setCantidadEntrada("1");
+  };
+
+  const cerrarModalEntrada = () => {
+    if (guardandoEntradaRef.current) return;
+    setProductoEntrada(null);
+    setCantidadEntrada("1");
+    setPendienteConfirmarEntrada(false);
+  };
+
+  const solicitarConfirmacionEntrada = (evento: FormEvent<HTMLFormElement>) => {
+    evento.preventDefault();
+    const cantidad = Number(cantidadEntrada);
+    if (!Number.isSafeInteger(cantidad) || cantidad < 1) {
+      mostrarMensaje("error", "Ingresa una cantidad entera mayor que cero.");
+      return;
+    }
+    setPendienteConfirmarEntrada(true);
+  };
+
+  const confirmarEntrada = async () => {
+    if (!productoEntrada || guardandoEntradaRef.current) return;
+    const cantidad = Number(cantidadEntrada);
+    if (!Number.isSafeInteger(cantidad) || cantidad < 1) {
+      mostrarMensaje("error", "Ingresa una cantidad entera mayor que cero.");
+      return;
+    }
+    const inventarioGeneral = bodegasSistema.find(
+      (bodega) => bodega.tipo === "inventario_general" && bodega.estado === "activa",
+    );
+    if (!inventarioGeneral) {
+      mostrarMensaje("error", "No se encontró el Inventario General. Actualiza la página e inténtalo nuevamente.");
+      return;
+    }
+    guardandoEntradaRef.current = true;
+    setGuardandoEntrada(true);
+    try {
+      await registrarEntradaInventarioGeneralApi({
+        productoId: String(productoEntrada.id),
+        bodegaDestinoId: String(inventarioGeneral.id),
+        cantidad,
+        observacion: `Ingreso adicional de ${cantidad} unidades del bien ${productoEntrada.codigo}.`,
+      });
+      setProductoEntrada(null);
+      setCantidadEntrada("1");
+      setPendienteConfirmarEntrada(false);
+      await recargarDatosInventario().catch(() => undefined);
+      mostrarMensaje("exito", "Entrada registrada correctamente. El movimiento quedó guardado.");
+    } catch (error) {
+      const respuesta = axios.isAxiosError(error) ? error.response?.data?.message : undefined;
+      const mensaje = Array.isArray(respuesta) ? respuesta.join(" ") : respuesta;
+      mostrarMensaje("error", typeof mensaje === "string" && mensaje.trim()
+        ? mensaje : "No se pudo registrar la entrada. Comprueba la conexión y vuelve a intentarlo.");
+    } finally {
+      guardandoEntradaRef.current = false;
+      setGuardandoEntrada(false);
+    }
+  };
+
   const confirmarBajaProducto = async () => {
     if (!productoBaja) return;
 
@@ -1013,8 +1092,8 @@ function InventarioAdmin() {
           }
 
           .tabla-inventario-scroll {
-            height: calc(100vh - 272px);
-            max-height: calc(100vh - 272px);
+            height: calc(100vh - 255px);
+            max-height: calc(100vh - 255px);
             min-height: 280px;
             overflow-y: auto !important;
             overflow-x: hidden;
@@ -1631,6 +1710,17 @@ function InventarioAdmin() {
                         </button>
 
                         <button
+                          className="boton-icono-tabla"
+                          type="button"
+                          title="Registrar entrada de unidades"
+                          aria-label={`Agregar unidades al bien ${item.descripcion}`}
+                          disabled={!item.productoOriginal || item.productoOriginal.estado === "inactivo"}
+                          onClick={() => item.productoOriginal && abrirModalEntrada(item.productoOriginal)}
+                        >
+                          <Plus size={18} aria-hidden="true" />
+                        </button>
+
+                        <button
                           className="boton-icono-tabla boton-icono-peligro"
                           type="button"
                           title="Dar de baja"
@@ -1653,127 +1743,67 @@ function InventarioAdmin() {
 
       {productoDetalle && (
         <div className="modal-fondo">
-          <div className="modal-contenedor modal-detalle-producto">
+          <div className="modal-contenedor modal-detalle-producto inventario-detalle-modal">
             <div className="modal-header">
-              <div>
-                <h2>Información del bien</h2>
-              </div>
-
-              <button
-                className="modal-cerrar"
-                type="button"
-                onClick={() => setProductoDetalle(null)}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="detalle-producto-cabecera">
-              <div className="detalle-producto-resumen">
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <h3>
-                    {productoDetalle.descripcion}
-                  </h3>
-
-                  <p>
-                    Código: {productoDetalle.codigo}
-                  </p>
-                </div>
-
-                <span
-                  className={`badge-bien badge-bien-${productoDetalle.estadoBien}`}
-                >
+              <div><h2>Información del bien</h2></div>
+              <div className="inventario-detalle-cabecera-acciones">
+                <span className={`badge-bien badge-bien-${productoDetalle.estadoBien}`}>
                   {obtenerNombreEstado(productoDetalle.estadoBien)}
                 </span>
+                <button className="modal-cerrar" type="button" aria-label="Cerrar información del bien"
+                  onClick={() => setProductoDetalle(null)}><X size={20} /></button>
               </div>
             </div>
-
-            <div className="detalle-producto-grid">
-              {[
-                {
-                  campo: "Tipo",
-                  valor: obtenerNombreTipo(productoDetalle.tipoProducto),
-                },
-                {
-                  campo: "Atributo",
-                  valor:
-                    productoDetalle.tipoProducto === "no_consumible"
-                      ? productoDetalle.empresa || "No registrado"
-                      : "No aplica",
-                },
-                {
-                  campo: "Código ULEAM",
-                  valor: productoDetalle.codigoUleam,
-                },
-                {
-                  campo: "Cantidad",
-                  valor: String(productoDetalle.cantidad),
-                },
-                {
-                  campo: "Categoría",
-                  valor: productoDetalle.categoria,
-                },
-                {
-                  campo: "Bodega asignada",
-                  valor: obtenerBodegaAsignada(productoDetalle),
-                },
-                {
-                  campo: "Custodio actual",
-                  valor: productoDetalle.custodioActual,
-                },
-                {
-                  campo: "Serie",
-                  valor: productoDetalle.serie,
-                },
-                {
-                  campo: "Modelo",
-                  valor: productoDetalle.modelo,
-                },
-                {
-                  campo: "Marca",
-                  valor: productoDetalle.marca,
-                },
-                {
-                  campo: "Material",
-                  valor: productoDetalle.material,
-                },
-                {
-                  campo: "Color",
-                  valor: productoDetalle.color,
-                },
-                {
-                  campo: "Dimensiones",
-                  valor: productoDetalle.dimensiones,
-                },
-                {
-                  campo: "Procedencia",
-                  valor: productoDetalle.procedencia,
-                },
-                {
-                  campo: "Fecha de registro",
-                  valor: productoDetalle.fechaRegistro,
-                },
-              ].map((item) => (
-                <div key={item.campo} className="detalle-producto-item">
-                  <span>
-                    {item.campo}
-                  </span>
-
-                  <p>
-                    {item.valor || "No especificado"}
-                  </p>
+            <div className="inventario-detalle-contenido">
+              <div className="detalle-producto-resumen inventario-detalle-resumen">
+                <div>
+                  <p>Código: <strong>{productoDetalle.codigo}</strong></p>
+                  <h3>{productoDetalle.descripcion}</h3>
                 </div>
-              ))}
-
-              <div className="detalle-producto-item detalle-producto-observacion">
-                <span>
-                  Observación
-                </span>
-
-                <p>
-                  {productoDetalle.observacion || "Sin observación"}
-                </p>
               </div>
+              <div className="inventario-detalle-paneles">
+                <section className="inventario-detalle-panel">
+                  <h3>Datos del bien</h3>
+                  <div className="inventario-detalle-campos">
+                    {[
+                      { campo: "Código ULEAM", valor: productoDetalle.codigoUleam },
+                      { campo: "Categoría", valor: productoDetalle.categoria },
+                      { campo: "Tipo", valor: obtenerNombreTipo(productoDetalle.tipoProducto) },
+                      { campo: "Atributo", valor: productoDetalle.tipoProducto === "no_consumible" ? productoDetalle.empresa || "No registrado" : "No aplica" },
+                      { campo: "Ubicación", valor: obtenerBodegaAsignada(productoDetalle) },
+                      { campo: "Custodio actual", valor: productoDetalle.custodioActual },
+                      { campo: "Procedencia", valor: productoDetalle.procedencia },
+                    ].map(({ campo, valor }) => (
+                      <div key={campo} className="detalle-producto-item">
+                        <span>{campo}</span><p>{valor || "No especificado"}</p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+                <section className="inventario-detalle-panel">
+                  <h3>Características y procedencia</h3>
+                  <div className="inventario-detalle-campos">
+                    {[
+                      { campo: "Cantidad", valor: String(productoDetalle.cantidad) },
+                      { campo: "Serie", valor: productoDetalle.serie },
+                      { campo: "Marca", valor: productoDetalle.marca },
+                      { campo: "Modelo", valor: productoDetalle.modelo },
+                      { campo: "Color", valor: productoDetalle.color },
+                      { campo: "Material", valor: productoDetalle.material },
+                      { campo: "Dimensiones", valor: productoDetalle.dimensiones },
+                      { campo: "Fecha de registro", valor: productoDetalle.fechaRegistro },
+                    ].map(({ campo, valor }) => (
+                      <div key={campo} className="detalle-producto-item">
+                        <span>{campo}</span><p>{valor || "No especificado"}</p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </div>
+              <section className="inventario-detalle-panel inventario-detalle-observacion">
+                <h3>Observación</h3>
+                <p>{productoDetalle.observacion || "Sin observación"}</p>
+              </section>
             </div>
           </div>
         </div>
@@ -1795,14 +1825,12 @@ function InventarioAdmin() {
             </div>
 
             <form className="formulario-modal" onSubmit={guardarNuevoProducto}>
-              <div className="formulario-producto-secciones formulario-producto-unificado">
-                <section className="grupo-formulario-producto grupo-formulario-producto-completo">
+              <div className="formulario-producto-secciones inventario-formulario-columnas">
+                <section className="grupo-formulario-producto inventario-formulario-panel">
                   <div className="grupo-formulario-titulo">
                     <h3>Datos del bien</h3>
-                    <p>Información principal, características físicas y procedencia del registro.</p>
                   </div>
-
-                  <div className="grid-formulario grid-formulario-producto-unificado">
+                  <div className="inventario-formulario-grid">
                     <div className="campo-formulario">
                       <label>Código *</label>
                       <input
@@ -1915,6 +1943,18 @@ function InventarioAdmin() {
                     </div>
 
                     <div className="campo-formulario">
+                      <label>Ubicación</label>
+                      <input value="General" disabled />
+                    </div>
+                  </div>
+                </section>
+
+                <section className="grupo-formulario-producto inventario-formulario-panel">
+                  <div className="grupo-formulario-titulo">
+                    <h3>Características y procedencia</h3>
+                  </div>
+                  <div className="inventario-formulario-grid">
+                    <div className="campo-formulario">
                       <label>Cantidad *</label>
                       <input
                         required
@@ -1925,11 +1965,6 @@ function InventarioAdmin() {
                           actualizarCampoProducto("cantidad", e.target.value)
                         }
                       />
-                    </div>
-
-                    <div className="campo-formulario">
-                      <label>Ubicación</label>
-                      <input value="General" disabled />
                     </div>
 
                     <div className="campo-formulario">
@@ -2011,7 +2046,7 @@ function InventarioAdmin() {
                   </div>
                 </section>
 
-                <section className="grupo-formulario-producto grupo-formulario-producto-completo grupo-formulario-observacion">
+                <section className="grupo-formulario-producto inventario-formulario-observacion">
                   <div className="campo-formulario campo-producto-observacion">
                     <label>Observación</label>
                     <textarea
@@ -2052,6 +2087,7 @@ function InventarioAdmin() {
             <div className="modal-header">
               <div>
                 <h2>Editar información</h2>
+                <p>Actualiza los datos del bien. Para aumentar las existencias, utiliza la acción + del inventario.</p>
               </div>
 
               <button
@@ -2064,226 +2100,229 @@ function InventarioAdmin() {
             </div>
 
             <form className="formulario-modal" onSubmit={guardarEdicionProducto}>
-              <div className="grid-formulario grid-formulario-editar-producto">
-                <div className="campo-formulario">
-                  <label>Código *</label>
-                  <input
-                    required
-                    value={formularioProducto.codigo}
-                    onChange={(e) =>
-                      actualizarCampoProducto("codigo", e.target.value)
-                    }
-                  />
-                </div>
+              <div className="formulario-producto-secciones inventario-formulario-columnas">
+                <section className="grupo-formulario-producto inventario-formulario-panel">
+                  <div className="grupo-formulario-titulo">
+                    <h3>Datos del bien</h3>
+                  </div>
+                  <div className="inventario-formulario-grid">
+                    <div className="campo-formulario">
+                      <label>Código *</label>
+                      <input
+                        required
+                        value={formularioProducto.codigo}
+                        onChange={(e) =>
+                          actualizarCampoProducto("codigo", e.target.value)
+                        }
+                      />
+                    </div>
 
-                <div className="campo-formulario">
-                  <label>Código ULEAM</label>
-                  <input
-                    value={formularioProducto.codigoUleam}
-                    onChange={(e) =>
-                      actualizarCampoProducto("codigoUleam", e.target.value)
-                    }
-                  />
-                </div>
+                    <div className="campo-formulario">
+                      <label>Código ULEAM</label>
+                      <input
+                        value={formularioProducto.codigoUleam}
+                        onChange={(e) =>
+                          actualizarCampoProducto("codigoUleam", e.target.value)
+                        }
+                      />
+                    </div>
 
-                <div className="campo-formulario">
-                  <label>Cantidad *</label>
-                  <input
-                    required
-                    min="0"
-                    type="number"
-                    value={formularioProducto.cantidad}
-                    onChange={(e) =>
-                      actualizarCampoProducto("cantidad", e.target.value)
-                    }
-                  />
-                </div>
+                    <div className="campo-formulario campo-editar-descripcion inventario-campo-nombre-ancho">
+                      <label>Bien / descripción *</label>
+                      <input
+                        required
+                        value={formularioProducto.descripcion}
+                        onChange={(e) =>
+                          actualizarCampoProducto("descripcion", e.target.value)
+                        }
+                      />
+                    </div>
 
-                <div className="campo-formulario">
-                  <label>Tipo *</label>
-                  <CampoDesplegable mostrarIconoFiltro={false}
-                    valor={formularioProducto.tipoProducto}
-                    ariaLabel="Seleccionar tipo de bien"
-                    onChange={(valor) => {
-                      const tipoProducto = valor as TipoProducto;
-                      setFormularioProducto((formularioActual) => ({
-                        ...formularioActual,
-                        tipoProducto,
-                        empresa:
-                          tipoProducto === "consumible"
-                            ? ""
-                            : formularioActual.empresa || "BLD",
-                      }));
-                    }}
-                    opciones={[
-                      { valor: "consumible", texto: "Consumible" },
-                      { valor: "no_consumible", texto: "No consumible" },
-                    ]}
-                  />
-                </div>
+                    <div className="campo-formulario">
+                      <label>Categoría *</label>
+                      <CampoDesplegable mostrarIconoFiltro={false}
+                        valor={formularioProducto.categoria}
+                        ariaLabel="Seleccionar categoría"
+                        onChange={(valor) => actualizarCampoProducto("categoria", valor)}
+                        opciones={[
+                          { valor: "", texto: "Selecciona una categoría" },
+                          ...categoriasActivas.map((categoria) => ({
+                            valor: categoria.nombre,
+                            texto: categoria.nombre,
+                          })),
+                        ]}
+                      />
+                    </div>
 
-                <div className="campo-formulario">
-                  <label>Atributo *</label>
-                  <CampoDesplegable
-                    mostrarIconoFiltro={false}
-                    valor={formularioProducto.empresa}
-                    ariaLabel="Seleccionar atributo del bien"
-                    deshabilitado={formularioProducto.tipoProducto === "consumible"}
-                    onChange={(valor) =>
-                      actualizarCampoProducto("empresa", valor as EmpresaBien | "")
-                    }
-                    opciones={
-                      formularioProducto.tipoProducto === "consumible"
-                        ? [{ valor: "", texto: "No aplica" }]
-                        : [
-                            { valor: "BLD", texto: "BLD" },
-                            { valor: "BCA", texto: "BCA" },
-                          ]
-                    }
-                  />
-                </div>
+                    <div className="campo-formulario">
+                      <label>Tipo *</label>
+                      <CampoDesplegable mostrarIconoFiltro={false}
+                        valor={formularioProducto.tipoProducto}
+                        ariaLabel="Seleccionar tipo de bien"
+                        onChange={(valor) => {
+                          const tipoProducto = valor as TipoProducto;
+                          setFormularioProducto((formularioActual) => ({
+                            ...formularioActual,
+                            tipoProducto,
+                            empresa:
+                              tipoProducto === "consumible"
+                                ? ""
+                                : formularioActual.empresa || "BLD",
+                          }));
+                        }}
+                        opciones={[
+                          { valor: "consumible", texto: "Consumible" },
+                          { valor: "no_consumible", texto: "No consumible" },
+                        ]}
+                      />
+                    </div>
 
-                <div className="campo-formulario campo-editar-descripcion">
-                  <label>Descripción / Bien *</label>
-                  <input
-                    required
-                    value={formularioProducto.descripcion}
-                    onChange={(e) =>
-                      actualizarCampoProducto("descripcion", e.target.value)
-                    }
-                  />
-                </div>
+                    <div className="campo-formulario">
+                      <label>Atributo *</label>
+                      <CampoDesplegable
+                        mostrarIconoFiltro={false}
+                        valor={formularioProducto.empresa}
+                        ariaLabel="Seleccionar atributo del bien"
+                        deshabilitado={formularioProducto.tipoProducto === "consumible"}
+                        onChange={(valor) =>
+                          actualizarCampoProducto("empresa", valor as EmpresaBien | "")
+                        }
+                        opciones={
+                          formularioProducto.tipoProducto === "consumible"
+                            ? [{ valor: "", texto: "No aplica" }]
+                            : [
+                                { valor: "BLD", texto: "BLD" },
+                                { valor: "BCA", texto: "BCA" },
+                              ]
+                        }
+                      />
+                    </div>
 
-                <div className="campo-formulario">
-                  <label>Categoría *</label>
-                  <CampoDesplegable mostrarIconoFiltro={false}
-                    valor={formularioProducto.categoria}
-                    ariaLabel="Seleccionar categoría"
-                    onChange={(valor) => actualizarCampoProducto("categoria", valor)}
-                    opciones={[
-                      { valor: "", texto: "Selecciona una categoría" },
-                      ...categoriasActivas.map((categoria) => ({
-                        valor: categoria.nombre,
-                        texto: categoria.nombre,
-                      })),
-                    ]}
-                  />
-                </div>
+                    <div className="campo-formulario">
+                      <label>Estado de calidad *</label>
+                      <CampoDesplegable mostrarIconoFiltro={false}
+                        valor={formularioProducto.estadoBien}
+                        ariaLabel="Seleccionar estado"
+                        onChange={(valor) =>
+                          actualizarCampoProducto("estadoBien", valor as EstadoBien)
+                        }
+                        opciones={[
+                          { valor: "bueno", texto: "Bueno" },
+                          { valor: "regular", texto: "Medio" },
+                          { valor: "malo", texto: "Malo" },
+                        ]}
+                      />
+                    </div>
 
-                <div className="campo-formulario">
-                  <label>Estado de calidad *</label>
-                  <CampoDesplegable mostrarIconoFiltro={false}
-                    valor={formularioProducto.estadoBien}
-                    ariaLabel="Seleccionar estado"
-                    onChange={(valor) =>
-                      actualizarCampoProducto("estadoBien", valor as EstadoBien)
-                    }
-                    opciones={[
-                      { valor: "bueno", texto: "Bueno" },
-                      { valor: "regular", texto: "Medio" },
-                      { valor: "malo", texto: "Malo" },
-                    ]}
-                  />
-                </div>
+                    <div className="campo-formulario">
+                      <label>Ubicación</label>
+                      <input
+                        value={
+                          productoEditar
+                            ? obtenerBodegaAsignada(
+                                obtenerItemDesdeProducto(productoEditar)
+                              )
+                            : "Ninguna"
+                        }
+                        disabled
+                      />
+                    </div>
 
-                <div className="campo-formulario">
-                  <label>Bodega asignada</label>
-                  <input
-                    value={
-                      productoEditar
-                        ? obtenerBodegaAsignada(
-                            obtenerItemDesdeProducto(productoEditar)
-                          )
-                        : "Ninguna"
-                    }
-                    disabled
-                  />
-                </div>
+                    <div className="campo-formulario">
+                      <label>Custodio actual</label>
+                      <input value={formularioProducto.custodioActual} disabled />
+                    </div>
+                  </div>
+                </section>
 
-                <div className="campo-formulario">
-                  <label>Custodio actual</label>
-                  <input value={formularioProducto.custodioActual} disabled />
-                </div>
+                <section className="grupo-formulario-producto inventario-formulario-panel">
+                  <div className="grupo-formulario-titulo">
+                    <h3>Características y procedencia</h3>
+                  </div>
+                  <div className="inventario-formulario-grid">
+                    <div className="campo-formulario">
+                      <label>Serie</label>
+                      <input
+                        value={formularioProducto.serie}
+                        onChange={(e) =>
+                          actualizarCampoProducto("serie", e.target.value)
+                        }
+                      />
+                    </div>
 
-                <div className="campo-formulario">
-                  <label>Serie</label>
-                  <input
-                    value={formularioProducto.serie}
-                    onChange={(e) =>
-                      actualizarCampoProducto("serie", e.target.value)
-                    }
-                  />
-                </div>
+                    <div className="campo-formulario">
+                      <label>Marca</label>
+                      <input
+                        value={formularioProducto.marca}
+                        onChange={(e) =>
+                          actualizarCampoProducto("marca", e.target.value)
+                        }
+                      />
+                    </div>
 
-                <div className="campo-formulario">
-                  <label>Modelo</label>
-                  <input
-                    value={formularioProducto.modelo}
-                    onChange={(e) =>
-                      actualizarCampoProducto("modelo", e.target.value)
-                    }
-                  />
-                </div>
+                    <div className="campo-formulario">
+                      <label>Modelo</label>
+                      <input
+                        value={formularioProducto.modelo}
+                        onChange={(e) =>
+                          actualizarCampoProducto("modelo", e.target.value)
+                        }
+                      />
+                    </div>
 
-                <div className="campo-formulario">
-                  <label>Marca</label>
-                  <input
-                    value={formularioProducto.marca}
-                    onChange={(e) =>
-                      actualizarCampoProducto("marca", e.target.value)
-                    }
-                  />
-                </div>
+                    <div className="campo-formulario">
+                      <label>Color</label>
+                      <input
+                        value={formularioProducto.color}
+                        onChange={(e) =>
+                          actualizarCampoProducto("color", e.target.value)
+                        }
+                      />
+                    </div>
 
-                <div className="campo-formulario">
-                  <label>Material</label>
-                  <input
-                    value={formularioProducto.material}
-                    onChange={(e) =>
-                      actualizarCampoProducto("material", e.target.value)
-                    }
-                  />
-                </div>
+                    <div className="campo-formulario">
+                      <label>Material</label>
+                      <input
+                        value={formularioProducto.material}
+                        onChange={(e) =>
+                          actualizarCampoProducto("material", e.target.value)
+                        }
+                      />
+                    </div>
 
-                <div className="campo-formulario">
-                  <label>Color</label>
-                  <input
-                    value={formularioProducto.color}
-                    onChange={(e) =>
-                      actualizarCampoProducto("color", e.target.value)
-                    }
-                  />
-                </div>
+                    <div className="campo-formulario">
+                      <label>Dimensiones</label>
+                      <input
+                        value={formularioProducto.dimensiones}
+                        onChange={(e) =>
+                          actualizarCampoProducto("dimensiones", e.target.value)
+                        }
+                      />
+                    </div>
 
-                <div className="campo-formulario">
-                  <label>Dimensiones</label>
-                  <input
-                    value={formularioProducto.dimensiones}
-                    onChange={(e) =>
-                      actualizarCampoProducto("dimensiones", e.target.value)
-                    }
-                  />
-                </div>
+                    <div className="campo-formulario">
+                      <label>Procedencia</label>
+                      <input
+                        value={formularioProducto.procedencia}
+                        onChange={(e) =>
+                          actualizarCampoProducto("procedencia", e.target.value)
+                        }
+                      />
+                    </div>
+                  </div>
+                </section>
 
-                <div className="campo-formulario">
-                  <label>Procedencia</label>
-                  <input
-                    value={formularioProducto.procedencia}
-                    onChange={(e) =>
-                      actualizarCampoProducto("procedencia", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="campo-formulario campo-editar-observacion">
-                  <label>Observación</label>
-                  <textarea
-                    value={formularioProducto.observacion}
-                    onChange={(e) =>
-                      actualizarCampoProducto("observacion", e.target.value)
-                    }
-                  />
-                </div>
+                <section className="grupo-formulario-producto inventario-formulario-observacion">
+                  <div className="campo-formulario campo-editar-observacion">
+                    <label>Observación</label>
+                    <textarea
+                      value={formularioProducto.observacion}
+                      onChange={(e) =>
+                        actualizarCampoProducto("observacion", e.target.value)
+                      }
+                    />
+                  </div>
+                </section>
               </div>
               <div className="modal-acciones">
                 <button
@@ -2299,6 +2338,83 @@ function InventarioAdmin() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {confirmandoEdicion && productoEditar && (
+        <div className="modal-fondo inventario-confirmacion-superpuesta">
+          <div className="modal-contenedor" style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <div><h2>Guardar cambios</h2><p>¿Seguro que deseas actualizar la información de este bien?</p></div>
+              <button type="button" className="modal-cerrar" aria-label="Cancelar confirmación"
+                onClick={() => setConfirmandoEdicion(false)}><X size={20} /></button>
+            </div>
+            <div className="inventario-confirmacion-contenido">
+              <strong>{productoEditar.descripcion}</strong>
+              <span>Código: {productoEditar.codigo}</span>
+            </div>
+            <div className="modal-acciones inventario-confirmacion-acciones">
+              <button type="button" className="boton-secundario" onClick={() => setConfirmandoEdicion(false)}>Cancelar</button>
+              <button type="button" className="boton-principal" onClick={() => void confirmarGuardarEdicion()}>Sí, guardar cambios</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {productoEntrada && (
+        <div className="modal-fondo inventario-modal-entrada">
+          <div className="modal-contenedor" style={{ maxWidth: 540 }}>
+            <div className="modal-header">
+              <div>
+                <h2>Registrar entrada</h2>
+                <p>Agrega unidades de un bien existente al Inventario General.</p>
+              </div>
+              <button type="button" className="modal-cerrar" aria-label="Cerrar entrada" disabled={guardandoEntrada}
+                onClick={cerrarModalEntrada}><X size={20} /></button>
+            </div>
+            <form onSubmit={solicitarConfirmacionEntrada} className="inventario-entrada-formulario">
+              <div className="inventario-entrada-resumen">
+                <span>Bien</span><strong>{productoEntrada.descripcion}</strong>
+                <span>Código</span><strong>{productoEntrada.codigo}</strong>
+                <span>Destino</span><strong>Inventario General</strong>
+              </div>
+              <div className="campo-formulario">
+                <label htmlFor="inventario-cantidad-entrada">Cantidad a ingresar *</label>
+                <input id="inventario-cantidad-entrada" type="number" required min="1" step="1"
+                  value={cantidadEntrada} disabled={guardandoEntrada}
+                  onChange={(evento) => setCantidadEntrada(evento.target.value)} />
+              </div>
+              <div className="modal-acciones inventario-confirmacion-acciones">
+                <button type="button" className="boton-secundario" disabled={guardandoEntrada} onClick={cerrarModalEntrada}>Cancelar</button>
+                <button type="submit" className="boton-principal" disabled={guardandoEntrada}>
+                  {guardandoEntrada ? "Agregando..." : "Agregar"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {productoEntrada && pendienteConfirmarEntrada && (
+        <div className="modal-fondo inventario-confirmacion-superpuesta">
+          <div className="modal-contenedor" role="alertdialog" aria-modal="true" aria-labelledby="titulo-confirmacion-entrada" style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <div>
+                <h2 id="titulo-confirmacion-entrada">Agregar existencias</h2>
+                <p>¿Seguro que deseas agregar {Number(cantidadEntrada)} unidad(es) de «{productoEntrada.descripcion}»?</p>
+              </div>
+            </div>
+            <div className="inventario-confirmacion-contenido">
+              <strong>{productoEntrada.codigo}</strong>
+              <span>Se sumarán las unidades al Inventario General y se registrará un movimiento de Entrada.</span>
+            </div>
+            <div className="modal-acciones inventario-confirmacion-acciones">
+              <button type="button" className="boton-secundario" disabled={guardandoEntrada}
+                onClick={() => setPendienteConfirmarEntrada(false)}>Cancelar</button>
+              <button type="button" className="boton-principal" disabled={guardandoEntrada}
+                onClick={() => void confirmarEntrada()}>{guardandoEntrada ? "Agregando..." : "Sí, confirmar"}</button>
+            </div>
           </div>
         </div>
       )}

@@ -227,7 +227,7 @@ export class UsuariosService implements OnApplicationBootstrap {
     return this.convertirAPublico(guardado);
   }
 
-  /** Permite o bloquea el acceso por 60 minutos; la excepción caduca sin tareas programadas. */
+  /** Permite o bloquea el acceso por 120 minutos; la excepción caduca automáticamente. */
   async configurarAccesoTemporal(
     id: string,
     permitido: boolean,
@@ -239,7 +239,7 @@ export class UsuariosService implements OnApplicationBootstrap {
       throw new BadRequestException("Primero debes activar la cuenta del usuario.");
     }
     if (!usuario.horarioAcceso) {
-      throw new BadRequestException("Configura un horario semanal para utilizar excepciones de una hora.");
+      throw new BadRequestException("Configura un horario semanal para utilizar excepciones de dos horas.");
     }
     const dentro = estaDentroDeHorarioSemanal(usuario.horarioAcceso);
     if (permitido === dentro) {
@@ -248,13 +248,13 @@ export class UsuariosService implements OnApplicationBootstrap {
         : "El usuario ya está fuera de su horario autorizado.");
     }
     usuario.accesoTemporalPermitido = permitido;
-    usuario.accesoTemporalHasta = new Date(Date.now() + 60 * 60 * 1000);
+    usuario.accesoTemporalHasta = new Date(Date.now() + 2 * 60 * 60 * 1000);
     const guardado = await this.usuariosRepository.save(usuario);
     await this.auditoriaService.registrar({
       usuarioId: actor.id, modulo: "usuarios",
       accion: permitido ? "acceso_temporal_permitido" : "acceso_temporal_bloqueado",
       registroId: usuario.id,
-      descripcion: `${permitido ? "Acceso extraordinario" : "Bloqueo temporal"} de ${usuario.nombre} durante una hora.`,
+      descripcion: `${permitido ? "Acceso extraordinario" : "Bloqueo temporal"} de ${usuario.nombre} durante dos horas.`,
     });
     return this.convertirAPublico(guardado);
   }

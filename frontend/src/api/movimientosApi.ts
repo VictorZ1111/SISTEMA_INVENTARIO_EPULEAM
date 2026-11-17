@@ -56,3 +56,13 @@ export async function devolverDesdeBodegaApi(datos: {
 }): Promise<void> {
   await clienteApi.post("/movimientos/devolucion-bodega", datos);
 }
+
+/** Registra un incremento real de existencias en Inventario General como movimiento de entrada. */
+export async function registrarEntradaInventarioGeneralApi(datos: {
+  productoId: string;
+  bodegaDestinoId: string;
+  cantidad: number;
+  observacion?: string;
+}): Promise<void> {
+  await clienteApi.post("/movimientos/entrada", datos);
+}

@@ -1,4 +1,4 @@
-﻿import axios from "axios";
+import axios from "axios";
 import { useEffect, useMemo, useState } from "react";
 import { Download, Paintbrush } from "lucide-react";
 
@@ -40,7 +40,7 @@ function mensajeError(error: unknown) {
     if (typeof mensaje === "string" && !/sql|query failed|constraint|postgres|database|syntax error/i.test(mensaje)) return mensaje;
     if (Array.isArray(mensaje)) return mensaje.join(" ");
   }
-  return "No se pudieron cargar los movimientos para las actas. IntÃ©ntalo nuevamente.";
+  return "No se pudieron cargar los movimientos para las actas. Inténtalo nuevamente.";
 }
 
 export default function ActasAdmin() {
@@ -71,7 +71,7 @@ export default function ActasAdmin() {
 
   const custodios = useMemo(() => [
     { valor: "todos", etiqueta: "Todos los custodios" },
-    { valor: "administracion", etiqueta: "AdministraciÃ³n (Inventario general)" },
+    { valor: "administracion", etiqueta: "Administración (Inventario general)" },
     ...usuarios.filter((usuario) => usuario.rol !== "admin")
       .map((usuario) => ({ valor: String(usuario.id), etiqueta: usuario.nombre }))
       .sort((a, b) => a.etiqueta.localeCompare(b.etiqueta, "es")),
@@ -100,7 +100,7 @@ export default function ActasAdmin() {
       await descargarActaWord(datosDocumento(registro));
       setError("");
     } catch {
-      setError("No se pudo generar el acta en Word. Comprueba que las plantillas estÃ©n instaladas.");
+      setError("No se pudo generar el acta en Word. Comprueba que las plantillas estén instaladas.");
     }
   };
 
@@ -109,15 +109,15 @@ export default function ActasAdmin() {
       <EncabezadoPagina titulo="Actas" descripcion="Genera actas en Word editable a partir de las plantillas institucionales aprobadas." />
 
       <div className="actas-pestanas" role="tablist" aria-label="Tipos de acta">
-        <button type="button" role="tab" aria-selected={categoria === "recepcion"} className={categoria === "recepcion" ? "activa" : ""} onClick={() => setCategoria("recepcion")}>RecepciÃ³n interna</button>
+        <button type="button" role="tab" aria-selected={categoria === "recepcion"} className={categoria === "recepcion" ? "activa" : ""} onClick={() => setCategoria("recepcion")}>Recepción interna</button>
         <button type="button" role="tab" aria-selected={categoria === "entrega"} className={categoria === "entrega" ? "activa" : ""} onClick={() => setCategoria("entrega")}>Entrega</button>
       </div>
 
       <section className="actas-panel-filtros" aria-label="Filtros de actas">
         <div className="actas-filtros">
           <CampoDesplegable ariaLabel="Tipo de periodo" valor={filtros.periodo} opciones={[
-            { valor: "dia", etiqueta: "DÃ­a" }, { valor: "mes", etiqueta: "Mes" },
-            { valor: "anio", etiqueta: "AÃ±o" }, { valor: "rango", etiqueta: "Entre periodos" },
+            { valor: "dia", etiqueta: "Día" }, { valor: "mes", etiqueta: "Mes" },
+            { valor: "anio", etiqueta: "Año" }, { valor: "rango", etiqueta: "Entre periodos" },
           ]} alCambiar={(valor) => actualizar("periodo", valor as PeriodoActas)} anchoMinimo={155} />
 
           {filtros.periodo === "dia" && <SelectorFechaFiltro valor={filtros.fecha} alCambiar={(valor) => actualizar("fecha", valor)} ariaLabel="Fecha del acta" />}
@@ -135,25 +135,25 @@ export default function ActasAdmin() {
           ]} alCambiar={(valor) => actualizar("tipoProducto", valor as TipoBienActa)} anchoMinimo={175} />
           <button type="button" className="actas-boton-limpiar" onClick={() => { setFiltros(filtrosIniciales()); setError(""); }} title="Limpiar filtros" aria-label="Limpiar filtros"><Paintbrush size={19} /></button>
         </div>
-        {rangoInvalido && <p className="actas-error" role="alert">Selecciona un periodo vÃ¡lido: la fecha inicial no puede ser posterior a la fecha final.</p>}
+        {rangoInvalido && <p className="actas-error" role="alert">Selecciona un periodo válido: la fecha inicial no puede ser posterior a la fecha final.</p>}
       </section>
 
       <section className="actas-listado">
         <div className="actas-listado-encabezado">
-          <div><h2>{categoria === "recepcion" ? "Actas de recepciÃ³n interna" : "Actas de entrega"}</h2><p>Selecciona un movimiento y descarga el acta en Word editable.</p></div>
+          <div><h2>{categoria === "recepcion" ? "Actas de recepción interna" : "Actas de entrega"}</h2><p>Selecciona un movimiento y descarga el acta en Word editable.</p></div>
           <span className="actas-contador">{rangoInvalido ? 0 : registrosVisibles.length} registros</span>
         </div>
         {error && <p className="actas-error" role="alert">{error}</p>}
         <div className="actas-tabla-scroll">
           <table className="actas-tabla">
-            <thead><tr><th>Fecha</th><th>CÃ³digo</th><th>Bien</th><th>Cantidad</th><th>Registrado por</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Código</th><th>Bien</th><th>Cantidad</th><th>Registrado por</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody>
               {cargando && !rangoInvalido ? <tr><td colSpan={7} className="actas-sin-registros">Cargando movimientos...</td></tr> :
-                rangoInvalido || registrosVisibles.length === 0 ? <tr><td colSpan={7} className="actas-sin-registros">{rangoInvalido ? "Corrige las fechas para consultar los movimientos." : error ? "No se pudieron cargar los registros." : `TodavÃ­a no se han registrado ${categoria === "recepcion" ? "recepciones internas" : "entregas"} para los filtros seleccionados.`}</td></tr> :
+                rangoInvalido || registrosVisibles.length === 0 ? <tr><td colSpan={7} className="actas-sin-registros">{rangoInvalido ? "Corrige las fechas para consultar los movimientos." : error ? "No se pudieron cargar los registros." : `Todavía no se han registrado ${categoria === "recepcion" ? "recepciones internas" : "entregas"} para los filtros seleccionados.`}</td></tr> :
                 registrosVisibles.map((registro) => (
                   <tr key={registro.id}>
                     <td>{fechaSoloDia(registro.createdAt)}</td>
-                    <td>{registro.codigo || "Sin cÃ³digo"}</td>
+                    <td>{registro.codigo || "Sin código"}</td>
                     <td>{registro.producto}</td>
                     <td className="actas-cantidad">{registro.cantidad}</td>
                     <td>{registro.usuario}</td>

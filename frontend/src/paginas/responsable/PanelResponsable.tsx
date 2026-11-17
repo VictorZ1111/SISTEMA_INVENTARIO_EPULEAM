@@ -10,6 +10,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import EncabezadoPagina from "../../componentes/EncabezadoPagina";
+import { nombreVisualUsuario } from "../../utilidades/nombresVisuales";
 import TablaBase from "../../componentes/TablaBase";
 import CampoDesplegable from "../../componentes/CampoDesplegable";
 
@@ -17,7 +18,7 @@ import { useAuth } from "../../contexto/AuthContext";
 import {
   limpiarPrefijoBodega as limpiarNombreBodega,
   obtenerBodegasPrincipalesUsuario,
-  obtenerSucursalesTastyUsuario,
+  obtenerSucursalesUsuario,
 } from "../../dominio/bodegas";
 import {
   esBienVisible,
@@ -82,12 +83,13 @@ function PanelResponsable() {
   const [detalleProducto, setDetalleProducto] = useState<Producto | null>(null);
 
   const bodegasPrincipales = useMemo(
-    () => obtenerBodegasPrincipalesUsuario(usuarioActual),
+    () => obtenerBodegasPrincipalesUsuario(usuarioActual).filter(
+      (nombre) => nombre !== "Bodega Limpieza" && nombre !== "Bodega Oficina"),
     [usuarioActual]
   );
 
   const sucursalesTasty = useMemo(
-    () => obtenerSucursalesTastyUsuario(usuarioActual),
+    () => obtenerSucursalesUsuario(usuarioActual),
     [usuarioActual]
   );
 
@@ -180,7 +182,7 @@ function PanelResponsable() {
   return (
     <div className="pagina-admin pagina-responsable pagina-supervisor-inicio">
       <EncabezadoPagina
-        titulo="Inicio"
+        titulo={`Bienvenido, ${nombreVisualUsuario(usuarioActual?.nombre || "Usuario")}`}
         descripcion="Consulta el Inventario General y accede a tus sucursales asignadas."
       />
 
@@ -371,8 +373,8 @@ function PanelResponsable() {
       <section className="seccion-dashboard seccion-compacta">
         <div className="seccion-dashboard-header solicitudes-header-simple">
           <div>
-            <h2>Sucursales Tasty</h2>
-            <p>Accede únicamente a las sucursales gastronómicas habilitadas.</p>
+            <h2>Ubicaciones asignadas</h2>
+            <p>Accede al inventario de tus ubicaciones asignadas.</p>
           </div>
         </div>
 
@@ -402,7 +404,7 @@ function PanelResponsable() {
           </div>
         ) : (
           <div className="responsable-bodega-vacia">
-            No tienes asignada ninguna sucursal de Tasty.
+            No tienes ubicaciones asignadas.
           </div>
         )}
       </section>

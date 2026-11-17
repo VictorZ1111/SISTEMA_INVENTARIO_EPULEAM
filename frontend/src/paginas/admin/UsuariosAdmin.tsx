@@ -5,6 +5,7 @@ import {
   Eye,
   EyeOff,
   Clock3,
+  KeyRound,
   Plus,
   Power,
   PowerOff,
@@ -13,9 +14,13 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import EncabezadoPagina from "../../componentes/EncabezadoPagina";
+import { nombreVisualUsuario } from "../../utilidades/nombresVisuales";
+import { obtenerIconoBodega } from "../../dominio/inventarioVisual";
+import "../../estilos/usuarios-administracion.css";
+import "../../estilos/usuario-detalle-ficha.css";
 import TablaBase from "../../componentes/TablaBase";
 import UleamLoader from "../../componentes/UleamLoader";
 
@@ -28,12 +33,12 @@ import SelectorHoraAcceso from "../../componentes/SelectorHoraAcceso";
 import { DIAS_HORARIO, horarioPorDefecto, estaDentroDeHorario, type HorarioDia } from "../../tipos/horarioAcceso";
 
 interface FormularioUsuario {
-  nombre: string;
+  nombres: string;
+  apellidos: string;
   correoUsuario: string;
   rol: RolUsuario;
   telefono: string;
   bodegasAsignadas: string[];
-  bodegaSeleccionada: string;
   codigoAcceso: string;
   cambiarCodigoAcceso: boolean;
   nuevoCodigoAcceso: string;
@@ -52,6 +57,14 @@ interface ConfirmacionUsuario {
   accion: "eliminar";
 }
 
+interface ConfirmacionOperacion {
+  titulo: string;
+  mensaje: string;
+  etiqueta: string;
+  nombreUsuario: string;
+  ejecutar: () => Promise<void>;
+}
+
 const DOMINIO_CORREO = "@epuleam.com";
 const CORREO_ADMINISTRADOR_GENERAL = "admin@epuleam.com";
 
@@ -62,12 +75,12 @@ function esAdministradorGeneral(usuario: Usuario) {
 const REGEX_CODIGO = /^[A-Za-z]{2}\d{5}[^A-Za-z0-9]$/;
 
 const formularioInicial: FormularioUsuario = {
-  nombre: "",
+  nombres: "",
+  apellidos: "",
   correoUsuario: "responsable",
   rol: "responsable",
   telefono: "",
   bodegasAsignadas: [],
-  bodegaSeleccionada: "",
   codigoAcceso: "",
   cambiarCodigoAcceso: false,
   nuevoCodigoAcceso: "",
@@ -98,14 +111,32 @@ function obtenerCorreoUsuarioPorRol(rol: RolUsuario) {
   return "supervisor";
 }
 
-function obtenerNombreCorto(nombre: string) {
-  const partesNombre = nombre.trim().split(" ").filter(Boolean);
+type FiltroAcceso = "todos" | "activo" | "inactivo";
 
-  if (partesNombre.length <= 2) {
-    return nombre;
+/** Estado operativo: respeta la cuenta, la excepción temporal y el horario real de Ecuador. */
+function obtenerEstadoAcceso(usuario: Usuario, ahora: number): { texto: string; activo: boolean; temporal: boolean } {
+  if (usuario.estado !== "activo") return { texto: "Inhabilitado", activo: false, temporal: false };
+  const excepcionVigente = usuario.accesoTemporalHasta &&
+    new Date(usuario.accesoTemporalHasta).getTime() > ahora;
+  if (excepcionVigente && usuario.accesoTemporalPermitido !== null && usuario.accesoTemporalPermitido !== undefined) {
+    return usuario.accesoTemporalPermitido
+      ? { texto: "Activo temporalmente", activo: true, temporal: true }
+      : { texto: "Inhabilitado temporalmente", activo: false, temporal: true };
   }
+  return estaDentroDeHorario(usuario.horarioAcceso ?? null, new Date(ahora))
+    ? { texto: "Activo", activo: true, temporal: false }
+    : { texto: "Fuera de horario", activo: false, temporal: false };
+}
 
-  return `${partesNombre[0]} ${partesNombre[1]}`;
+/** Separa para el formulario sin cambiar el campo nombre existente en PostgreSQL. */
+function separarNombreCompleto(nombre: string): { nombres: string; apellidos: string } {
+  const partes = nombre.trim().split(/\s+/).filter(Boolean);
+  if (partes.length < 2) return { nombres: nombre.trim(), apellidos: "" };
+  const cantidadNombres = partes.length >= 4 ? 2 : 1;
+  return {
+    nombres: partes.slice(0, cantidadNombres).join(" "),
+    apellidos: partes.slice(cantidadNombres).join(" "),
+  };
 }
 
 function obtenerBodegasUsuario(usuario: Usuario) {
@@ -127,9 +158,10 @@ function esBodegaGastronomia(bodega: string) {
   return nombre.includes("gastronom");
 }
 
-function esSucursalTasty(bodega: string) {
+function esSucursalResponsable(bodega: string) {
   const nombre = normalizarTexto(bodega);
-  return nombre.includes("tasty") && !nombre.includes("gastronom");
+  return (nombre.startsWith("tasty ") && !nombre.includes("gastronom")) ||
+    nombre === "bodega limpieza" || nombre === "bodega oficina";
 }
 
 function esBodegaPrincipalSupervisor(bodega: string) {
@@ -138,7 +170,7 @@ function esBodegaPrincipalSupervisor(bodega: string) {
 
 function esAsignacionPermitidaPorRol(rol: RolUsuario, bodega: string) {
   if (rol === "supervisor") return esBodegaPrincipalSupervisor(bodega);
-  if (rol === "responsable") return esSucursalTasty(bodega);
+  if (rol === "responsable") return esSucursalResponsable(bodega);
   return false;
 }
 
@@ -175,9 +207,18 @@ function UsuariosAdmin() {
   const [usuarioDetalle, setUsuarioDetalle] = useState<Usuario | null>(null);
   const [confirmacion, setConfirmacion] =
     useState<ConfirmacionUsuario | null>(null);
+  const [confirmacionOperacion, setConfirmacionOperacion] = useState<ConfirmacionOperacion | null>(null);
+  const [confirmandoOperacion, setConfirmandoOperacion] = useState(false);
 
   const [busqueda, setBusqueda] = useState("");
   const [rolFiltro, setRolFiltro] = useState<RolUsuario | "todos">("todos");
+  const [estadoFiltro, setEstadoFiltro] = useState<FiltroAcceso>("todos");
+  const [ahora, setAhora] = useState(() => Date.now());
+
+  useEffect(() => {
+    const intervalo = window.setInterval(() => setAhora(Date.now()), 30000);
+    return () => window.clearInterval(intervalo);
+  }, []);
   const [ordenUsuarios, setOrdenUsuarios] = useState<"asc" | "desc">("asc");
   const [mensajeSistema, setMensajeSistema] =
     useState<MensajeSistema | null>(null);
@@ -188,7 +229,7 @@ function UsuariosAdmin() {
   const [mostrarCodigoAdministrador, setMostrarCodigoAdministrador] = useState(false);
 
   const filtrosActivos =
-    busqueda.trim() !== "" || rolFiltro !== "todos" || ordenUsuarios !== "asc";
+    busqueda.trim() !== "" || rolFiltro !== "todos" || estadoFiltro !== "todos" || ordenUsuarios !== "asc";
 
   const bodegasAsignables: Bodega[] = bodegasDisponibles.filter(
     (bodega: Bodega) =>
@@ -233,51 +274,25 @@ function UsuariosAdmin() {
           : formularioActual.bodegasAsignadas.filter((bodega) =>
               esAsignacionPermitidaPorRol(rol, bodega)
             ),
-      bodegaSeleccionada: "",
-      codigoAcceso: usuarioEditando
+          codigoAcceso: usuarioEditando
         ? formularioActual.codigoAcceso
         : "",
     }));
   };
 
-  const agregarBodegaFormulario = () => {
-    if (!formulario.bodegaSeleccionada) return;
-
-    setFormulario((formularioActual) => {
-      const bodegaSeleccionada = formularioActual.bodegaSeleccionada;
-      const yaTieneGastronomia = formularioActual.bodegasAsignadas.some(esBodegaGastronomia);
-
-      if (yaTieneGastronomia && esSucursalTasty(bodegaSeleccionada)) {
-        return {
-          ...formularioActual,
-          bodegaSeleccionada: "",
-        };
-      }
-
-      const bodegasBase = esBodegaGastronomia(bodegaSeleccionada)
-        ? formularioActual.bodegasAsignadas.filter((bodegaActual) => !esSucursalTasty(bodegaActual))
-        : formularioActual.bodegasAsignadas;
-
-      return {
-        ...formularioActual,
-        bodegasAsignadas: Array.from(new Set([...bodegasBase, bodegaSeleccionada])),
-        bodegaSeleccionada: "",
-      };
-    });
-  };
-
-  const quitarBodegaFormulario = (bodega: string) => {
-    setFormulario((formularioActual) => ({
-      ...formularioActual,
-      bodegasAsignadas: formularioActual.bodegasAsignadas.filter(
-        (bodegaActual) => bodegaActual !== bodega
-      ),
+  const alternarBodegaFormulario = (nombreBodega: string) => {
+    setFormulario((actual) => ({
+      ...actual,
+      bodegasAsignadas: actual.bodegasAsignadas.includes(nombreBodega)
+        ? actual.bodegasAsignadas.filter((nombre) => nombre !== nombreBodega)
+        : [...actual.bodegasAsignadas, nombreBodega],
     }));
   };
 
   const limpiarFiltros = () => {
     setBusqueda("");
     setRolFiltro("todos");
+    setEstadoFiltro("todos");
     setOrdenUsuarios("asc");
   };
 
@@ -301,15 +316,18 @@ function UsuariosAdmin() {
     setUsuarioEditando(usuario);
 
     setFormulario({
-      nombre: usuario.nombre,
+      ...separarNombreCompleto(usuario.nombre),
       correoUsuario: esAdministradorGeneral(usuario)
         ? "admin"
         : obtenerCorreoUsuarioPorRol(usuario.rol),
       rol: usuario.rol,
       telefono: usuario.telefono || "",
-      bodegasAsignadas: obtenerBodegasUsuario(usuario),
-      bodegaSeleccionada: "",
-      codigoAcceso: "",
+      // Solo al guardar se migran asignaciones auxiliares antiguas a la bodega real.
+      bodegasAsignadas: Array.from(new Set(obtenerBodegasUsuario(usuario).map((nombre) =>
+        nombre === "Sucursal Limpieza" ? "Bodega Limpieza" :
+        nombre === "Sucursal Oficina" ? "Bodega Oficina" : nombre
+      ))),
+          codigoAcceso: "",
       cambiarCodigoAcceso: false,
       nuevoCodigoAcceso: "",
       codigoAdministradorGeneral: "",
@@ -331,7 +349,9 @@ function UsuariosAdmin() {
   };
 
   const validarFormulario = () => {
-    const nombre = formulario.nombre.trim();
+    const nombres = formulario.nombres.trim();
+    const apellidos = formulario.apellidos.trim();
+    const nombre = `${nombres} ${apellidos}`.trim();
     const correoUsuario =
       usuarioEditando && esAdministradorGeneral(usuarioEditando)
         ? "admin"
@@ -339,8 +359,8 @@ function UsuariosAdmin() {
     const correoCompleto = `${correoUsuario}${DOMINIO_CORREO}`;
     const codigoAcceso = formulario.codigoAcceso.trim();
 
-    if (nombre.length < 3) {
-      mostrarMensaje("error", "El nombre debe tener al menos 3 caracteres.");
+    if (nombres.length < 2 || apellidos.length < 2) {
+      mostrarMensaje("error", "Ingresa los nombres y apellidos del usuario.");
       return null;
     }
 
@@ -402,7 +422,7 @@ function UsuariosAdmin() {
   };
 
 
-  const confirmarCambioCodigo = async () => {
+  const confirmarCambioCodigo = () => {
     if (!usuarioEditando || esAdministradorGeneral(usuarioEditando)) return;
 
     if (usuarioActual?.rol !== "admin") {
@@ -432,31 +452,31 @@ function UsuariosAdmin() {
       return;
     }
 
-    try {
-      await restablecerCodigoAcceso(
-        usuarioEditando.id,
-        nuevoCodigo,
-        codigoAutorizacion
-      );
-
-      setFormulario((formularioActual) => ({
-        ...formularioActual,
-        cambiarCodigoAcceso: false,
-        nuevoCodigoAcceso: "",
-        codigoAdministradorGeneral: "",
-      }));
-      setMostrarNuevoCodigo(false);
-      setMostrarCodigoAdministrador(false);
-      mostrarMensaje("exito", "Código de acceso actualizado correctamente.");
-    } catch (error) {
-      mostrarMensaje(
-        "error",
-        error instanceof Error ? error.message : "No se pudo restablecer el código de acceso."
-      );
-    }
+    setConfirmacionOperacion({
+      titulo: "Cambiar código de acceso",
+      mensaje: "¿Seguro que deseas cambiar el código de acceso de este usuario?",
+      etiqueta: "Sí, cambiar código",
+      nombreUsuario: usuarioEditando.nombre,
+      ejecutar: async () => {
+        try {
+          await restablecerCodigoAcceso(usuarioEditando.id, nuevoCodigo, codigoAutorizacion);
+          setFormulario((actual) => ({
+            ...actual,
+            cambiarCodigoAcceso: false,
+            nuevoCodigoAcceso: "",
+            codigoAdministradorGeneral: "",
+          }));
+          setMostrarNuevoCodigo(false);
+          setMostrarCodigoAdministrador(false);
+          mostrarMensaje("exito", "Código de acceso actualizado correctamente.");
+        } catch (error) {
+          mostrarMensaje("error", error instanceof Error ? error.message : "No se pudo restablecer el código de acceso.");
+        }
+      },
+    });
   };
 
-  const guardarUsuario = async (event: FormEvent<HTMLFormElement>) => {
+  const guardarUsuario = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const datosValidados = validarFormulario();
@@ -488,64 +508,89 @@ function UsuariosAdmin() {
       }
     }
 
-    try {
-      if (usuarioEditando) {
-        await editarUsuario(usuarioEditando.id, usuarioFormulario);
-      } else {
-        await agregarUsuario(usuarioFormulario);
-      }
-
-      const eraEdicion = Boolean(usuarioEditando);
-      cerrarModal();
-      mostrarMensaje(
-        "exito",
-        eraEdicion
-          ? "Usuario actualizado correctamente."
-          : "Usuario creado correctamente."
-      );
-    } catch (error) {
-      mostrarMensaje(
-        "error",
-        error instanceof Error ? error.message : "No se pudo guardar el usuario."
-      );
-    }
+    setConfirmacionOperacion({
+      titulo: usuarioEditando ? "Guardar cambios" : "Crear usuario",
+      mensaje: usuarioEditando
+        ? "¿Seguro que deseas guardar los cambios de este usuario?"
+        : "¿Seguro que deseas registrar este usuario?",
+      etiqueta: usuarioEditando ? "Sí, guardar cambios" : "Sí, crear usuario",
+      nombreUsuario: datosValidados.nombre,
+      ejecutar: async () => {
+        try {
+          if (usuarioEditando) {
+            await editarUsuario(usuarioEditando.id, usuarioFormulario);
+          } else {
+            await agregarUsuario(usuarioFormulario);
+          }
+          const eraEdicion = Boolean(usuarioEditando);
+          cerrarModal();
+          mostrarMensaje(
+            "exito",
+            eraEdicion ? "Usuario actualizado correctamente." : "Usuario creado correctamente."
+          );
+        } catch (error) {
+          mostrarMensaje("error", error instanceof Error ? error.message : "No se pudo guardar el usuario.");
+        }
+      },
+    });
   };
 
-  const cambiarEstado = async (usuario: Usuario) => {
+  const cambiarEstado = (usuario: Usuario) => {
     if (esAdministradorGeneral(usuario)) {
       mostrarMensaje("error", "El Administrador General debe permanecer activo.");
       return;
     }
     const nuevoEstado = usuario.estado === "activo" ? "inactivo" : "activo";
-    try {
-      await cambiarEstadoUsuario(usuario.id, nuevoEstado);
-      mostrarMensaje("exito", nuevoEstado === "activo"
-        ? "Usuario activado correctamente."
-        : "Usuario inactivado correctamente.");
-    } catch (error) {
-      mostrarMensaje("error", error instanceof Error ? error.message : "No se pudo cambiar el estado del usuario.");
-    }
+    const activar = nuevoEstado === "activo";
+    setConfirmacionOperacion({
+      titulo: activar ? "Habilitar usuario" : "Inhabilitar usuario",
+      mensaje: activar
+        ? "¿Seguro que deseas habilitar esta cuenta? Se aplicarán sus horarios de acceso."
+        : "¿Seguro que deseas inhabilitar esta cuenta? El usuario perderá el acceso al sistema.",
+      etiqueta: activar ? "Sí, habilitar" : "Sí, inhabilitar",
+      nombreUsuario: usuario.nombre,
+      ejecutar: async () => {
+        try {
+          await cambiarEstadoUsuario(usuario.id, nuevoEstado);
+          mostrarMensaje("exito", activar ? "Usuario habilitado correctamente." : "Usuario inhabilitado correctamente.");
+        } catch (error) {
+          mostrarMensaje("error", error instanceof Error ? error.message : "No se pudo cambiar el estado del usuario.");
+        }
+      },
+    });
   };
 
   /** Excepción horaria temporal: no modifica la activación permanente de la cuenta. */
-  const gestionarExcepcionHorario = async (usuario: Usuario) => {
+  const gestionarExcepcionHorario = (usuario: Usuario) => {
     if (esAdministradorGeneral(usuario) || usuario.estado !== "activo" || !usuario.horarioAcceso) return;
-    try {
-      const excepcionVigente = Boolean(usuario.accesoTemporalHasta &&
-        new Date(usuario.accesoTemporalHasta).getTime() > Date.now());
-      if (excepcionVigente) {
-        await cancelarAccesoTemporalUsuario(usuario.id);
-        mostrarMensaje("exito", "Se restableció el horario habitual del usuario.");
-      } else {
-        const permitido = !estaDentroDeHorario(usuario.horarioAcceso);
-        await configurarAccesoTemporalUsuario(usuario.id, permitido);
-        mostrarMensaje("exito", permitido
-          ? "Acceso permitido durante una hora. Después se aplicará su horario habitual."
-          : "Acceso suspendido durante una hora. Después se aplicará su horario habitual.");
-      }
-    } catch (error) {
-      mostrarMensaje("error", error instanceof Error ? error.message : "No se pudo gestionar la excepción de horario.");
-    }
+    const excepcionVigente = Boolean(usuario.accesoTemporalHasta &&
+      new Date(usuario.accesoTemporalHasta).getTime() > Date.now());
+    const permitido = !estaDentroDeHorario(usuario.horarioAcceso);
+    setConfirmacionOperacion({
+      titulo: excepcionVigente ? "Restablecer horario de acceso" : permitido ? "Activación temporal" : "Inhabilitación temporal",
+      mensaje: excepcionVigente
+        ? "¿Seguro que deseas cancelar el acceso temporal y volver al horario habitual?"
+        : permitido
+          ? "¿Seguro que deseas habilitar temporalmente a este usuario durante dos horas?"
+          : "¿Seguro que deseas inhabilitar temporalmente a este usuario durante dos horas?",
+      etiqueta: excepcionVigente ? "Sí, restablecer" : permitido ? "Sí, activar temporalmente" : "Sí, inhabilitar temporalmente",
+      nombreUsuario: usuario.nombre,
+      ejecutar: async () => {
+        try {
+          if (excepcionVigente) {
+            await cancelarAccesoTemporalUsuario(usuario.id);
+            mostrarMensaje("exito", "Se restableció el horario habitual del usuario.");
+          } else {
+            await configurarAccesoTemporalUsuario(usuario.id, permitido);
+            mostrarMensaje("exito", permitido
+              ? "Acceso permitido durante dos horas. Después se aplicará su horario habitual."
+              : "Acceso suspendido durante dos horas. Después se aplicará su horario habitual.");
+          }
+        } catch (error) {
+          mostrarMensaje("error", error instanceof Error ? error.message : "No se pudo gestionar la excepción de horario.");
+        }
+      },
+    });
   };
 
   const solicitarEliminacion = (usuario: Usuario) => {
@@ -588,6 +633,19 @@ function UsuariosAdmin() {
     }
   };
 
+  const confirmarOperacion = async () => {
+    if (!confirmacionOperacion || confirmandoOperacion) return;
+    setConfirmandoOperacion(true);
+    try {
+      await confirmacionOperacion.ejecutar();
+    } catch (error) {
+      mostrarMensaje("error", error instanceof Error ? error.message : "No se pudo completar la operación.");
+    } finally {
+      setConfirmandoOperacion(false);
+      setConfirmacionOperacion(null);
+    }
+  };
+
   const usuariosFiltrados = useMemo(() => {
     const textoBusqueda = busqueda.trim().toLowerCase();
 
@@ -600,7 +658,10 @@ function UsuariosAdmin() {
         usuario.nombre.toLowerCase().includes(textoBusqueda) ||
         usuario.correo.toLowerCase().includes(textoBusqueda);
 
-      return coincideRol && coincideBusqueda;
+      const acceso = obtenerEstadoAcceso(usuario, ahora);
+      const coincideEstado = estadoFiltro === "todos" ||
+        (estadoFiltro === "activo" ? acceso.activo : !acceso.activo);
+      return coincideRol && coincideBusqueda && coincideEstado;
     });
 
     return [...filtrados].sort((usuarioA, usuarioB) => {
@@ -610,7 +671,7 @@ function UsuariosAdmin() {
 
       return ordenUsuarios === "asc" ? comparacion : comparacion * -1;
     });
-  }, [usuarios, busqueda, rolFiltro, ordenUsuarios]);
+  }, [usuarios, busqueda, rolFiltro, estadoFiltro, ordenUsuarios, ahora]);
 
   return (
     <div className="pagina-admin">
@@ -676,16 +737,30 @@ function UsuariosAdmin() {
 
           <CampoDesplegable
             className="filtro-compacto"
-            ancho={180}
-            anchoMenu={220}
+            ancho={216}
+            anchoMenu={230}
             valor={rolFiltro}
             onChange={(valor) => setRolFiltro(valor as RolUsuario | "todos")}
             ariaLabel="Filtrar por rol"
             opciones={[
-              { valor: "todos", texto: "Todos" },
+              { valor: "todos", texto: "Todos los roles" },
               { valor: "admin", texto: "Administrador" },
               { valor: "responsable", texto: "Responsable" },
               { valor: "supervisor", texto: "Supervisor" },
+            ]}
+          />
+
+          <CampoDesplegable
+            className="filtro-estado-usuario"
+            ancho={226}
+            anchoMenu={244}
+            valor={estadoFiltro}
+            onChange={(valor) => setEstadoFiltro(valor as FiltroAcceso)}
+            ariaLabel="Filtrar usuarios por estado de acceso"
+            opciones={[
+              { valor: "todos", texto: "Todos los estados" },
+              { valor: "activo", texto: "Activos" },
+              { valor: "inactivo", texto: "Inhabilitados" },
             ]}
           />
 
@@ -781,7 +856,7 @@ function UsuariosAdmin() {
                       </div>
 
                       <div>
-                        <strong>{obtenerNombreCorto(usuario.nombre)}</strong>
+                        <strong>{nombreVisualUsuario(usuario.nombre)}</strong>
                       </div>
                     </div>
                   </td>
@@ -796,18 +871,14 @@ function UsuariosAdmin() {
 
 
                   <td>
-                    <span
-                      className={`badge-estado badge-estado-${usuario.estado}`}
-                    >
-                      {usuario.estado === "activo" ? "Activo" : "Inactivo"}
-                    </span>
-                    {usuario.estado === "activo" && usuario.horarioAcceso && (
-                      <small className="usuario-acceso-temporal-estado">
-                        {usuario.accesoTemporalHasta && new Date(usuario.accesoTemporalHasta).getTime() > Date.now()
-                          ? `${usuario.accesoTemporalPermitido ? "Acceso excepcional" : "Bloqueo temporal"} hasta ${new Date(usuario.accesoTemporalHasta).toLocaleTimeString("es-EC", { timeZone: "America/Guayaquil", hour: "2-digit", minute: "2-digit" })}`
-                          : estaDentroDeHorario(usuario.horarioAcceso) ? "Dentro de horario" : "Fuera de horario"}
-                      </small>
-                    )}
+                    {(() => {
+                      const acceso = obtenerEstadoAcceso(usuario, ahora);
+                      return (
+                        <span className={`badge-estado usuario-badge-acceso ${acceso.activo ? "badge-estado-activo" : "badge-estado-inactivo"} ${acceso.temporal ? "usuario-badge-temporal" : ""}`}>
+                          {acceso.texto}
+                        </span>
+                      );
+                    })()}
                   </td>
 
                   <td>
@@ -844,29 +915,32 @@ function UsuariosAdmin() {
                         className="boton-icono-tabla"
                         type="button"
                         title={esAdministradorGeneral(usuario)
+                          ? "La cuenta del Administrador General está protegida"
+                          : !usuario.horarioAcceso ? "Primero configura un horario semanal"
+                          : usuario.estado !== "activo" ? "Primero activa permanentemente la cuenta"
+                          : usuario.accesoTemporalHasta && new Date(usuario.accesoTemporalHasta).getTime() > ahora
+                            ? "Cancelar activación o inhabilitación temporal"
+                            : estaDentroDeHorario(usuario.horarioAcceso, new Date(ahora))
+                              ? "Inhabilitar temporalmente durante dos horas"
+                              : "Activar temporalmente durante dos horas"}
+                        onClick={() => void gestionarExcepcionHorario(usuario)}
+                        disabled={esAdministradorGeneral(usuario) || usuario.estado !== "activo" || !usuario.horarioAcceso}
+                      >
+                        <Clock3 size={17} />
+                      </button>
+
+                      <button
+                        className="boton-icono-tabla"
+                        type="button"
+                        title={esAdministradorGeneral(usuario)
                           ? "El Administrador General debe permanecer activo"
-                          : usuario.estado === "activo" ? "Inactivar cuenta permanentemente" : "Activar cuenta permanentemente"}
+                          : usuario.estado === "activo" ? "Inhabilitar cuenta permanentemente" : "Activar cuenta permanentemente"}
                         onClick={() => cambiarEstado(usuario)}
                         disabled={esAdministradorGeneral(usuario)}
                         style={esAdministradorGeneral(usuario) ? { opacity: 0.45, cursor: "not-allowed" } : undefined}
                       >
                         {usuario.estado === "activo" ? <PowerOff size={17} /> : <Power size={17} />}
                       </button>
-
-                      {usuario.estado === "activo" && Boolean(usuario.horarioAcceso) && !esAdministradorGeneral(usuario) && (
-                        <button
-                          className="boton-icono-tabla"
-                          type="button"
-                          title={usuario.accesoTemporalHasta && new Date(usuario.accesoTemporalHasta).getTime() > Date.now()
-                            ? "Cancelar excepción de una hora"
-                            : estaDentroDeHorario(usuario.horarioAcceso ?? null)
-                              ? "Suspender acceso por una hora, sin inactivar la cuenta"
-                              : "Permitir acceso por una hora fuera del horario habitual"}
-                          onClick={() => gestionarExcepcionHorario(usuario)}
-                        >
-                          <Clock3 size={17} />
-                        </button>
-                      )}
 
                       <button
                         className="boton-icono-tabla boton-icono-peligro"
@@ -899,17 +973,7 @@ function UsuariosAdmin() {
         <div className="modal-fondo">
           <div
             className="modal-contenedor modal-grande modal-usuario-compacto"
-            style={{
-              maxWidth: "1320px",
-              width: "calc(100% - 40px)",
-              height: formulario.cambiarCodigoAcceso
-                ? "min(860px, calc(100vh - 32px))"
-                : "auto",
-              maxHeight: "calc(100vh - 32px)",
-              overflow: "hidden",
-              display: "flex",
-              flexDirection: "column",
-            }}
+            style={{ maxWidth: "1430px", width: "calc(100% - 36px)", maxHeight: "calc(100vh - 32px)" }}
           >
             <div className="modal-header">
               <div>
@@ -921,81 +985,44 @@ function UsuariosAdmin() {
 
             <form
               className="formulario-modal formulario-usuario-compacto"
-              style={{
-                minHeight: 0,
-                overflow: "hidden",
-                display: "flex",
-                flexDirection: "column",
-                flex: 1,
-              }}
               onSubmit={guardarUsuario}
             >
-              <div
-                className="grid-usuario-compacto"
-                style={{
-                  overflowY: "auto",
-                  overflowX: "hidden",
-                  paddingRight: "8px",
-                  paddingBottom: "18px",
-                  minHeight: 0,
-                  flex: 1,
-                  alignContent: "start",
-                }}
-              >
-                <div className="campo-formulario usuario-campo-ancho">
-                  <label>Nombre completo *</label>
-                  <input
-                    required
-                    value={formulario.nombre}
-                    onChange={(e) => actualizarCampo("nombre", e.target.value)}
-                    placeholder="Ej: Carlos Mendoza"
-                  />
-                </div>
-
-                <div className="campo-formulario">
-                  <label>Correo institucional *</label>
-
-                  <div className="correo-institucional-compacto">
-                    <input
-                      value={formulario.correoUsuario}
-                      disabled
-                      readOnly
-                      aria-label="Correo institucional generado según el rol"
-                    />
-
-                    <span>{DOMINIO_CORREO}</span>
-                  </div>
-                  <small className="ayuda-campo-usuario">
-                    Se asigna automáticamente de acuerdo con el rol.
-                  </small>
-                </div>
-
-                <div className="campo-formulario">
-                  <label>Teléfono</label>
-                  <input
-                    value={formulario.telefono}
-                    onChange={(e) => actualizarCampo("telefono", e.target.value)}
-                    placeholder="Opcional"
-                  />
-                </div>
-
-                <div className="campo-formulario">
-                  <label>Rol *</label>
-                  <CampoDesplegable mostrarIconoFiltro={false}
-                    valor={formulario.rol}
-                    anchoMenu={260}
-                    ariaLabel="Seleccionar rol"
-                    onChange={(valor) => cambiarRolFormulario(valor as RolUsuario)}
-                    opciones={[
-                      { valor: "admin", texto: "Administrador" },
-                      { valor: "responsable", texto: "Responsable" },
-                      { valor: "supervisor", texto: "Supervisor" },
-                    ]}
-                  />
-                </div>
-
+              <div className="usuario-form-layout">
+                <section className="usuario-form-columna usuario-form-datos" aria-label="Datos del usuario">
+                  <h3>Datos del usuario</h3>
+                  <div className="usuario-datos-grid">
+                    <div className="campo-formulario">
+                      <label htmlFor="usuario-nombres">Nombres *</label>
+                      <input id="usuario-nombres" required value={formulario.nombres}
+                        onChange={(evento) => actualizarCampo("nombres", evento.target.value)}
+                        placeholder="Nombres" />
+                    </div>
+                    <div className="campo-formulario">
+                      <label htmlFor="usuario-apellidos">Apellidos *</label>
+                      <input id="usuario-apellidos" required value={formulario.apellidos}
+                        onChange={(evento) => actualizarCampo("apellidos", evento.target.value)}
+                        placeholder="Apellidos" />
+                    </div>
+                    <div className="campo-formulario">
+                      <label>Rol *</label>
+                      <CampoDesplegable mostrarIconoFiltro={false}
+                        valor={formulario.rol} anchoMenu={250} ariaLabel="Seleccionar rol"
+                        onChange={(valor) => cambiarRolFormulario(valor as RolUsuario)}
+                        opciones={[
+                          { valor: "admin", texto: "Administrador" },
+                          { valor: "responsable", texto: "Responsable" },
+                          { valor: "supervisor", texto: "Supervisor" },
+                        ]} />
+                    </div>
+                    <div className="campo-formulario">
+                      <label>Correo institucional *</label>
+                      <div className="correo-institucional-compacto">
+                        <input value={formulario.correoUsuario} disabled readOnly aria-label="Correo institucional generado según el rol" />
+                        <span>{DOMINIO_CORREO}</span>
+                      </div>
+                    </div>
                 {!usuarioEditando && (
-                  <div className="campo-formulario">
+                  <div className="campo-formulario usuario-datos-ancho">
                     <label>Código de acceso *</label>
 
                     <div
@@ -1031,7 +1058,7 @@ function UsuariosAdmin() {
                           )
                         }
                       >
-                        Generar
+                        <KeyRound size={17} aria-hidden="true" /> Generar
                       </button>
                     </div>
 
@@ -1042,7 +1069,7 @@ function UsuariosAdmin() {
                 )}
 
                 {usuarioEditando && esAdministradorGeneral(usuarioEditando) && (
-                  <div className="campo-formulario">
+                  <div className="campo-formulario usuario-datos-ancho">
                     <label>Código de acceso</label>
                     <input
                       value="Código especial protegido"
@@ -1055,8 +1082,8 @@ function UsuariosAdmin() {
                   </div>
                 )}
 
-                {usuarioEditando && !esAdministradorGeneral(usuarioEditando) && (
-                  <div className="campo-formulario">
+                {usuarioEditando && !esAdministradorGeneral(usuarioEditando) && !formulario.cambiarCodigoAcceso && (
+                  <div className="campo-formulario usuario-datos-ancho">
                     <label>Código de acceso</label>
 
                     <div
@@ -1094,7 +1121,7 @@ function UsuariosAdmin() {
                             setMostrarCodigoAdministrador(false);
                           }}
                         >
-                          Cambiar
+                          <KeyRound size={17} aria-hidden="true" /> Cambiar
                         </button>
                       )}
                     </div>
@@ -1108,7 +1135,7 @@ function UsuariosAdmin() {
                   !esAdministradorGeneral(usuarioEditando) &&
                   formulario.cambiarCodigoAcceso && (
                     <div
-                      className="campo-formulario usuario-campo-ancho"
+                      className="campo-formulario usuario-datos-ancho"
                       style={{
                         padding: "16px",
                         border: "1px solid #dfe5ec",
@@ -1197,7 +1224,7 @@ function UsuariosAdmin() {
                                 )
                               }
                             >
-                              Generar
+                              <KeyRound size={17} aria-hidden="true" /> Generar
                             </button>
                           </div>
                           <small className="ayuda-campo-usuario">
@@ -1282,8 +1309,13 @@ function UsuariosAdmin() {
                       </div>
                     </div>
                   )}
+                  </div>
 
-                <section className="horario-usuario-panel usuario-campo-ancho" aria-label="Horario semanal de acceso">
+
+                </section>
+
+                <section className="usuario-form-columna usuario-form-horarios" aria-label="Horario de acceso del usuario">
+                <section className="horario-usuario-panel" aria-label="Horario semanal de acceso">
                   <div className="horario-usuario-encabezado">
                     <div>
                       <strong>Horario de acceso</strong>
@@ -1338,97 +1370,29 @@ function UsuariosAdmin() {
                       : "Este usuario conserva acceso sin restricciones hasta que modifiques su horario."}
                   </p>
                 </section>
-
+                </section>
                 {formulario.rol !== "admin" && (
-                  <div className="campo-formulario usuario-campo-ancho campo-bodegas-usuario">
-                    <label>{formulario.rol === "responsable" ? "Sucursales asignadas" : "Bodegas asignadas"}</label>
-
-                    <div className="selector-bodega-usuario">
-                      <CampoDesplegable mostrarIconoFiltro={false}
-                        valor={formulario.bodegaSeleccionada}
-                        anchoMenu={360}
-                        altoMenuMaximo={190}
-                        ariaLabel={formulario.rol === "responsable" ? "Seleccionar sucursal asignada" : "Seleccionar bodega asignada"}
-                        onChange={(valor) => actualizarCampo("bodegaSeleccionada", valor)}
-                        opciones={[
-                          { valor: "", texto: formulario.rol === "responsable" ? "Selecciona una sucursal" : "Selecciona una bodega" },
-                          ...bodegasAsignables
-                            .filter((bodega) => {
-                              if (formulario.bodegasAsignadas.includes(bodega.nombre)) {
-                                return false;
-                              }
-
-                              if (gastronomiaAsignada && esSucursalTasty(bodega.nombre)) {
-                                return false;
-                              }
-
-                              return true;
-                            })
-                            .map((bodega) => ({
-                              valor: bodega.nombre,
-                              texto: bodega.nombre,
-                            })),
-                        ]}
-                      />
-
-                      <button
-                        className="boton-agregar-bodega-usuario boton-agregar-bodega-solo-icono"
-                        type="button"
-                        disabled={!formulario.bodegaSeleccionada}
-                        onClick={agregarBodegaFormulario}
-                        title={formulario.rol === "responsable" ? "Agregar sucursal" : "Agregar bodega"}
-                        aria-label={formulario.rol === "responsable" ? "Agregar sucursal" : "Agregar bodega"}
-                        style={{
-                          width: "52px",
-                          minWidth: "52px",
-                          height: "52px",
-                          borderRadius: "12px",
-                          border: "1px solid #111827",
-                          background: "#111827",
-                          color: "#ffffff",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          opacity: formulario.bodegaSeleccionada ? 1 : 0.45,
-                          cursor: formulario.bodegaSeleccionada ? "pointer" : "not-allowed",
-                        }}
-                      >
-                        <Plus size={20} strokeWidth={2.4} />
-                      </button>
+                  <section className="usuario-asignaciones-panel usuario-form-asignaciones" aria-label="Asignaciones del usuario">
+                    <h3>{formulario.rol === "responsable" ? "Ubicaciones asignadas" : "Bodegas asignadas"}</h3>
+                    <div className="usuario-asignaciones-opciones">
+                      {bodegasAsignables.map((bodega) => {
+                        const Icono = obtenerIconoBodega(bodega.nombre);
+                        const seleccionada = formulario.bodegasAsignadas.includes(bodega.nombre);
+                        return (
+                          <label key={bodega.id} className={`usuario-asignacion-opcion ${obtenerClaseBodegaChip(bodega.nombre)} ${seleccionada ? "seleccionada" : ""}`}>
+                            <input type="checkbox" checked={seleccionada}
+                              onChange={() => alternarBodegaFormulario(bodega.nombre)} />
+                            <Icono size={19} aria-hidden="true" />
+                            <span>{bodega.nombre}</span>
+                          </label>
+                        );
+                      })}
                     </div>
-
-                    {gastronomiaAsignada && (
-                      <p className="mensaje-gastronomia-usuario">
-                        Al asignar Gastronomía al supervisor, tendrá acceso a sus 5 sucursales Tasty.
-                      </p>
+                    {bodegasAsignables.length === 0 && (
+                      <small className="texto-sin-bodegas">No hay ubicaciones disponibles para este rol.</small>
                     )}
-
-                    <div className="chips-bodegas-usuario">
-                      {formulario.bodegasAsignadas.length > 0 ? (
-                        formulario.bodegasAsignadas.map((bodega) => (
-                          <span
-                            className={`chip-bodega-usuario ${obtenerClaseBodegaChip(bodega)}`}
-                            key={bodega}
-                          >
-                            {bodega}
-                            <button
-                              type="button"
-                              onClick={() => quitarBodegaFormulario(bodega)}
-                              aria-label={`Quitar ${bodega}`}
-                            >
-                              ×
-                            </button>
-                          </span>
-                        ))
-                      ) : (
-                        <small className="texto-sin-bodegas">
-                          {formulario.rol === "responsable"
-                            ? "Sin sucursales asignadas."
-                            : "Sin bodegas asignadas."}
-                        </small>
-                      )}
-                    </div>
-                  </div>
+                    {gastronomiaAsignada && <p className="mensaje-gastronomia-usuario">Gastronomía incluye Tasty 1–5.</p>}
+                  </section>
                 )}
               </div>
 
@@ -1461,113 +1425,109 @@ function UsuariosAdmin() {
 
       {usuarioDetalle && (
         <div className="modal-fondo">
-          <div className="modal-contenedor" style={{ maxWidth: 720 }}>
+          <div className="modal-contenedor usuario-detalle-modal">
             <div className="modal-header">
               <div>
                 <h2>Detalle del usuario</h2>
                 <p>Información registrada dentro del sistema.</p>
               </div>
-
-              <button
-                className="modal-cerrar"
-                type="button"
-                onClick={() => setUsuarioDetalle(null)}
-              >
+              <button className="modal-cerrar" type="button" aria-label="Cerrar detalle del usuario"
+                onClick={() => setUsuarioDetalle(null)}>
                 <X size={20} />
               </button>
             </div>
-
-            <div style={{ padding: "26px 28px 8px" }}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "16px",
-                  padding: "18px",
-                  border: "1px solid #e5e7eb",
-                  borderRadius: "18px",
-                  background: "#f9fafb",
-                }}
-              >
-                <div
-                  style={{
-                    width: "58px",
-                    height: "58px",
-                    borderRadius: "50%",
-                    background: "#111111",
-                    color: "#ffffff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "22px",
-                    fontWeight: 800,
-                    flexShrink: 0,
-                  }}
-                >
+            <div className="usuario-detalle-contenido">
+              <div className="usuario-detalle-presentacion">
+                <div className="usuario-detalle-avatar" aria-hidden="true">
                   {usuarioDetalle.nombre.charAt(0)}
                 </div>
-
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <h3
-                    style={{
-                      margin: "0 0 6px",
-                      fontSize: "21px",
-                      color: "#111827",
-                      fontWeight: 800,
-                    }}
-                  >
-                    {obtenerNombreCorto(usuarioDetalle.nombre)}
-                  </h3>
-
-                  <p
-                    style={{
-                      margin: 0,
-                      color: "#6b7280",
-                      fontSize: "15px",
-                    }}
-                  >
-                    {usuarioDetalle.correo}
-                  </p>
+                <div>
+                  <h3 title={usuarioDetalle.nombre}>{nombreVisualUsuario(usuarioDetalle.nombre)}</h3>
+                  <p>{usuarioDetalle.correo}</p>
                 </div>
               </div>
-            </div>
-
-            <div className="detalle-usuario-grid">
-              <div className="detalle-usuario-card">
-                <span>Nombre completo</span>
-                <p>{usuarioDetalle.nombre}</p>
+              <div className="usuario-detalle-paneles">
+                <section className="usuario-detalle-panel">
+                  <h3>Datos del usuario</h3>
+                  <div className="usuario-detalle-campos">
+                    {[
+                      { nombre: "Nombre completo", valor: usuarioDetalle.nombre },
+                      { nombre: "Teléfono", valor: usuarioDetalle.telefono || "Sin registrar" },
+                      { nombre: "Correo institucional", valor: usuarioDetalle.correo },
+                      { nombre: "Rol", valor: obtenerNombreRol(usuarioDetalle.rol) },
+                    ].map((dato) => (
+                      <div className="detalle-usuario-card" key={dato.nombre}>
+                        <span>{dato.nombre}</span><p>{dato.valor}</p>
+                      </div>
+                    ))}
+                    {!esAdministradorGeneral(usuarioDetalle) && (
+                      <div className="detalle-usuario-card usuario-detalle-card-ancho">
+                        <span>Código de acceso</span>
+                        <p>Código protegido. Para reemplazarlo, utiliza Editar → Cambiar código.</p>
+                      </div>
+                    )}
+                  </div>
+                </section>
+                <section className="usuario-detalle-panel">
+                  <h3>Horario de acceso</h3>
+                  {usuarioDetalle.horarioAcceso ? (
+                    <div className="usuario-detalle-horarios">
+                      {DIAS_HORARIO.map((nombre, indice) => {
+                        const franja = usuarioDetalle.horarioAcceso?.find((dia) => dia.dia === indice + 1);
+                        return (
+                          <div className="usuario-detalle-horario" key={nombre}>
+                            <span>{nombre}</span>
+                            <strong className={!franja?.activo ? "usuario-horario-sin-acceso" : ""}>
+                              {franja?.activo ? `${franja.desde} a ${franja.hasta}` : "Sin acceso"}
+                            </strong>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="usuario-detalle-horario-libre">Acceso sin horario restringido.</p>
+                  )}
+                </section>
               </div>
-
-              <div className="detalle-usuario-card">
-                <span>Teléfono</span>
-                <p>{usuarioDetalle.telefono || "Sin registrar"}</p>
-              </div>
-
-              <div className="detalle-usuario-card detalle-usuario-card-bodegas">
-                <span>Bodegas asignadas</span>
-
+              <section className="usuario-detalle-panel usuario-detalle-asignaciones">
+                <h3>{usuarioDetalle.rol === "responsable" ? "Ubicaciones asignadas" : "Bodegas asignadas"}</h3>
                 <div className="chips-bodegas-detalle">
                   {obtenerBodegasUsuario(usuarioDetalle).length > 0 ? (
                     obtenerBodegasUsuario(usuarioDetalle).map((bodega) => (
-                      <span
-                        className={`chip-bodega-detalle ${obtenerClaseBodegaChip(bodega)}`}
-                        key={bodega}
-                      >
+                      <span className={`chip-bodega-detalle ${obtenerClaseBodegaChip(bodega)}`} key={bodega}>
                         {bodega}
                       </span>
                     ))
                   ) : (
-                    <p>Sin asignar</p>
+                    <p className="usuario-detalle-sin-asignaciones">Sin asignaciones</p>
                   )}
                 </div>
-              </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      )}
 
-              {!esAdministradorGeneral(usuarioDetalle) && (
-                <div className="detalle-usuario-card">
-                  <span>Código de acceso</span>
-                  <p>{usuarioDetalle.codigoAcceso || "Sin registrar"}</p>
-                </div>
-              )}
+      {confirmacionOperacion && (
+        <div className="modal-fondo usuario-confirmacion-fondo" role="presentation">
+          <div className="modal-contenedor usuario-confirmacion-modal" role="alertdialog"
+            aria-modal="true" aria-labelledby="usuario-confirmacion-titulo" aria-describedby="usuario-confirmacion-mensaje">
+            <div className="modal-header">
+              <div>
+                <h2 id="usuario-confirmacion-titulo">{confirmacionOperacion.titulo}</h2>
+                <p id="usuario-confirmacion-mensaje">{confirmacionOperacion.mensaje}</p>
+              </div>
+            </div>
+            {confirmacionOperacion.nombreUsuario && (
+              <div className="usuario-confirmacion-nombre">{confirmacionOperacion.nombreUsuario}</div>
+            )}
+            <div className="modal-acciones">
+              <button type="button" className="boton-secundario" disabled={confirmandoOperacion}
+                onClick={() => setConfirmacionOperacion(null)}>Cancelar</button>
+              <button type="button" className="boton-principal" disabled={confirmandoOperacion}
+                onClick={() => void confirmarOperacion()}>
+                {confirmandoOperacion ? "Guardando..." : confirmacionOperacion.etiqueta}
+              </button>
             </div>
           </div>
         </div>

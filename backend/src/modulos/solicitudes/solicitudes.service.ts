@@ -812,7 +812,7 @@ export class SolicitudesService {
       .where("usuarioSolicitante.rol = :rolSolicitante", {
         rolSolicitante: RolUsuario.RESPONSABLE,
       })
-      .andWhere("bodegaSolicitante.bodegaPadreId IN (:...areas)", { areas })
+      .andWhere("(bodegaSolicitante.bodegaPadreId IN (:...areas) OR bodegaSolicitante.id IN (:...areas))", { areas })
       .orderBy("solicitud.createdAt", "DESC")
       .addOrderBy("detalle.id", "ASC")
       .getMany();
@@ -991,8 +991,8 @@ export class SolicitudesService {
     if (
       usuario.rol !== RolUsuario.SUPERVISOR ||
       solicitud.usuarioSolicitante.rol !== RolUsuario.RESPONSABLE ||
-      solicitud.bodegaSolicitante.tipo !== TipoBodega.SUCURSAL ||
-      !solicitud.bodegaSolicitante.bodegaPadreId
+      (solicitud.bodegaSolicitante.tipo !== TipoBodega.SUCURSAL &&
+        solicitud.bodegaSolicitante.tipo !== TipoBodega.PRINCIPAL)
     ) {
       return false;
     }
@@ -1000,7 +1000,7 @@ export class SolicitudesService {
     const asignacion = await this.asignacionesRepository.findOne({
       where: {
         usuarioId: usuario.id,
-        bodegaId: solicitud.bodegaSolicitante.bodegaPadreId,
+        bodegaId: solicitud.bodegaSolicitante.bodegaPadreId ?? solicitud.bodegaSolicitante.id,
         tipoAsignacion: TipoAsignacion.SUPERVISOR,
       },
       relations: {
@@ -1014,15 +1014,15 @@ export class SolicitudesService {
   }
 
   private async validarSupervisorReceptor(bodega: Bodega): Promise<void> {
-    if (!bodega.bodegaPadreId) {
-      throw new ConflictException(
-        "La sucursal no tiene una bodega principal asociada.",
-      );
+    const areaId = bodega.tipo === TipoBodega.PRINCIPAL
+      ? bodega.id : bodega.bodegaPadreId;
+    if (!areaId) {
+      throw new ConflictException("La sucursal no tiene una bodega principal asociada.");
     }
 
     const asignaciones = await this.asignacionesRepository.find({
       where: {
-        bodegaId: bodega.bodegaPadreId,
+        bodegaId: areaId,
         tipoAsignacion: TipoAsignacion.SUPERVISOR,
       },
       relations: { usuario: true, bodega: true },
@@ -1182,10 +1182,10 @@ export class SolicitudesService {
     destinoStock: Bodega;
     area: Bodega;
   }> {
-    if (bodegaSolicitante.tipo !== TipoBodega.SUCURSAL) {
-      throw new ConflictException(
-        'Las solicitudes de Responsable deben pertenecer a una sucursal activa.',
-      );
+    if (bodegaSolicitante.tipo !== TipoBodega.SUCURSAL &&
+        !(bodegaSolicitante.tipo === TipoBodega.PRINCIPAL &&
+          ["Bodega Limpieza", "Bodega Oficina"].includes(bodegaSolicitante.nombre))) {
+      throw new ConflictException('Las solicitudes de Responsable deben pertenecer a una ubicación autorizada.');
     }
 
     const area = await this.obtenerAreaSolicitud(
@@ -1505,9 +1505,8 @@ export class SolicitudesService {
       return;
     }
 
-    // Regla especial de Gastronomía: el Supervisor se asigna a la bodega
-    // principal "Gastronomía", pero opera solicitudes sobre sus
-    // sucursales Tasty 1–5. No necesita una asignación duplicada por sucursal.
+    // Un Supervisor puede operar solicitudes de sucursales de su área
+    // principal, sin duplicar las asignaciones de las sucursales.
     if (
       usuario.rol === RolUsuario.SUPERVISOR &&
       bodega.tipo === TipoBodega.SUCURSAL &&
@@ -1525,8 +1524,7 @@ export class SolicitudesService {
 
       if (
         asignacionPadre?.bodega?.tipo === TipoBodega.PRINCIPAL &&
-        asignacionPadre.bodega.nombre.trim().toLowerCase() ===
-          "gastronomía".toLowerCase()
+        asignacionPadre.bodega.estado === EstadoBodega.ACTIVA
       ) {
         return;
       }
@@ -1547,17 +1545,17 @@ export class SolicitudesService {
       bodega.tipo !== TipoBodega.SUCURSAL
     ) {
       throw new ConflictException(
-        "Un Supervisor solo puede solicitar para su bodega principal o una sucursal Tasty asociada.",
+        "Un Supervisor solo puede solicitar para su bodega principal o sus sucursales asociadas.",
       );
     }
 
-    if (
-      usuario.rol === RolUsuario.RESPONSABLE &&
-      bodega.tipo !== TipoBodega.SUCURSAL
-    ) {
-      throw new ConflictException(
-        "Un Responsable solo puede solicitar para una sucursal Tasty asignada.",
-      );
+    if (usuario.rol === RolUsuario.RESPONSABLE) {
+      const permitida = bodega.tipo === TipoBodega.SUCURSAL ||
+        (bodega.tipo === TipoBodega.PRINCIPAL &&
+          ["Bodega Limpieza", "Bodega Oficina"].includes(bodega.nombre));
+      if (!permitida) {
+        throw new ConflictException("El Responsable solo puede solicitar para una ubicación asignada.");
+      }
     }
   }
 

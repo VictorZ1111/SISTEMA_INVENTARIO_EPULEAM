@@ -1,3 +1,4 @@
+import { nombreVisualUsuario } from "./nombresVisuales";
 import type { Usuario } from "../tipos/usuario";
 import {
   BODEGA_GASTRONOMIA,
@@ -50,7 +51,9 @@ export function obtenerSupervisoresBodega(
 ) {
   const asignacionBuscada = esSucursalTasty(nombreBodega)
     ? BODEGA_GASTRONOMIA
-    : nombreBodega;
+    : nombreBodega === "Sucursal Limpieza" ? "Bodega Limpieza"
+      : nombreBodega === "Sucursal Oficina" ? "Bodega Oficina"
+      : nombreBodega;
 
   return usuarios.filter(
     (usuario) =>
@@ -66,7 +69,8 @@ export function obtenerResponsablesSucursal(
   usuarios: Usuario[],
   nombreSucursal: string
 ) {
-  if (!esSucursalTasty(nombreSucursal)) return [];
+  if (!esSucursalTasty(nombreSucursal) &&
+    !["Bodega Limpieza", "Bodega Oficina"].includes(nombreSucursal)) return [];
 
   return usuarios.filter(
     (usuario) =>
@@ -85,7 +89,7 @@ export function formatearNombresUsuarios(
   const nombres = Array.from(
     new Set(
       usuarios
-        .map((usuario) => usuario.nombre.trim())
+        .map((usuario) => nombreVisualUsuario(usuario.nombre))
         .filter(Boolean)
     )
   );

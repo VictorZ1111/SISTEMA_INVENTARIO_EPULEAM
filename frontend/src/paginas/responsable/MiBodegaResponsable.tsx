@@ -20,7 +20,7 @@ import {
   SUCURSALES_TASTY,
   esBodegaGastronomiaAgrupada,
   obtenerBodegasPrincipalesUsuario,
-  obtenerSucursalesTastyUsuario,
+  obtenerSucursalesUsuario,
 } from "../../dominio/bodegas";
 import { obtenerIconoBodega } from "../../dominio/inventarioVisual";
 import { useUsuarios } from "../../contexto/UsuariosContext";
@@ -123,12 +123,13 @@ function MiBodegaResponsable() {
   const { categoriasActivas } = useConfiguracion();
 
   const bodegasPrincipales = useMemo(
-    () => obtenerBodegasPrincipalesUsuario(usuarioActual),
+    () => obtenerBodegasPrincipalesUsuario(usuarioActual).filter(
+      (nombre) => nombre !== "Bodega Limpieza" && nombre !== "Bodega Oficina"),
     [usuarioActual]
   );
 
   const sucursalesTasty = useMemo(
-    () => obtenerSucursalesTastyUsuario(usuarioActual),
+    () => obtenerSucursalesUsuario(usuarioActual),
     [usuarioActual]
   );
 
@@ -304,8 +305,8 @@ function MiBodegaResponsable() {
           <div className="seccion-dashboard seccion-compacta responsable-sucursales-seccion">
             <div className="seccion-dashboard-header solicitudes-header-simple">
               <div>
-                <h2>Sucursales Tasty</h2>
-                <p>Accede a las sucursales gastronómicas habilitadas para tu usuario.</p>
+                <h2>Ubicaciones asignadas</h2>
+                <p>Accede a las ubicaciones asignadas a tu usuario.</p>
               </div>
             </div>
 
@@ -329,7 +330,7 @@ function MiBodegaResponsable() {
 
                       <span className="responsable-bodega-card-info">
                         <strong>{limpiarNombreBodega(bodega)}</strong>
-                        <span className="tarjeta-sucursal-etiqueta">Sucursal gastronómica de {limpiarNombreBodega(bodega)}.</span>
+                        <span className="tarjeta-sucursal-etiqueta">Inventario de {limpiarNombreBodega(bodega)}.</span>
                       </span>
                     </button>
                   );
@@ -337,7 +338,7 @@ function MiBodegaResponsable() {
               </div>
             ) : (
               <div className="responsable-bodega-vacia">
-                No tienes asignada ninguna sucursal de Tasty.
+                No tienes ubicaciones asignadas.
               </div>
             )}
           </div>
@@ -347,7 +348,7 @@ function MiBodegaResponsable() {
           <div className="seccion-dashboard-header solicitudes-header-simple">
             <div>
               <h2>Inventario de {limpiarNombreBodega(bodegaSeleccionada)}</h2>
-              <p>Bienes registrados en la sucursal seleccionada.</p>
+              <p>Bienes registrados en la ubicación seleccionada.</p>
             </div>
           </div>
 

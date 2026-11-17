@@ -586,19 +586,30 @@ function SolicitudesSupervisor({ modo = "supervisor" }: { modo?: "supervisor" | 
     if (!solicitudGestion || modo !== "supervisor") return;
 
     const sucursal = limpiarNombreBodega(solicitudGestion.bodegaSolicitante.nombre);
+    // Gastronomía muestra Tasty como ubicaciones operativas; Limpieza y
+    // Oficina muestran su bodega principal. Usar una de las opciones reales
+    // del Supervisor, vinculada al área de la solicitud recibida.
+    const areaSolicitud = normalizarTexto(sucursal).startsWith("tasty ")
+      ? "Gastronomía"
+      : normalizarTexto(sucursal).includes("limpieza")
+        ? "Bodega Limpieza"
+        : normalizarTexto(sucursal).includes("oficina")
+          ? "Bodega Oficina"
+          : sucursal;
     const bodegaAsignada = bodegasUsuario.find((nombre) =>
       normalizarTexto(limpiarNombreBodega(nombre)) === normalizarTexto(sucursal),
+    ) ?? bodegasUsuario.find((nombre) =>
+      normalizarTexto(limpiarNombreBodega(nombre)) ===
+        normalizarTexto(limpiarNombreBodega(areaSolicitud)),
     );
     if (!bodegaAsignada) {
-      mostrarMensaje("error", "No tienes asignada la sucursal de origen de esta solicitud.");
+      mostrarMensaje("error", "No tienes asignada la bodega principal de esta solicitud.");
       return;
     }
 
+    // Puede crear una solicitud al Administrador aunque tenga stock;
+    // cuando hay faltantes, los precarga para evitar introducirlos a mano.
     const faltantes = itemsRevision.filter((item) => item.pendienteOriginal > item.disponible);
-    if (!faltantes.length) {
-      mostrarMensaje("error", "No hay cantidades faltantes. Si necesitas otros bienes, crea una solicitud desde Mis solicitudes.");
-      return;
-    }
 
     // Se precargan exclusivamente las cantidades que faltan del pedido;
     // luego el Supervisor puede agregar, quitar o modificar bienes.
@@ -1677,7 +1688,7 @@ function SolicitudesSupervisor({ modo = "supervisor" }: { modo?: "supervisor" | 
               <button
                 className="boton-secundario"
                 type="button"
-                disabled={guardandoAtencion || !itemsRevision.some((item) => item.pendienteOriginal > item.disponible)}
+                disabled={guardandoAtencion || !itemsRevision.some((item) => item.pendienteOriginal > 0)}
                 onClick={abrirSolicitudBasadaEnRecibida}
               >
                 Solicitar al Administrador

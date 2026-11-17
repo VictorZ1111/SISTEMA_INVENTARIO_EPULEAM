@@ -2,6 +2,8 @@ import type { UsuarioSesion } from "../tipos/usuario";
 
 export const BODEGA_INVENTARIO_GENERAL = "Inventario General";
 export const BODEGA_GASTRONOMIA = "Gastronomía";
+export const SUCURSAL_LIMPIEZA = "Sucursal Limpieza";
+export const SUCURSAL_OFICINA = "Sucursal Oficina";
 export const SUCURSALES_TASTY = [
   "Tasty 1",
   "Tasty 2",
@@ -11,7 +13,7 @@ export const SUCURSALES_TASTY = [
 ] as const;
 
 type UsuarioConBodegas =
-  | Pick<UsuarioSesion, "bodegasAsignadas" | "bodegaAsignada">
+  | (Pick<UsuarioSesion, "bodegasAsignadas" | "bodegaAsignada"> & Partial<Pick<UsuarioSesion, "rol">>)
   | null
   | undefined;
 
@@ -47,6 +49,13 @@ export function esSucursalTastyOperativa(bodega: string) {
   return normalizarTextoBodega(limpiarPrefijoBodega(bodega)).startsWith("tasty ");
 }
 
+function obtenerSucursalesOperativasDesdeBodegas(bodegas: string[]): string[] {
+  const todas = [...bodegas];
+  if (bodegas.some(esBodegaGastronomiaAgrupada)) todas.push(...SUCURSALES_TASTY);
+  // Limpieza y Oficina no son sucursales físicas: apuntan al inventario principal.
+  return Array.from(new Set(todas));
+}
+
 export function obtenerBodegasBaseUsuario(usuario: UsuarioConBodegas) {
   const bodegasBase = usuario?.bodegasAsignadas?.length
     ? usuario.bodegasAsignadas
@@ -64,6 +73,7 @@ export function obtenerBodegasPrincipalesUsuario(usuario: UsuarioConBodegas) {
   const bodegasPrincipales = bodegasBase.filter((bodega) => {
     if (esBodegaGastronomiaAgrupada(bodega)) return false;
     if (tieneGastronomia && esSucursalTastyOperativa(bodega)) return false;
+    if (bodega === SUCURSAL_LIMPIEZA || bodega === SUCURSAL_OFICINA) return false;
     return !esSucursalTastyOperativa(bodega);
   });
 
@@ -72,6 +82,16 @@ export function obtenerBodegasPrincipalesUsuario(usuario: UsuarioConBodegas) {
       ...bodegasPrincipales,
       ...(tieneGastronomia ? [BODEGA_GASTRONOMIA] : []),
     ]),
+  );
+}
+
+/** Incluye sucursales Tasty y de Limpieza/Oficina según el área asignada. */
+export function obtenerSucursalesUsuario(usuario: UsuarioConBodegas) {
+  const bodegas = obtenerBodegasBaseUsuario(usuario);
+  return obtenerSucursalesOperativasDesdeBodegas(bodegas).filter(
+    (nombre) => esSucursalTastyOperativa(nombre) ||
+      (usuario?.rol === "responsable" &&
+        (nombre === "Bodega Limpieza" || nombre === "Bodega Oficina")),
   );
 }
 
@@ -86,13 +106,7 @@ export function obtenerSucursalesTastyUsuario(usuario: UsuarioConBodegas) {
 }
 
 export function expandirBodegasAccesoTasty(bodegas: string[]) {
-  const bodegasExpandidas = [...bodegas];
-
-  if (bodegas.some(esBodegaGastronomia)) {
-    bodegasExpandidas.push(...SUCURSALES_TASTY);
-  }
-
-  return Array.from(new Set(bodegasExpandidas.filter(Boolean)));
+  return obtenerSucursalesOperativasDesdeBodegas(bodegas.filter(Boolean));
 }
 
 export function obtenerBodegasAccesoUsuario(usuario: UsuarioConBodegas) {

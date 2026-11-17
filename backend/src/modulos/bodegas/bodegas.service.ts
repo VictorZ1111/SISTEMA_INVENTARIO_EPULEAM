@@ -105,7 +105,10 @@ export class BodegasService implements OnApplicationBootstrap {
     // Las bodegas oficiales retiradas de forma autorizada se conservan en la
     // base de datos, pero dejan de aparecer en los listados operativos.
     return bodegas
-      .filter((bodega) => !bodega.esSistema || bodega.estado === EstadoBodega.ACTIVA)
+      .filter((bodega) =>
+        (!bodega.esSistema || bodega.estado === EstadoBodega.ACTIVA) &&
+        bodega.nombre !== "Sucursal Limpieza" && bodega.nombre !== "Sucursal Oficina"
+      )
       .map((bodega) => this.convertirAPublica(bodega));
   }
 
@@ -124,7 +127,9 @@ export class BodegasService implements OnApplicationBootstrap {
       },
     });
 
-    return bodegas.map((bodega) => this.convertirAPublica(bodega));
+    return bodegas
+      .filter((bodega) => bodega.nombre !== "Sucursal Limpieza" && bodega.nombre !== "Sucursal Oficina")
+      .map((bodega) => this.convertirAPublica(bodega));
   }
 
   async buscarPublicaPorId(id: string): Promise<BodegaPublica> {

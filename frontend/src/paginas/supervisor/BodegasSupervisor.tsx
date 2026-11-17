@@ -24,7 +24,7 @@ import {
   SUCURSALES_TASTY,
   esBodegaGastronomiaAgrupada,
   obtenerBodegasPrincipalesUsuario,
-  obtenerSucursalesTastyUsuario,
+  obtenerSucursalesUsuario,
 } from "../../dominio/bodegas";
 import { obtenerIconoBodega } from "../../dominio/inventarioVisual";
 import { useConfiguracion } from "../../contexto/ConfiguracionContext";
@@ -54,7 +54,7 @@ function obtenerBodegasAccesoUsuario(usuario: ReturnType<typeof useAuth>["usuari
   return Array.from(
     new Set([
       ...obtenerBodegasPrincipalesUsuario(usuario),
-      ...obtenerSucursalesTastyUsuario(usuario),
+      ...obtenerSucursalesUsuario(usuario),
     ])
   );
 }
@@ -144,7 +144,7 @@ function BodegasSupervisor() {
     [usuarioActual]
   );
   const sucursalesTasty = useMemo(
-    () => obtenerSucursalesTastyUsuario(usuarioActual),
+    () => obtenerSucursalesUsuario(usuarioActual),
     [usuarioActual]
   );
   const bodegasAcceso = useMemo(
@@ -380,8 +380,8 @@ function BodegasSupervisor() {
           <div className="seccion-dashboard seccion-compacta responsable-sucursales-seccion">
             <div className="seccion-dashboard-header solicitudes-header-simple">
               <div>
-                <h2>Sucursales Tasty</h2>
-                <p>Accede a las sucursales gastronómicas habilitadas para tu usuario.</p>
+                <h2>Sucursales asignadas</h2>
+                <p>Accede a las sucursales asignadas a tu usuario.</p>
               </div>
             </div>
 
@@ -409,7 +409,7 @@ function BodegasSupervisor() {
                         style={{ flex: 1, alignSelf: "stretch", justifyContent: "center" }}
                       >
                         <strong>{limpiarNombreBodega(bodega)}</strong>
-                        <span className="tarjeta-sucursal-etiqueta">Sucursal gastronómica de {limpiarNombreBodega(bodega)}.</span>
+                        <span className="tarjeta-sucursal-etiqueta">Inventario de {limpiarNombreBodega(bodega)}.</span>
                       </span>
                     </button>
                   );
@@ -417,7 +417,7 @@ function BodegasSupervisor() {
               </div>
             ) : (
               <div className="responsable-bodega-vacia">
-                No tienes asignada ninguna sucursal de Tasty.
+                No tienes sucursales asignadas.
               </div>
             )}
           </div>
@@ -441,8 +441,8 @@ function BodegasSupervisor() {
           </div>
 
           <div className="bodega-responsables-resumen">
-            <span>{bodegaSeleccionada.startsWith("Tasty ") ? "Responsable de la sucursal:" : "Supervisor encargado:"}</span>
-            <strong>{bodegaSeleccionada.startsWith("Tasty ")
+            <span>{(bodegaSeleccionada.startsWith("Tasty ") || bodegaSeleccionada.startsWith("Sucursal ")) ? "Responsable de la sucursal:" : "Supervisor encargado:"}</span>
+            <strong>{(bodegaSeleccionada.startsWith("Tasty ") || bodegaSeleccionada.startsWith("Sucursal "))
               ? formatearNombresUsuarios(obtenerResponsablesSucursal(usuarios, bodegaSeleccionada), "Sin responsable asignado")
               : usuarioActual?.nombre || "Supervisor asignado"}</strong>
           </div>
